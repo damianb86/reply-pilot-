@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Igu Privacy Policy</title>
+    <style>
+      :root {
+        color: #1f2933;
+        background: #f6f7f9;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 48px 20px 64px;
+      }
+
+      h1,
+      h2 {
+        color: #111827;
+        line-height: 1.2;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2.25rem;
+      }
+
+      h2 {
+        margin-top: 32px;
+        font-size: 1.25rem;
+      }
+
+      p,
+      li {
+        font-size: 1rem;
+      }
+
+      .updated {
+        color: #52606d;
+        margin-top: 0;
+      }
+
+      a {
+        color: #0f62fe;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Igu Privacy Policy</h1>
+      <p class="updated">Last updated: May 3, 2026</p>
+
+      <p>
+        Igu is a Shopify embedded app for merchant review-reply workflows. This
+        policy explains what data the app may process, how it is used, and how
+        merchants and shoppers can request access or deletion.
+      </p>
+
+      <h2>Data Read From Shopify</h2>
+      <p>
+        Igu uses Shopify API access only for the scopes approved by the
+        merchant during installation. Depending on enabled features, Igu may
+        read shop domain, app session data, product information, and review or
+        workflow context supplied by the merchant or connected services.
+      </p>
+
+      <h2>Data Sent By Merchants</h2>
+      <p>
+        Merchants may submit support requests, customization requests,
+        configuration values, brand voice guidance, and other operational text
+        entered in the app. Igu stores these records to provide support,
+        maintain settings, and operate the app.
+      </p>
+
+      <h2>Shopper Data</h2>
+      <p>
+        Igu is not designed to store Shopify customer account records. If a
+        merchant connects review workflows, shopper review text, customer names,
+        ratings, product references, or reply drafts may be processed so the
+        merchant can manage replies. Igu does not sell shopper data.
+      </p>
+
+      <h2>Use Of Data</h2>
+      <p>
+        Data is used to authenticate the app, provide embedded app features,
+        support merchants, improve app reliability, respond to privacy requests,
+        and comply with Shopify platform requirements.
+      </p>
+
+      <h2>Retention</h2>
+      <p>
+        App sessions and merchant-entered data are retained while the app is
+        installed or while needed for support, security, legal compliance, and
+        operational records. Shop data is deleted when required by Shopify
+        privacy webhooks or upon verified merchant request.
+      </p>
+
+      <h2>Providers</h2>
+      <p>
+        Igu uses Shopify for platform services, PostgreSQL for app data storage,
+        Docker hosting infrastructure, and SMTP email providers configured by
+        the app operator for support messages. If Gmail SMTP is used, the SMTP
+        password must be a Gmail App Password.
+      </p>
+
+      <h2>Security</h2>
+      <p>
+        Igu validates Shopify authentication and webhooks, uses HTTPS in
+        production, stores secrets outside version control, and limits database
+        access per app with a dedicated database user.
+      </p>
+
+      <h2>Your Rights</h2>
+      <p>
+        Merchants and shoppers may request access, correction, export, or
+        deletion of personal data. Shopper requests should include the shop name
+        and enough information for the merchant and app operator to locate the
+        relevant records.
+      </p>
+
+      <h2>Privacy Webhooks</h2>
+      <p>
+        Igu implements Shopify mandatory privacy webhooks for
+        customers/data_request, customers/redact, and shop/redact. The shop
+        redact webhook deletes persisted data for the affected shop.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        For privacy or support requests, contact the app operator at the email
+        configured as CONTACT_EMAIL in production.
+      </p>
+    </main>
+  </body>
+</html>
