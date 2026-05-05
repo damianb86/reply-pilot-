@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 
-const APP_NAME = "Igu";
+const APP_NAME = "Reply Pilot";
 
 function getSmtpConfig() {
   const port = Number(process.env.EMAIL_PORT ?? 587);
@@ -81,8 +81,8 @@ export async function sendContactEmail({
       message,
     ].join("\n"),
     headers: {
-      "X-Igu-Shop": shop,
-      "X-Igu-Type": type,
+      "X-Reply-Pilot-Shop": shop,
+      "X-Reply-Pilot-Type": type,
     },
   });
 

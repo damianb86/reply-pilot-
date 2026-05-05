@@ -36,10 +36,10 @@ export default function App() {
     <ShopifyAppProvider embedded apiKey={apiKey}>
       <PolarisAppProvider i18n={enTranslations}>
         <s-app-nav>
-          <s-link href={withEmbeddedSearch("/app/dashboard")}>Dashboard</s-link>
-          <s-link href={withEmbeddedSearch("/app/reviews")}>Reviews</s-link>
+          <s-link href={withEmbeddedSearch("/app/dashboard")}>Connect</s-link>
+          <s-link href={withEmbeddedSearch("/app/reviews")}>Queue</s-link>
           <s-link href={withEmbeddedSearch("/app/brand-voice")}>Brand voice</s-link>
-          <s-link href={withEmbeddedSearch("/app/logs")}>Logs</s-link>
+          <s-link href={withEmbeddedSearch("/app/logs")}>Sent</s-link>
           <s-link href={withEmbeddedSearch("/app/settings")}>Settings</s-link>
           <s-link href={withEmbeddedSearch("/app/help")}>Help</s-link>
         </s-app-nav>

@@ -1,0 +1,405 @@
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+} from "node:crypto";
+import db from "./db.server";
+
+const JUDGEME_API_BASE = "https://api.judge.me/api/v1";
+const TOKEN_PREFIX = "v1";
+
+type JsonObject = Record<string, unknown>;
+
+export class JudgeMeApiError extends Error {
+  status?: number;
+  statusText?: string;
+  details?: unknown;
+
+  constructor(message: string, options: { status?: number; statusText?: string; details?: unknown } = {}) {
+    super(message);
+    this.name = "JudgeMeApiError";
+    this.status = options.status;
+    this.statusText = options.statusText;
+    this.details = options.details;
+  }
+}
+
+function base64Url(buffer: Buffer) {
+  return buffer.toString("base64url");
+}
+
+function fromBase64Url(value: string) {
+  return Buffer.from(value, "base64url");
+}
+
+function encryptionKey() {
+  const seed =
+    process.env.JUDGEME_TOKEN_ENCRYPTION_KEY ||
+    process.env.SHOPIFY_API_SECRET ||
+    process.env.SHOPIFY_API_KEY ||
+    "reply-pilot-local-development-key";
+
+  return createHash("sha256").update(seed).digest();
+}
+
+export function encryptSecret(secret: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  return [TOKEN_PREFIX, base64Url(iv), base64Url(tag), base64Url(encrypted)].join(":");
+}
+
+export function decryptSecret(value: string) {
+  const [prefix, ivValue, tagValue, encryptedValue] = value.split(":");
+  if (prefix !== TOKEN_PREFIX || !ivValue || !tagValue || !encryptedValue) {
+    return value;
+  }
+
+  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), fromBase64Url(ivValue));
+  decipher.setAuthTag(fromBase64Url(tagValue));
+
+  return Buffer.concat([
+    decipher.update(fromBase64Url(encryptedValue)),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+export function maskJudgeMeToken(token: string) {
+  if (token.length <= 10) return "••••";
+  return `${token.slice(0, 4)}••••${token.slice(-4)}`;
+}
+
+function safeJsonParse(value?: string | null) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function compactJson(value: unknown) {
+  return JSON.stringify(value ?? null);
+}
+
+function readObject(value: unknown): JsonObject {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonObject)
+    : {};
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
+function readBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value === "true";
+  return null;
+}
+
+function readCount(value: unknown) {
+  const data = readObject(value);
+  const candidates = [
+    data.count,
+    data.reviews_count,
+    data.total,
+    data.total_count,
+    data.review_count,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "number") return candidate;
+    if (typeof candidate === "string" && candidate.trim() && !Number.isNaN(Number(candidate))) {
+      return Number(candidate);
+    }
+  }
+
+  return null;
+}
+
+function normalizeShopDomain(value: string) {
+  return value
+    .trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "")
+    .toLowerCase();
+}
+
+async function parseJudgeMeResponse(response: Response) {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+export async function callJudgeMeApi(
+  path: string,
+  options: {
+    apiToken: string;
+    shopDomain: string;
+    method?: "GET" | "POST" | "PUT" | "DELETE";
+    body?: unknown;
+    searchParams?: Record<string, string | string[] | number | boolean | undefined>;
+  },
+) {
+  const url = new URL(`${JUDGEME_API_BASE}${path}`);
+  url.searchParams.set("shop_domain", normalizeShopDomain(options.shopDomain));
+
+  for (const [key, value] of Object.entries(options.searchParams ?? {})) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) url.searchParams.append(key, item);
+    } else {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  const response = await fetch(url.toString(), {
+    method: options.method ?? "GET",
+    headers: {
+      Accept: "application/json",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      "X-Api-Token": options.apiToken,
+    },
+    ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+  });
+  const body = await parseJudgeMeResponse(response);
+
+  if (!response.ok) {
+    const message =
+      readString(readObject(body).error) ||
+      readString(readObject(body).message) ||
+      `Judge.me request failed with ${response.status} ${response.statusText}`;
+
+    throw new JudgeMeApiError(message, {
+      status: response.status,
+      statusText: response.statusText,
+      details: {
+        endpoint: path,
+        shopDomain: normalizeShopDomain(options.shopDomain),
+        response: body,
+      },
+    });
+  }
+
+  return body;
+}
+
+export async function buildJudgeMeSnapshot(apiToken: string, shopDomain: string) {
+  const normalizedShopDomain = normalizeShopDomain(shopDomain);
+  const [accountResponse, countResponse, reviewsResponse, settingsResponse] = await Promise.all([
+    callJudgeMeApi("/shops/info", { apiToken, shopDomain: normalizedShopDomain }),
+    callJudgeMeApi("/reviews/count", { apiToken, shopDomain: normalizedShopDomain }),
+    callJudgeMeApi("/reviews", {
+      apiToken,
+      shopDomain: normalizedShopDomain,
+      searchParams: { per_page: 5, page: 1 },
+    }),
+    callJudgeMeApi("/settings", {
+      apiToken,
+      shopDomain: normalizedShopDomain,
+      searchParams: {
+        "setting_keys[]": [
+          "admin_email",
+          "autopublish",
+          "widget_star_color",
+          "enable_review_pictures",
+        ],
+      },
+    }),
+  ]);
+
+  const account = readObject(readObject(accountResponse).shop ?? accountResponse);
+  const reviews = Array.isArray(readObject(reviewsResponse).reviews)
+    ? (readObject(reviewsResponse).reviews as unknown[])
+    : [];
+  const settings = readObject(readObject(settingsResponse).settings ?? settingsResponse);
+
+  return {
+    shopDomain: normalizedShopDomain,
+    account,
+    settings,
+    reviewCount: readCount(countResponse),
+    sampleReviews: reviews.slice(0, 5),
+    raw: {
+      account: accountResponse,
+      reviewCount: countResponse,
+      reviews: reviewsResponse,
+      settings: settingsResponse,
+    },
+  };
+}
+
+export async function upsertJudgeMeConnection(input: {
+  shop: string;
+  shopDomain: string;
+  apiToken: string;
+  authMethod: "private_token";
+  scope?: string | null;
+}) {
+  const snapshot = await buildJudgeMeSnapshot(input.apiToken, input.shopDomain);
+  const account = snapshot.account;
+
+  return db.judgeMeConnection.upsert({
+    where: { shop: input.shop },
+    update: {
+      shopDomain: snapshot.shopDomain,
+      authMethod: input.authMethod,
+      encryptedApiToken: encryptSecret(input.apiToken),
+      tokenMask: maskJudgeMeToken(input.apiToken),
+      scope: input.scope ?? null,
+      status: "connected",
+      shopName: readString(account.name),
+      shopEmail: readString(account.email),
+      ownerName: readString(account.owner),
+      plan: readString(account.plan),
+      platform: readString(account.platform),
+      country: readString(account.country),
+      timezone: readString(account.timezone),
+      widgetVersion: readString(account.widget_version),
+      awesome: readBoolean(account.awesome),
+      reviewCount: snapshot.reviewCount,
+      lastVerifiedAt: new Date(),
+      lastError: null,
+      accountJson: compactJson(snapshot.raw.account),
+      settingsJson: compactJson(snapshot.settings),
+      sampleReviewsJson: compactJson(snapshot.sampleReviews),
+    },
+    create: {
+      shop: input.shop,
+      shopDomain: snapshot.shopDomain,
+      authMethod: input.authMethod,
+      encryptedApiToken: encryptSecret(input.apiToken),
+      tokenMask: maskJudgeMeToken(input.apiToken),
+      scope: input.scope ?? null,
+      status: "connected",
+      shopName: readString(account.name),
+      shopEmail: readString(account.email),
+      ownerName: readString(account.owner),
+      plan: readString(account.plan),
+      platform: readString(account.platform),
+      country: readString(account.country),
+      timezone: readString(account.timezone),
+      widgetVersion: readString(account.widget_version),
+      awesome: readBoolean(account.awesome),
+      reviewCount: snapshot.reviewCount,
+      lastVerifiedAt: new Date(),
+      lastError: null,
+      accountJson: compactJson(snapshot.raw.account),
+      settingsJson: compactJson(snapshot.settings),
+      sampleReviewsJson: compactJson(snapshot.sampleReviews),
+    },
+  });
+}
+
+export async function refreshJudgeMeConnection(shop: string) {
+  const connection = await db.judgeMeConnection.findUnique({ where: { shop } });
+  if (!connection) {
+    throw new JudgeMeApiError("There is no Judge.me connection saved for this shop.");
+  }
+
+  try {
+    const apiToken = decryptSecret(connection.encryptedApiToken);
+    const snapshot = await buildJudgeMeSnapshot(apiToken, connection.shopDomain);
+    const account = snapshot.account;
+
+    return db.judgeMeConnection.update({
+      where: { shop },
+      data: {
+        status: "connected",
+        shopName: readString(account.name),
+        shopEmail: readString(account.email),
+        ownerName: readString(account.owner),
+        plan: readString(account.plan),
+        platform: readString(account.platform),
+        country: readString(account.country),
+        timezone: readString(account.timezone),
+        widgetVersion: readString(account.widget_version),
+        awesome: readBoolean(account.awesome),
+        reviewCount: snapshot.reviewCount,
+        lastVerifiedAt: new Date(),
+        lastError: null,
+        accountJson: compactJson(snapshot.raw.account),
+        settingsJson: compactJson(snapshot.settings),
+        sampleReviewsJson: compactJson(snapshot.sampleReviews),
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Judge.me error";
+    await db.judgeMeConnection.update({
+      where: { shop },
+      data: {
+        status: "error",
+        lastError: message,
+      },
+    });
+    throw error;
+  }
+}
+
+export async function getJudgeMeConnectionView(shop: string) {
+  const connection = await db.judgeMeConnection.findUnique({ where: { shop } });
+  if (!connection) return null;
+
+  return {
+    id: connection.id,
+    shop: connection.shop,
+    shopDomain: connection.shopDomain,
+    authMethod: connection.authMethod,
+    tokenMask: connection.tokenMask,
+    scope: connection.scope,
+    status: connection.status,
+    shopName: connection.shopName,
+    shopEmail: connection.shopEmail,
+    ownerName: connection.ownerName,
+    plan: connection.plan,
+    platform: connection.platform,
+    country: connection.country,
+    timezone: connection.timezone,
+    widgetVersion: connection.widgetVersion,
+    awesome: connection.awesome,
+    reviewCount: connection.reviewCount,
+    lastVerifiedAt: connection.lastVerifiedAt?.toISOString() ?? null,
+    lastError: connection.lastError,
+    account: safeJsonParse(connection.accountJson),
+    settings: safeJsonParse(connection.settingsJson),
+    sampleReviews: safeJsonParse(connection.sampleReviewsJson),
+    createdAt: connection.createdAt.toISOString(),
+    updatedAt: connection.updatedAt.toISOString(),
+  };
+}
+
+export async function disconnectJudgeMe(shop: string) {
+  await db.judgeMeConnection.deleteMany({ where: { shop } });
+}
+
+export function serializeJudgeMeError(error: unknown) {
+  if (error instanceof JudgeMeApiError) {
+    return {
+      message: error.message,
+      status: error.status,
+      statusText: error.statusText,
+      details: error.details,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      details: error.stack,
+    };
+  }
+
+  return {
+    message: "Unknown Judge.me connection error.",
+    details: error,
+  };
+}

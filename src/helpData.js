@@ -1,7 +1,7 @@
 export const helpHeroBenefits = [
   {
     title: 'Customize',
-    description: 'Igu for your unique workflow',
+    description: 'Reply Pilot for your unique workflow',
   },
   {
     title: 'Build',
@@ -21,7 +21,7 @@ export const helpQuickLinks = [
   {
     title: 'Getting started',
     description:
-      'Learn the basics and set up Igu to start managing review replies.',
+      'Connect Judge.me, train brand voice, and start approving replies.',
     actionLabel: 'View guide',
     icon: 'book',
     tone: 'green',
@@ -29,7 +29,7 @@ export const helpQuickLinks = [
   {
     title: 'Best practices',
     description:
-      'Discover tips to get the most out of Igu and create better customer experiences.',
+      'Tune review replies so they stay personal, concise, and safe to send.',
     actionLabel: 'View tips',
     icon: 'lightbulb',
     tone: 'blue',
@@ -65,7 +65,7 @@ export const helpResources = [
   },
   {
     title: 'Changelog',
-    description: "See what's new in Igu",
+    description: "See what's new in Reply Pilot",
     icon: 'changelog',
   },
   {

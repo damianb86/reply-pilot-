@@ -1,122 +1,84 @@
+/* eslint-disable react/prop-types */
 import {useEffect, useRef, useState} from 'react';
 import {useFetcher} from 'react-router';
 import {
+  Badge,
   Banner,
   BlockStack,
   Box,
   Button,
   Card,
-  Divider,
+  Checkbox,
   Icon,
   InlineGrid,
   InlineStack,
   Select,
-  Tabs,
   Text,
   TextField,
 } from '@shopify/polaris';
-import {HideIcon, ViewIcon} from '@shopify/polaris-icons';
+import {
+  AlertTriangleIcon,
+  CheckCircleIcon,
+  ConnectIcon,
+  HideIcon,
+  RefreshIcon,
+  ViewIcon,
+} from '@shopify/polaris-icons';
 
-const tabs = [
-  {id: 'general', content: 'General'},
-  {id: 'notifications', content: 'Notifications'},
-  {id: 'auto-approve', content: 'Auto-approve'},
-  {id: 'api', content: 'API'},
+const settingsNav = ['Connections', 'Auto-reply rules', 'Notifications', 'Data & privacy', 'Plan & billing'];
+
+const confidenceOptions = [
+  {label: '85% and above', value: '85'},
+  {label: '90% and above', value: '90'},
+  {label: '95% and above', value: '95'},
 ];
 
-const languageOptions = [{label: 'English', value: 'english'}];
-const repliesPerPageOptions = [{label: '20', value: '20'}];
-const retentionOptions = [{label: '12 months', value: '12-months'}];
-const timezoneOptions = [{label: '(GMT-05:00) Eastern Time (US & Canada)', value: 'est'}];
-const dateFormatOptions = [{label: 'MMM D, YYYY', value: 'mmm-d-yyyy'}];
+const retentionOptions = [
+  {label: '12 months', value: '12-months'},
+  {label: '24 months', value: '24-months'},
+  {label: 'Forever', value: 'forever'},
+];
+
+const timezoneOptions = [
+  {label: '(GMT-03:00) Buenos Aires', value: 'america-argentina-cordoba'},
+  {label: '(GMT-05:00) Eastern Time', value: 'eastern'},
+  {label: '(GMT+00:00) UTC', value: 'utc'},
+];
 
 function SettingsSwitch({checked, label, onChange}) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-label={label}
-      aria-checked={checked}
-      className={`settings-switch ${checked ? 'is-on' : ''}`}
-      onClick={() => onChange(!checked)}
-    >
-      <span className="settings-switch-thumb" />
-    </button>
-  );
-}
-
-function SettingsPanel({title, description, children, id, footer}) {
-  return (
-    <div id={id}>
-      <Card padding="0">
-        <Box padding="400">
-          <BlockStack gap="100">
-            <Text as="h2" variant="headingLg">{title}</Text>
-            <Text as="p" variant="bodyMd" tone="subdued">{description}</Text>
-          </BlockStack>
-        </Box>
-        <Divider />
-        <BlockStack gap="0">{children}</BlockStack>
-        {footer && (
-          <>
-            <Divider />
-            <Box padding="400">
-              <InlineStack align="end" gap="200">{footer}</InlineStack>
-            </Box>
-          </>
-        )}
-      </Card>
-    </div>
+    <Checkbox label={label} labelHidden checked={checked} onChange={onChange} />
   );
 }
 
 function FieldRow({label, description, children}) {
   return (
-    <>
-      <Box paddingInline="400" paddingBlock="300">
-        <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
-          <BlockStack gap="050">
-            <Text as="span" variant="bodyMd" fontWeight="semibold">{label}</Text>
-            {description && (
-              <Text as="span" variant="bodyMd" tone="subdued">{description}</Text>
-            )}
-          </BlockStack>
-          <Box>{children}</Box>
-        </InlineStack>
-      </Box>
-      <Divider />
-    </>
+    <div className="rp-field-row">
+      <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
+        <BlockStack gap="050">
+          <Text as="p" variant="bodyMd" fontWeight="semibold">{label}</Text>
+          {description ? <Text as="p" variant="bodyMd" tone="subdued">{description}</Text> : null}
+        </BlockStack>
+        <Box>{children}</Box>
+      </InlineStack>
+    </div>
   );
 }
 
-function DangerRow({title, description, actionLabel}) {
+function SectionCard({title, description, children, action}) {
   return (
-    <>
-      <Box paddingInline="400" paddingBlock="300">
-        <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
-          <BlockStack gap="050">
-            <Text as="span" variant="bodyMd" fontWeight="semibold" tone="critical">{title}</Text>
-            <Text as="span" variant="bodyMd" tone="subdued">{description}</Text>
+    <Card padding="0">
+      <Box padding="400">
+        <InlineStack align="space-between" blockAlign="start" gap="300">
+          <BlockStack gap="100">
+            <Text as="h2" variant="headingLg">{title}</Text>
+            <Text as="p" variant="bodyMd" tone="subdued">{description}</Text>
           </BlockStack>
-          <Button tone="critical" variant="secondary">{actionLabel}</Button>
+          {action}
         </InlineStack>
       </Box>
-      <Divider />
-    </>
-  );
-}
-
-function DetailRow({label, children}) {
-  return (
-    <>
-      <Box paddingInline="400" paddingBlock="300">
-        <InlineStack align="space-between" blockAlign="center" gap="400">
-          <Text as="span" variant="bodyMd" fontWeight="semibold">{label}</Text>
-          {children}
-        </InlineStack>
-      </Box>
-      <Divider />
-    </>
+      <BlockStack gap="0">{children}</BlockStack>
+    </Card>
   );
 }
 
@@ -127,84 +89,34 @@ function JudgeMeIntegrationPanel() {
   const [showToken, setShowToken] = useState(false);
   const [apiToken, setApiToken] = useState('');
   const [resultVisible, setResultVisible] = useState(false);
+  const wasSubmitting = useRef(false);
 
   const isSubmitting = fetcher.state === 'submitting';
-  const wasSubmitting = useRef(false);
 
   useEffect(() => {
     if (fetcher.state === 'submitting') wasSubmitting.current = true;
     if (wasSubmitting.current && fetcher.state === 'idle' && fetcher.data !== undefined) {
       wasSubmitting.current = false;
       setResultVisible(true);
+      if (fetcher.data?.success) setShowForm(false);
     }
   }, [fetcher.state, fetcher.data]);
 
   const result = resultVisible ? fetcher.data : undefined;
 
-  function handleReconnect() {
-    setShowForm(true);
-    setResultVisible(false);
-    setApiToken('');
-  }
-
-  function handleCancel() {
-    setShowForm(false);
-    setResultVisible(false);
-  }
-
-  return (
-    <SettingsPanel
-      id="judgeme-integration"
-      title="Judge.me integration"
-      description="Manage your Judge.me connection."
-      footer={
-        !showForm ? (
-          <Button onClick={handleReconnect}>Reconnect</Button>
-        ) : (
-          <>
-            <Button disabled={isSubmitting} onClick={handleCancel}>Cancel</Button>
-            <Button
-              variant="primary"
-              submit
-              disabled={isSubmitting}
-              loading={isSubmitting}
-            >
-              Verify & save
-            </Button>
-          </>
-        )
-      }
-    >
-      {!showForm ? (
-        <>
-          <DetailRow label="Status">
-            <Badge tone="info">Not connected</Badge>
-          </DetailRow>
-          <DetailRow label="Store">
-            <Text as="span" variant="bodyMd" tone="subdued">Connect your store review source</Text>
-          </DetailRow>
-          <DetailRow label="API key">
-            <InlineStack gap="200" blockAlign="center">
-              <Text as="span" variant="bodyMd" tone="subdued">
-                {showApiKey ? 'jm_live_82b7e3d1f9046c5a' : '••••••••••••••••••••••••'}
-              </Text>
-              <Button
-                icon={showApiKey ? HideIcon : ViewIcon}
-                variant="plain"
-                accessibilityLabel={showApiKey ? 'Hide API key' : 'Show API key'}
-                onClick={() => setShowApiKey(v => !v)}
-              />
-            </InlineStack>
-          </DetailRow>
-        </>
-      ) : (
+  if (showForm) {
+    return (
+      <SectionCard
+        title="Judge.me connection"
+        description="Verify a Judge.me API token before importing reviews."
+      >
         <fetcher.Form method="post">
           <input type="hidden" name="intent" value="verify-judgeme" />
-          <Box paddingInline="400" paddingBlock="300">
+          <Box padding="400">
             <BlockStack gap="400">
               <TextField
                 label="API token"
-                helpText="Find it in your Judge.me dashboard under Settings → General."
+                helpText="Find it in Judge.me under Settings > General."
                 type={showToken ? 'text' : 'password'}
                 name="apiToken"
                 value={apiToken}
@@ -215,148 +127,208 @@ function JudgeMeIntegrationPanel() {
                   <Button
                     icon={showToken ? HideIcon : ViewIcon}
                     accessibilityLabel={showToken ? 'Hide token' : 'Show token'}
-                    onClick={() => setShowToken(v => !v)}
+                    onClick={() => setShowToken((value) => !value)}
                   />
                 }
               />
-              {result && !result.success && (
-                <Banner tone="critical">{result.error}</Banner>
-              )}
-              {result?.success && (
-                <Banner tone="success">Connection verified successfully.</Banner>
-              )}
+              {result && !result.success ? <Banner tone="critical">{result.error}</Banner> : null}
+              {result?.success ? <Banner tone="success">Connection verified successfully.</Banner> : null}
+              <InlineStack align="end" gap="200">
+                <Button disabled={isSubmitting} onClick={() => setShowForm(false)}>Cancel</Button>
+                <Button variant="primary" submit loading={isSubmitting} disabled={isSubmitting}>
+                  Verify & save
+                </Button>
+              </InlineStack>
             </BlockStack>
           </Box>
         </fetcher.Form>
-      )}
-    </SettingsPanel>
-  );
-}
+      </SectionCard>
+    );
+  }
 
-function PlaceholderTab({index}) {
-  const tab = tabs[index];
   return (
-    <Card>
-      <BlockStack gap="300">
-        <Text as="h2" variant="headingLg">{tab?.content ?? 'Settings'}</Text>
-        <Text as="p" variant="bodyMd" tone="subdued">
-          This section is ready for the next round of configuration work.
-        </Text>
-      </BlockStack>
-    </Card>
+    <SectionCard
+      title="Judge.me connection"
+      description="Judge.me is the first supported source. Other integrations are queued by vote."
+      action={<Button icon={ConnectIcon} onClick={() => setShowForm(true)}>Connect</Button>}
+    >
+      <FieldRow label="Status" description="No production source is connected yet.">
+        <Badge tone="attention">Not connected</Badge>
+      </FieldRow>
+      <FieldRow label="Store" description="Connect your Shopify store review source.">
+        <Text as="span" variant="bodyMd" tone="subdued">Waiting for token</Text>
+      </FieldRow>
+      <FieldRow label="API key" description="Stored encrypted after verification.">
+        <InlineStack gap="200" blockAlign="center">
+          <Text as="span" variant="bodyMd" tone="subdued">
+            {showApiKey ? 'jm_live_82b7e3d1f9046c5a' : '••••••••••••••••••••••••'}
+          </Text>
+          <Button
+            icon={showApiKey ? HideIcon : ViewIcon}
+            variant="plain"
+            accessibilityLabel={showApiKey ? 'Hide API key' : 'Show API key'}
+            onClick={() => setShowApiKey((value) => !value)}
+          />
+        </InlineStack>
+      </FieldRow>
+    </SectionCard>
   );
 }
 
 export default function SettingsPage() {
-  const [selectedTab, setSelectedTab] = useState(0);
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [activeSection, setActiveSection] = useState(settingsNav[0]);
   const [values, setValues] = useState({
-    language: 'english',
-    repliesPerPage: '20',
-    showConfidence: true,
-    showProductImages: true,
-    helpCenterLink: false,
-    useAiEmojis: true,
+    autoApprove: false,
+    humanLowConfidence: true,
+    notifyCritical: true,
+    notifyDailyDigest: true,
+    confidenceThreshold: '90',
     retention: '12-months',
-    timezone: 'est',
-    dateFormat: 'mmm-d-yyyy',
+    timezone: 'america-argentina-cordoba',
   });
 
   function set(key, value) {
-    setValues(prev => ({...prev, [key]: value}));
+    setValues((current) => ({...current, [key]: value}));
   }
 
   return (
     <BlockStack gap="400">
-      <BlockStack gap="100">
-        <Text as="h1" variant="heading2xl">Settings</Text>
-        <Text as="p" variant="bodyLg" tone="subdued">Manage your preferences and integrations.</Text>
-      </BlockStack>
-
-      <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab} />
-
-      {selectedTab === 0 ? (
-        <BlockStack gap="400">
-          <InlineGrid columns={{xs: 1, md: 2}} gap="400" alignItems="start">
-            <BlockStack gap="400">
-              <SettingsPanel
-                title="General settings"
-                description="Configure the basics of Igu."
-              >
-                <FieldRow label="Default reply language" description="The language used to generate AI replies.">
-                  <Box minWidth="160px">
-                    <Select label="Default reply language" labelHidden options={languageOptions} value={values.language} onChange={v => set('language', v)} />
-                  </Box>
-                </FieldRow>
-                <FieldRow label="Replies per page" description="Number of reviews to display per page.">
-                  <Box minWidth="160px">
-                    <Select label="Replies per page" labelHidden options={repliesPerPageOptions} value={values.repliesPerPage} onChange={v => set('repliesPerPage', v)} />
-                  </Box>
-                </FieldRow>
-                <FieldRow label="Show confidence score" description="Show confidence score for each AI reply.">
-                  <SettingsSwitch label="Show confidence score" checked={values.showConfidence} onChange={v => set('showConfidence', v)} />
-                </FieldRow>
-                <FieldRow label="Show product images" description="Show product images in reviews.">
-                  <SettingsSwitch label="Show product images" checked={values.showProductImages} onChange={v => set('showProductImages', v)} />
-                </FieldRow>
-                <FieldRow label="Link to help center" description="Add a help center link in your replies.">
-                  <SettingsSwitch label="Link to help center" checked={values.helpCenterLink} onChange={v => set('helpCenterLink', v)} />
-                </FieldRow>
-                <FieldRow label="Use AI emojis" description="Allow AI to use emojis in replies when appropriate.">
-                  <SettingsSwitch label="Use AI emojis" checked={values.useAiEmojis} onChange={v => set('useAiEmojis', v)} />
-                </FieldRow>
-              </SettingsPanel>
-
-              <SettingsPanel title="Data & privacy" description="Control your data and how it's used.">
-                <FieldRow label="Data retention" description="Choose how long we keep your data.">
-                  <Box minWidth="160px">
-                    <Select label="Data retention" labelHidden options={retentionOptions} value={values.retention} onChange={v => set('retention', v)} />
-                  </Box>
-                </FieldRow>
-                <FieldRow label="Delete data" description="Permanently delete all data and history.">
-                  <Button tone="critical" variant="secondary">Delete data</Button>
-                </FieldRow>
-              </SettingsPanel>
-            </BlockStack>
-
-            <BlockStack gap="400">
-              <JudgeMeIntegrationPanel />
-
-              <SettingsPanel title="Danger zone" description="Irreversible and advanced actions.">
-                <DangerRow
-                  title="Disconnect integration"
-                  description="This will stop Igu from accessing your review data."
-                  actionLabel="Disconnect"
-                />
-                <DangerRow
-                  title="Delete all generated replies"
-                  description="This will permanently delete all AI generated replies."
-                  actionLabel="Delete all"
-                />
-              </SettingsPanel>
-
-              <SettingsPanel title="Other settings" description="Additional preferences.">
-                <FieldRow label="Timezone" description="Set the timezone for activity logs and reports.">
-                  <Box minWidth="260px">
-                    <Select label="Timezone" labelHidden options={timezoneOptions} value={values.timezone} onChange={v => set('timezone', v)} />
-                  </Box>
-                </FieldRow>
-                <FieldRow label="Date format" description="Choose your preferred date format.">
-                  <Box minWidth="260px">
-                    <Select label="Date format" labelHidden options={dateFormatOptions} value={values.dateFormat} onChange={v => set('dateFormat', v)} />
-                  </Box>
-                </FieldRow>
-              </SettingsPanel>
-            </BlockStack>
-          </InlineGrid>
-
-          <InlineStack align="end">
-            <Button variant="primary">Save changes</Button>
-          </InlineStack>
+      <InlineStack align="space-between" blockAlign="center" gap="300">
+        <BlockStack gap="100">
+          <Text as="h1" variant="heading2xl">Settings</Text>
+          <Text as="p" variant="bodyLg" tone="subdued">
+            Configure sources, approval behavior, notifications, and account controls.
+          </Text>
         </BlockStack>
-      ) : (
-        <PlaceholderTab index={selectedTab} />
-      )}
+        <Button icon={RefreshIcon}>Sync settings</Button>
+      </InlineStack>
+
+      <div className="rp-settings-layout">
+        <aside className="rp-settings-nav" aria-label="Settings sections">
+          <BlockStack gap="150">
+            <Text as="p" variant="bodySm" tone="subdued" fontWeight="semibold">SETTINGS</Text>
+            {settingsNav.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`rp-settings-nav-item ${activeSection === item ? 'is-active' : ''}`}
+                onClick={() => setActiveSection(item)}
+              >
+                {item}
+              </button>
+            ))}
+          </BlockStack>
+        </aside>
+
+        <BlockStack gap="400">
+          {activeSection === 'Connections' ? (
+            <>
+              <JudgeMeIntegrationPanel />
+              <InlineGrid columns={{xs: 1, md: 2}} gap="400">
+                <Card>
+                  <BlockStack gap="300">
+                    <InlineStack gap="200" blockAlign="center">
+                      <Icon source={CheckCircleIcon} tone="success" />
+                      <Text as="h2" variant="headingLg">Source permissions</Text>
+                    </InlineStack>
+                    <Text as="p" variant="bodyMd" tone="subdued">
+                      Reply Pilot needs read access to import reviews and write access only when a merchant approves a reply.
+                    </Text>
+                    <InlineStack gap="200">
+                      <Badge>Read reviews</Badge>
+                      <Badge>Write approved replies</Badge>
+                    </InlineStack>
+                  </BlockStack>
+                </Card>
+
+                <Card>
+                  <BlockStack gap="300">
+                    <InlineStack gap="200" blockAlign="center">
+                      <Icon source={AlertTriangleIcon} tone="critical" />
+                      <Text as="h2" variant="headingLg">Disconnect</Text>
+                    </InlineStack>
+                    <Text as="p" variant="bodyMd" tone="subdued">
+                      Disconnecting stops imports and disables sending until a source is connected again.
+                    </Text>
+                    <Button tone="critical">Disconnect integration</Button>
+                  </BlockStack>
+                </Card>
+              </InlineGrid>
+            </>
+          ) : null}
+
+          {activeSection === 'Auto-reply rules' ? (
+            <SectionCard
+              title="Auto-reply rules"
+              description="Keep approval human-led by default, with explicit thresholds for future automation."
+            >
+              <FieldRow label="Auto-approve high-confidence replies" description="Send automatically only when confidence clears the selected threshold.">
+                <SettingsSwitch label="Auto-approve high-confidence replies" checked={values.autoApprove} onChange={(value) => set('autoApprove', value)} />
+              </FieldRow>
+              <FieldRow label="High-confidence threshold" description="Drafts below this value stay in the manual approval queue.">
+                <Box minWidth="180px">
+                  <Select label="High-confidence threshold" labelHidden options={confidenceOptions} value={values.confidenceThreshold} onChange={(value) => set('confidenceThreshold', value)} />
+                </Box>
+              </FieldRow>
+              <FieldRow label="Route low-confidence reviews to human" description="Flag angry, refund, delivery, and low-confidence reviews before sending.">
+                <SettingsSwitch label="Route low-confidence reviews to human" checked={values.humanLowConfidence} onChange={(value) => set('humanLowConfidence', value)} />
+              </FieldRow>
+            </SectionCard>
+          ) : null}
+
+          {activeSection === 'Notifications' ? (
+            <SectionCard
+              title="Notifications"
+              description="Control when the merchant gets pulled back into the queue."
+            >
+              <FieldRow label="Critical review alerts" description="Notify when a review needs human handling.">
+                <SettingsSwitch label="Critical review alerts" checked={values.notifyCritical} onChange={(value) => set('notifyCritical', value)} />
+              </FieldRow>
+              <FieldRow label="Daily digest" description="Send a summary of pending, sent, and edited replies.">
+                <SettingsSwitch label="Daily digest" checked={values.notifyDailyDigest} onChange={(value) => set('notifyDailyDigest', value)} />
+              </FieldRow>
+            </SectionCard>
+          ) : null}
+
+          {activeSection === 'Data & privacy' ? (
+            <SectionCard
+              title="Data & privacy"
+              description="Set retention and timezone for review activity and audit logs."
+            >
+              <FieldRow label="Data retention" description="Choose how long Reply Pilot keeps generated reply history.">
+                <Box minWidth="180px">
+                  <Select label="Data retention" labelHidden options={retentionOptions} value={values.retention} onChange={(value) => set('retention', value)} />
+                </Box>
+              </FieldRow>
+              <FieldRow label="Timezone" description="Used for sync times, sent states, and logs.">
+                <Box minWidth="260px">
+                  <Select label="Timezone" labelHidden options={timezoneOptions} value={values.timezone} onChange={(value) => set('timezone', value)} />
+                </Box>
+              </FieldRow>
+              <FieldRow label="Delete generated replies" description="Permanently delete generated replies and audit history.">
+                <Button tone="critical">Delete data</Button>
+              </FieldRow>
+            </SectionCard>
+          ) : null}
+
+          {activeSection === 'Plan & billing' ? (
+            <SectionCard
+              title="Plan & billing"
+              description="Usage is based on generated drafts and approved sends."
+            >
+              <FieldRow label="Current plan" description="Production mode, human approval required.">
+                <Badge tone="info">Pilot</Badge>
+              </FieldRow>
+              <FieldRow label="Quota" description="Reply Pilot quota is used unless a custom model key is configured.">
+                <Text as="span" variant="bodyMd">0 / 1,000 drafts</Text>
+              </FieldRow>
+              <FieldRow label="Billing">
+                <Button>Manage plan</Button>
+              </FieldRow>
+            </SectionCard>
+          ) : null}
+        </BlockStack>
+      </div>
     </BlockStack>
   );
 }

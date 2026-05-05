@@ -26,6 +26,7 @@ services:
     expose:
       - "3000"
     environment:
+      APP_ENV: production
       NODE_ENV: production
       NODE_OPTIONS: ${NODE_OPTIONS}
       PORT: 3000
@@ -33,7 +34,7 @@ services:
       SHOPIFY_API_SECRET: ${SHOPIFY_API_SECRET:?Set SHOPIFY_API_SECRET in the app .env}
       SCOPES: ${SCOPES:?Set SCOPES in the app .env}
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the app .env}
-      SHOPIFY_APP_URL: ${SHOPIFY_APP_URL:?Set SHOPIFY_APP_URL in the app .env}
+      SHOPIFY_APP_URL: ${PROD_SHOPIFY_APP_URL:?Set PROD_SHOPIFY_APP_URL in the app .env}
       CONTACT_EMAIL: ${CONTACT_EMAIL:?Set CONTACT_EMAIL in the app .env}
       EMAIL_HOST: ${EMAIL_HOST:?Set EMAIL_HOST in the app .env}
       EMAIL_PORT: ${EMAIL_PORT:?Set EMAIL_PORT in the app .env}

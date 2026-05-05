@@ -1,23 +1,21 @@
 export const defaultBrandVoice = {
   persona:
-    'Describe how your store should sound when replying to reviews. Include your tone, product expertise, escalation rules, and phrases your team prefers to use or avoid.',
-  greeting: 'Thank you so much for your review',
-  signOff: 'The team',
+    "I keep replies warm, concise, and specific. I thank customers without sounding scripted, mention the exact detail they shared, and keep the tone human rather than corporate. When something goes wrong I acknowledge it directly, apologize without overexplaining, and point to the next practical step. I avoid exaggerated praise, generic customer-service phrases, and details that were not already provided.",
+  greeting: 'Hi {name} -',
+  signOff: '- The team',
 };
 
 export const defaultToneKeywords = [
   'warm',
-  'professional',
-  'friendly',
-  'empathetic',
-  'enthusiastic',
-  'concise',
+  'a little playful',
+  'not corporate',
 ];
 
 export const defaultAvoidPhrases = [
-  'overly formal',
-  'generic phrases',
-  'excessive exclamation marks',
+  'reach out',
+  'valued customer',
+  'multiple emojis',
+  'exclamation chains',
 ];
 
 export const previewOptions = [

@@ -1,7 +1,7 @@
 .page {
   min-height: 100vh;
-  background: #f5f7fa;
-  color: #17202a;
+  background: #f6f6f7;
+  color: #202223;
   display: grid;
   place-items: center;
   padding: 32px 20px;
@@ -21,24 +21,24 @@
 }
 
 .eyebrow {
-  color: #0f766e;
+  color: #6d7175;
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: 650;
   letter-spacing: 0;
   margin: 0;
   text-transform: uppercase;
 }
 
 .copy h1 {
-  color: #111827;
-  font-size: clamp(3rem, 8vw, 6rem);
-  line-height: 0.95;
+  color: #202223;
+  font-size: clamp(3rem, 8vw, 5rem);
+  line-height: 1;
   letter-spacing: 0;
   margin: 0;
 }
 
 .lede {
-  color: #4b5563;
+  color: #6d7175;
   font-size: 1.125rem;
   max-width: 680px;
   margin: 0;
@@ -55,18 +55,18 @@
   display: grid;
   gap: 6px;
   min-width: min(360px, 100%);
-  color: #374151;
+  color: #202223;
   font-size: 0.9375rem;
   font-weight: 650;
 }
 
 .input {
   min-height: 44px;
-  border: 1px solid #c9d2dc;
+  border: 1px solid #c9cccf;
   border-radius: 8px;
   padding: 0 12px;
-  background: #fff;
-  color: #111827;
+  background: #ffffff;
+  color: #202223;
 }
 
 .button {
@@ -74,19 +74,19 @@
   border: 0;
   border-radius: 8px;
   padding: 0 18px;
-  background: #0f766e;
-  color: #fff;
+  background: #008060;
+  color: #ffffff;
   cursor: pointer;
   font-weight: 700;
 }
 
 .panel {
-  background: #ffffff;
-  border: 1px solid #d7dee7;
-  border-radius: 8px;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
   display: grid;
   gap: 0;
   overflow: hidden;
+  background: #ffffff;
 }
 
 .panel div {
@@ -96,16 +96,16 @@
 }
 
 .panel div + div {
-  border-top: 1px solid #e5eaf0;
+  border-top: 1px solid #dfe3e8;
 }
 
 .panel strong {
-  color: #111827;
+  color: #202223;
   font-size: 1rem;
 }
 
 .panel span {
-  color: #52606d;
+  color: #6d7175;
 }
 
 @media (max-width: 760px) {

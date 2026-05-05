@@ -1,13 +1,17 @@
+/* eslint-disable react/prop-types */
 import {useEffect, useState} from 'react';
-import {BlockStack, Button, Icon, InlineStack, Page, ProgressBar, Text} from '@shopify/polaris';
+import {Badge, BlockStack, Button, Icon, InlineStack, Page, Text} from '@shopify/polaris';
 import {
   AutomationIcon,
   ChartVerticalIcon,
   ChatIcon,
+  CheckCircleIcon,
   HomeIcon,
+  ImportIcon,
   PageIcon,
   QuestionCircleIcon,
   SettingsIcon,
+  SendIcon,
 } from '@shopify/polaris-icons';
 import BrandVoicePage from './pages/BrandVoicePage';
 import DashboardPage from './pages/DashboardPage';
@@ -17,11 +21,10 @@ import ReviewsPage from './pages/ReviewsPage';
 import SettingsPage from './pages/SettingsPage';
 
 const navigationItems = [
-  {key: 'dashboard', label: 'Dashboard', icon: 'home', path: '/dashboard'},
-  {key: 'reviews', label: 'Reviews', icon: 'reviews', path: '/reviews'},
+  {key: 'dashboard', label: 'Connect', icon: 'home', path: '/dashboard'},
+  {key: 'reviews', label: 'Queue', icon: 'reviews', path: '/reviews'},
   {key: 'brand-voice', label: 'Brand voice', icon: 'voice', path: '/brand-voice'},
-  {key: 'analytics', label: 'Analytics', icon: 'analytics'},
-  {key: 'logs', label: 'Logs', icon: 'logs', path: '/logs'},
+  {key: 'logs', label: 'Sent', icon: 'logs', path: '/logs'},
   {key: 'settings', label: 'Settings', icon: 'settings', path: '/settings'},
   {key: 'help', label: 'Help', icon: 'help', path: '/help'},
 ];
@@ -38,11 +41,12 @@ const iconMap = {
 
 function routeKeyFromPath(pathname) {
   if (pathname === '/dashboard') return 'dashboard';
+  if (pathname === '/reviews') return 'reviews';
   if (pathname === '/brand-voice') return 'brand-voice';
   if (pathname === '/logs') return 'logs';
   if (pathname === '/settings') return 'settings';
   if (pathname === '/help') return 'help';
-  return 'reviews';
+  return 'dashboard';
 }
 
 function NavigationIcon({name}) {
@@ -58,8 +62,8 @@ export default function App() {
 
   useEffect(() => {
     if (window.location.pathname === '/' || window.location.pathname === '') {
-      window.history.replaceState({}, '', '/reviews');
-      setCurrentPage('reviews');
+      window.history.replaceState({}, '', '/dashboard');
+      setCurrentPage('dashboard');
     }
 
     function handlePopState() {
@@ -85,12 +89,10 @@ export default function App() {
               <div className="app-mark-badge">
                 <Icon source={ChatIcon} tone="base" />
               </div>
-              <Text as="span" variant="headingLg">
-                Igu
-              </Text>
+              <Text as="span" variant="headingLg">Reply Pilot</Text>
             </div>
 
-            <nav className="sidebar-nav" aria-label="Igu sections">
+            <nav className="sidebar-nav" aria-label="Reply Pilot sections">
               {navigationItems.map((item) => {
                 const isActive = item.key === currentPage;
                 return (
@@ -112,36 +114,26 @@ export default function App() {
               <SidebarCard>
                 <BlockStack gap="300">
                   <InlineStack gap="200" blockAlign="center">
-                    <div className="status-dot" />
+                    <Badge tone="attention">Setup</Badge>
                     <Text as="p" variant="bodyMd" fontWeight="semibold">
-                      Connected to Judge.me
+                      Connect Judge.me
                     </Text>
                   </InlineStack>
                   <Text as="p" variant="bodySm" tone="subdued">
-                    Connect a review source
+                    Import reviews, draft replies, and send from one queue.
                   </Text>
-                  <Button fullWidth>View connection</Button>
+                  <Button icon={ImportIcon} fullWidth>Open connection</Button>
                 </BlockStack>
               </SidebarCard>
 
               <SidebarCard>
                 <BlockStack gap="300">
-                  <div>
-                    <Text as="p" variant="headingMd">
-                      Plan
-                    </Text>
-                    <Text as="p" variant="bodyMd">
-                      Production mode
-                    </Text>
-                    <Text as="p" variant="bodySm" tone="subdued">
-                      Real activity only
-                    </Text>
-                  </div>
-                  <ProgressBar progress={0} size="small" />
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    No replies sent yet
-                  </Text>
-                  <Button fullWidth>Manage plan</Button>
+                  <InlineStack gap="200" blockAlign="center">
+                    <Icon source={CheckCircleIcon} tone="success" />
+                    <Text as="p" variant="bodyMd" fontWeight="semibold">Production mode</Text>
+                  </InlineStack>
+                  <Text as="p" variant="bodySm" tone="subdued">38 sent today in the wireframe state.</Text>
+                  <Button icon={SendIcon} fullWidth>View sent replies</Button>
                 </BlockStack>
               </SidebarCard>
             </div>

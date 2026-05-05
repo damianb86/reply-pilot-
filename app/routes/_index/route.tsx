@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 import type { LoaderFunctionArgs } from "react-router";
 import { Form, redirect, useLoaderData } from "react-router";
 
@@ -32,11 +33,10 @@ export default function Index() {
       <section className={styles.hero}>
         <div className={styles.copy}>
           <p className={styles.eyebrow}>Shopify embedded app</p>
-          <h1>Igu</h1>
+          <h1>Reply Pilot</h1>
           <p className={styles.lede}>
-            A focused workspace for merchants who need review replies, brand
-            voice guidance, support requests, and privacy handling in one
-            Shopify-native admin experience.
+            AI drafts for Judge.me reviews, trained on the merchant's brand
+            voice and approved from a Shopify-native queue.
           </p>
 
           {showForm && (
@@ -59,18 +59,18 @@ export default function Index() {
           )}
         </div>
 
-        <div className={styles.panel} aria-label="Igu capabilities">
+        <div className={styles.panel} aria-label="Reply Pilot capabilities">
           <div>
             <strong>Review queue</strong>
-            <span>Work only with real imported reviews.</span>
+            <span>Bulk approve, regenerate, or route sensitive reviews to a human.</span>
           </div>
           <div>
             <strong>Brand voice</strong>
-            <span>Keep reply tone consistent across your team.</span>
+            <span>Set personality, sign-off, hard rules, and few-shot examples.</span>
           </div>
           <div>
-            <strong>Support</strong>
-            <span>Route merchant requests through production SMTP.</span>
+            <strong>Sent audit</strong>
+            <span>Track what shipped as-is and what the team edited.</span>
           </div>
         </div>
       </section>

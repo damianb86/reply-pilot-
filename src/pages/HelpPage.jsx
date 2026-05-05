@@ -1,9 +1,9 @@
+/* eslint-disable react/prop-types */
 import {useEffect, useState} from 'react';
 import {useFetcher} from 'react-router';
 import {
   Banner,
   BlockStack,
-  Box,
   Button,
   Card,
   Icon,
@@ -14,6 +14,7 @@ import {
   TextField,
 } from '@shopify/polaris';
 import {
+  AutomationIcon,
   BookOpenIcon,
   ChatIcon,
   CheckCircleIcon,
@@ -26,6 +27,9 @@ import {
   PlayCircleIcon,
   QuestionCircleIcon,
   StarIcon,
+  ThemeEditIcon,
+  WandIcon,
+  WorkIcon,
 } from '@shopify/polaris-icons';
 import {
   helpFeatureBullets,
@@ -48,56 +52,40 @@ const resourceIconMap = {
   code: CodeIcon,
 };
 
-function HelpHeroVisual() {
+const benefitIconMap = {
+  Customize: ThemeEditIcon,
+  Build: WorkIcon,
+  Create: WandIcon,
+  Experts: AutomationIcon,
+};
+
+const quickLinkToneMap = {
+  book: 'blue',
+  lightbulb: 'yellow',
+  faq: 'purple',
+  support: 'green',
+};
+
+function HelpIcon({source, tone = 'blue', size = 'md'}) {
   return (
-    <div className="help-hero-visual" aria-hidden="true">
-      <span className="help-spark spark-one" />
-      <span className="help-spark spark-two" />
-      <span className="help-spark spark-three" />
-      <span className="help-spark spark-four" />
-
-      <div className="help-hero-code-chip">
-        <Icon source={CodeIcon} tone="subdued" />
-      </div>
-
-      <div className="help-browser-window">
-        <div className="help-browser-dots">
-          <span />
-          <span />
-          <span />
-        </div>
-        <div className="help-browser-toolbar" />
-        <div className="help-browser-card">
-          <div className="help-browser-avatar" />
-          <div className="help-browser-lines">
-            <span />
-            <span />
-            <span />
-          </div>
-        </div>
-      </div>
-
-      <div className="help-puzzle-block help-puzzle-back">
-        <div className="help-puzzle-badge">S</div>
-      </div>
-      <div className="help-puzzle-block help-puzzle-front" />
-      <div className="help-gear-badge">⚙</div>
-    </div>
+    <span className={`rp-help-icon is-${tone} is-${size}`}>
+      <Icon source={source} tone="base" />
+    </span>
   );
 }
 
-function HelpQuickCard({item}) {
+function HelpQuickCard({item, onAction}) {
   return (
     <Card>
       <BlockStack gap="300">
-        <div className={`help-quick-icon is-${item.tone}`}>
-          <Icon source={quickLinkIconMap[item.icon]} tone="base" />
-        </div>
-        <BlockStack gap="100">
-          <Text as="h2" variant="headingLg">{item.title}</Text>
-          <Text as="p" variant="bodyLg" tone="subdued">{item.description}</Text>
-        </BlockStack>
-        <Button>{item.actionLabel}</Button>
+        <InlineStack gap="300" blockAlign="start" wrap={false}>
+          <HelpIcon source={quickLinkIconMap[item.icon]} tone={quickLinkToneMap[item.icon]} />
+          <BlockStack gap="100">
+            <Text as="h2" variant="headingLg">{item.title}</Text>
+            <Text as="p" variant="bodyMd" tone="subdued">{item.description}</Text>
+          </BlockStack>
+        </InlineStack>
+        <Button onClick={onAction}>{item.actionLabel}</Button>
       </BlockStack>
     </Card>
   );
@@ -105,17 +93,13 @@ function HelpQuickCard({item}) {
 
 function HelpResourceRow({item}) {
   return (
-    <button type="button" className="help-resource-row">
-      <span className="help-resource-icon">
-        <Icon source={resourceIconMap[item.icon]} tone="base" />
-      </span>
-      <span className="help-resource-copy">
+    <button type="button" className="rp-help-resource">
+      <HelpIcon source={resourceIconMap[item.icon]} tone="blue" />
+      <span>
         <Text as="span" variant="bodyMd" fontWeight="semibold">{item.title}</Text>
-        <Text as="span" variant="bodyMd" tone="subdued">{item.description}</Text>
+        <Text as="p" variant="bodyMd" tone="subdued">{item.description}</Text>
       </span>
-      <span className="help-resource-arrow">
-        <Icon source={ChevronRightIcon} tone="subdued" />
-      </span>
+      <Icon source={ChevronRightIcon} tone="subdued" />
     </button>
   );
 }
@@ -180,11 +164,11 @@ export default function HelpPage() {
 
   return (
     <BlockStack gap="400">
-      <InlineStack align="space-between" blockAlign="center">
+      <InlineStack align="space-between" blockAlign="center" gap="300">
         <BlockStack gap="100">
           <Text as="h1" variant="heading2xl">Help</Text>
           <Text as="p" variant="bodyLg" tone="subdued">
-            Find guides, FAQs, support, and expert help.
+            Setup guidance, support, and custom workflow requests for Reply Pilot.
           </Text>
         </BlockStack>
         <Button icon={ChatIcon} onClick={() => setOpenModal('support')}>Contact support</Button>
@@ -197,41 +181,29 @@ export default function HelpPage() {
       ) : null}
 
       <Card>
-        <InlineStack align="space-between" blockAlign="start" gap="400" wrap={false}>
+        <InlineGrid columns={{xs: 1, md: 2}} gap="500" alignItems="center">
           <BlockStack gap="400">
-            <Box
-              background="bg-fill-info-secondary"
-              borderRadius="full"
-              borderWidth="025"
-              borderColor="border-info"
-              paddingBlock="100"
-              paddingInline="300"
-            >
-              <InlineStack gap="100" blockAlign="center">
-                <Icon source={CodeIcon} tone="base" />
-                <Text as="span" variant="bodySm" fontWeight="semibold">CUSTOM DEVELOPMENT</Text>
-              </InlineStack>
-            </Box>
+            <InlineStack gap="200" blockAlign="center">
+              <HelpIcon source={CodeIcon} tone="red" />
+              <Text as="span" variant="bodySm" fontWeight="semibold" tone="critical">CUSTOM DEVELOPMENT</Text>
+            </InlineStack>
 
             <BlockStack gap="100">
               <Text as="h2" variant="heading2xl">Need something custom?</Text>
               <Text as="p" variant="bodyLg" tone="subdued">
-                We can tailor Igu to your workflow, build custom Shopify apps, and develop
-                specific features for your store with help from Shopify experts.
+                We can tailor Reply Pilot to your queue, build custom Shopify app flows, and connect review operations to the rest of your merchant workflow.
               </Text>
             </BlockStack>
 
-            <BlockStack gap="300">
+            <BlockStack gap="250">
               {helpHeroBenefits.map((benefit) => (
-                <InlineStack key={benefit.title} gap="200" blockAlign="start">
-                  <Box paddingBlockStart="050">
-                    <Icon source={CheckCircleIcon} tone="success" />
-                  </Box>
+                <div key={benefit.title} className="rp-help-benefit">
+                  <HelpIcon source={benefitIconMap[benefit.title] ?? CheckCircleIcon} tone="green" size="sm" />
                   <BlockStack gap="050">
                     <Text as="p" variant="bodyMd" fontWeight="semibold">{benefit.title}</Text>
                     <Text as="p" variant="bodyMd" tone="subdued">{benefit.description}</Text>
                   </BlockStack>
-                </InlineStack>
+                </div>
               ))}
             </BlockStack>
 
@@ -241,28 +213,38 @@ export default function HelpPage() {
             </InlineStack>
           </BlockStack>
 
-          <HelpHeroVisual />
-        </InlineStack>
+          <div className="rp-empty-state-card is-compact">
+            <BlockStack gap="300" align="center">
+              <span className="rp-empty-mark is-blue">
+                <Icon source={ClipboardChecklistIcon} tone="base" />
+              </span>
+              <Text as="h3" variant="headingLg" alignment="center">Implementation checklist</Text>
+              <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
+                Connect Judge.me, train brand voice, approve the first batch, then tune rules from Settings.
+              </Text>
+            </BlockStack>
+          </div>
+        </InlineGrid>
       </Card>
 
       <InlineGrid columns={{xs: 1, sm: 2, md: 4}} gap="300">
         {helpQuickLinks.map((item) => (
-          <HelpQuickCard key={item.title} item={item} />
+          <HelpQuickCard
+            key={item.title}
+            item={item}
+            onAction={() => item.icon === 'support' ? setOpenModal('support') : undefined}
+          />
         ))}
       </InlineGrid>
 
       <InlineGrid columns={{xs: 1, md: 2}} gap="400">
         <Card>
-          <BlockStack gap="400">
+          <BlockStack gap="300">
             <InlineStack gap="300" blockAlign="center">
-              <div className="help-panel-icon is-purple-soft">
-                <Icon source={ClipboardChecklistIcon} tone="base" />
-              </div>
+              <HelpIcon source={BookOpenIcon} tone="blue" />
               <BlockStack gap="050">
                 <Text as="h2" variant="headingLg">Resources</Text>
-                <Text as="p" variant="bodyMd" tone="subdued">
-                  Explore documentation, tutorials, and updates to help you succeed.
-                </Text>
+                <Text as="p" variant="bodyMd" tone="subdued">Documentation, tutorials, and updates.</Text>
               </BlockStack>
             </InlineStack>
             <BlockStack gap="0">
@@ -274,24 +256,20 @@ export default function HelpPage() {
         </Card>
 
         <Card>
-          <BlockStack gap="400">
+          <BlockStack gap="300">
             <InlineStack gap="300" blockAlign="center">
-              <div className="help-panel-icon is-red-soft">
-                <Icon source={StarIcon} tone="base" />
-              </div>
+              <HelpIcon source={StarIcon} tone="purple" />
               <BlockStack gap="050">
                 <Text as="h2" variant="headingLg">Request a feature</Text>
-                <Text as="p" variant="bodyMd" tone="subdued">
-                  Have an idea to make Igu even better? We'd love to hear it.
-                </Text>
+                <Text as="p" variant="bodyMd" tone="subdued">Help shape the review workflow roadmap.</Text>
               </BlockStack>
             </InlineStack>
             <BlockStack gap="200">
               {helpFeatureBullets.map((item) => (
-                <InlineStack key={item} gap="200" blockAlign="center">
-                  <Icon source={CheckCircleIcon} tone="success" />
-                  <Text as="p" variant="bodyLg" tone="subdued">{item}</Text>
-                </InlineStack>
+                <div key={item} className="rp-help-benefit">
+                  <HelpIcon source={CheckCircleIcon} tone="green" size="sm" />
+                  <Text as="p" variant="bodyMd" tone="subdued">{item}</Text>
+                </div>
               ))}
             </BlockStack>
             <Button onClick={() => setOpenModal('suggestion')}>Submit a request</Button>
