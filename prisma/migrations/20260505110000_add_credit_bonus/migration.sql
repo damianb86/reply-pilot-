@@ -1,0 +1,1 @@
+ALTER TABLE "CreditAccount" ADD COLUMN "bonusCredits" INTEGER NOT NULL DEFAULT 0;

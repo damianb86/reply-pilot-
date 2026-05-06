@@ -640,9 +640,9 @@ async function loadBrandVoiceForDrafts(shop: string) {
     alwaysMention: readStringListJson(settings?.alwaysMentionJson),
     avoidPhrases: readStringListJson(settings?.avoidPhrasesJson),
     selectedModel: resolveAiModelId(settings?.selectedModel || getDefaultAiModelId()),
-    personalityStyle: settings?.personalityStyle || "balanced",
+    personalityStyle: settings?.personalityStyle || "use_personality",
     personalityStrength: settings?.personalityStrength || "balanced",
-    replyLength: settings?.replyLength || "medium",
+    replyLength: settings?.replyLength || "adaptive",
   };
 }
 

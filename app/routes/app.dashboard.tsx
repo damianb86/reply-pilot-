@@ -15,6 +15,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return {
     shop: session.shop,
+    appHandle: process.env.SHOPIFY_APP_HANDLE || "reply-pilot",
     connection: await getJudgeMeConnectionView(session.shop),
     judgeMeApiSettingsUrl: "https://judge.me/settings?jump_to=judge.me+api",
     judgeMeApiDocsUrl: "https://judge.me/help/en/articles/8409180-judge-me-api",

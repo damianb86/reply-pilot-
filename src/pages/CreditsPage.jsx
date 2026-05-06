@@ -12,17 +12,24 @@ import {
   Text,
 } from '@shopify/polaris';
 
+function formatCreditNumber(value) {
+  const numeric = Math.trunc(Number(value || 0));
+  const sign = numeric < 0 ? '-' : '';
+  return `${sign}${Math.abs(numeric).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+}
+
 function LedgerAmount({amount}) {
   const positive = amount > 0;
   return (
     <Badge tone={positive ? 'success' : 'attention'}>
-      {positive ? '+' : ''}{amount} credits
+      {positive ? '+' : ''}{formatCreditNumber(amount)} credits
     </Badge>
   );
 }
 
 function PackageCard({pkg, fetcher}) {
   const isLoading = fetcher.state !== 'idle' && fetcher.formData?.get('packageId') === pkg.id;
+  const hasWelcomeBonus = Boolean(pkg.firstPurchaseBonusAvailable && pkg.firstPurchaseBonusCredits);
 
   return (
     <Card>
@@ -37,15 +44,46 @@ function PackageCard({pkg, fetcher}) {
           </BlockStack>
           <Text as="span" variant="headingLg">{pkg.priceLabel}</Text>
         </InlineStack>
-        <InlineStack align="space-between" blockAlign="center">
-          <Badge tone="info">{pkg.credits} credits</Badge>
-          <fetcher.Form method="post">
+        <InlineStack align="space-between" blockAlign="center" gap="200" wrap={false}>
+          <InlineStack gap="150" blockAlign="center" wrap={false}>
+            <span className="rp-credit-package-stack">
+              <span className="rp-credit-package-base">{formatCreditNumber(pkg.credits)} credits</span>
+              {hasWelcomeBonus ? (
+                <span className="rp-credit-package-bonus" title="First purchase bonus">
+                  +{formatCreditNumber(pkg.firstPurchaseBonusCredits)} credits
+                </span>
+              ) : null}
+            </span>
+          </InlineStack>
+          <fetcher.Form method="post" className="rp-credit-buy-form">
             <input type="hidden" name="packageId" value={pkg.id} />
             <Button submit loading={isLoading} disabled={fetcher.state !== 'idle'} variant={pkg.recommended ? 'primary' : undefined}>
-              Buy {pkg.credits}
+              Buy {formatCreditNumber(pkg.credits)}
             </Button>
           </fetcher.Form>
         </InlineStack>
+      </BlockStack>
+    </Card>
+  );
+}
+
+function replyCapacity(credits, replyCost) {
+  const cost = Number(replyCost || 1);
+  return formatCreditNumber(Math.floor(Number(credits || 0) / cost));
+}
+
+function ModelSpendCard({name, costs}) {
+  return (
+    <Card>
+      <BlockStack gap="100">
+        <Text as="p" variant="headingMd">{name}</Text>
+        <Text as="p" variant="bodyMd">{costs.reply} credit{costs.reply === 1 ? '' : 's'} per reply or preview</Text>
+        <Text as="p" variant="bodySm" tone="subdued">
+          1.000 credits answers about {replyCapacity(1000, costs.reply)} review replies.
+        </Text>
+        <Text as="p" variant="bodySm" tone="subdued">
+          {costs.personality} credits to generate Personality from past replies.
+        </Text>
       </BlockStack>
     </Card>
   );
@@ -55,6 +93,7 @@ export default function CreditsPage() {
   const loaderData = useLoaderData();
   const purchaseFetcher = useFetcher();
   const credits = loaderData.credits;
+  const modelCosts = credits.modelCosts ?? {};
   const actionData = purchaseFetcher.data;
   const message = actionData?.message ?? loaderData.message;
   const ok = actionData?.ok ?? loaderData.ok;
@@ -83,38 +122,47 @@ export default function CreditsPage() {
             Credits are assigned to this shop and are spent only when Reply Pilot generates AI content.
           </Text>
         </BlockStack>
-        <Badge tone={credits.balance <= 25 ? 'critical' : 'info'}>{credits.balance} credits left</Badge>
+        <Badge tone={credits.balance <= 25 ? 'critical' : 'info'}>{formatCreditNumber(credits.balance)} credits left</Badge>
       </InlineStack>
 
       <InlineGrid columns={{xs: 1, md: 3}} gap="300">
         <Card>
           <BlockStack gap="050">
             <Text as="span" variant="bodySm" tone="subdued">Available</Text>
-            <Text as="p" variant="headingXl">{credits.balance}</Text>
+            <Text as="p" variant="headingXl">{formatCreditNumber(credits.balance)}</Text>
           </BlockStack>
         </Card>
         <Card>
           <BlockStack gap="050">
             <Text as="span" variant="bodySm" tone="subdued">Spent</Text>
-            <Text as="p" variant="headingXl">{credits.spent}</Text>
+            <Text as="p" variant="headingXl">{formatCreditNumber(credits.spent)}</Text>
           </BlockStack>
         </Card>
         <Card>
           <BlockStack gap="050">
             <Text as="span" variant="bodySm" tone="subdued">Purchased</Text>
-            <Text as="p" variant="headingXl">{credits.purchased}</Text>
+            <Text as="p" variant="headingXl">{formatCreditNumber(credits.purchased)}</Text>
           </BlockStack>
         </Card>
       </InlineGrid>
 
       <section className="rp-field-card">
         <BlockStack gap="300">
-          <BlockStack gap="050">
-            <Text as="h2" variant="headingLg">Buy credits</Text>
-            <Text as="p" variant="bodyMd" tone="subdued">
-              Purchases use Shopify billing. After approval, credits are added to this shop automatically.
-            </Text>
-          </BlockStack>
+          <InlineStack align="space-between" blockAlign="start" gap="300">
+            <BlockStack gap="050">
+              <Text as="h2" variant="headingLg">Buy credits</Text>
+              <Text as="p" variant="bodyMd" tone="subdued">
+                Purchases use Shopify billing. After approval, credits are added to this shop automatically.
+              </Text>
+            </BlockStack>
+            {credits.firstPurchaseBonusAvailable ? (
+              <div className="rp-credit-welcome-bonus">
+                <Text as="p" variant="bodyMd" fontWeight="semibold">
+                  First purchase bonus: +{credits.firstPurchaseBonusPercent}% extra credits
+                </Text>
+              </div>
+            ) : null}
+          </InlineStack>
           <InlineGrid columns={{xs: 1, sm: 2, lg: 4}} gap="300">
             {credits.packages.map((pkg) => (
               <PackageCard key={pkg.id} pkg={pkg} fetcher={purchaseFetcher} />
@@ -127,27 +175,9 @@ export default function CreditsPage() {
         <BlockStack gap="300">
           <Text as="h2" variant="headingLg">How credits are spent</Text>
           <InlineGrid columns={{xs: 1, md: 3}} gap="300">
-            <Card>
-              <BlockStack gap="100">
-                <Text as="p" variant="headingMd">Basic</Text>
-                <Text as="p" variant="bodyMd">1 credit per reply or preview</Text>
-                <Text as="p" variant="bodySm" tone="subdued">2 credits to generate Personality from past replies.</Text>
-              </BlockStack>
-            </Card>
-            <Card>
-              <BlockStack gap="100">
-                <Text as="p" variant="headingMd">Pro</Text>
-                <Text as="p" variant="bodyMd">4 credits per reply or preview</Text>
-                <Text as="p" variant="bodySm" tone="subdued">8 credits to generate Personality from past replies.</Text>
-              </BlockStack>
-            </Card>
-            <Card>
-              <BlockStack gap="100">
-                <Text as="p" variant="headingMd">Premium</Text>
-                <Text as="p" variant="bodyMd">12 credits per reply or preview</Text>
-                <Text as="p" variant="bodySm" tone="subdued">24 credits to generate Personality from past replies.</Text>
-              </BlockStack>
-            </Card>
+            <ModelSpendCard name="Basic" costs={modelCosts.basic ?? {reply: 1, personality: 2}} />
+            <ModelSpendCard name="Pro" costs={modelCosts.pro ?? {reply: 4, personality: 8}} />
+            <ModelSpendCard name="Premium" costs={modelCosts.premium ?? {reply: 12, personality: 24}} />
           </InlineGrid>
         </BlockStack>
       </section>
@@ -162,7 +192,9 @@ export default function CreditsPage() {
                   <InlineStack align="space-between" blockAlign="center" gap="300">
                     <BlockStack gap="050">
                       <Text as="p" variant="bodyMd" fontWeight="semibold">{entry.description}</Text>
-                      <Text as="p" variant="bodySm" tone="subdued">Balance after: {entry.balanceAfter}</Text>
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        Balance after: {formatCreditNumber(entry.balanceAfter)}
+                      </Text>
                     </BlockStack>
                     <LedgerAmount amount={entry.amount} />
                   </InlineStack>

@@ -28,13 +28,19 @@ function parseIds(formData: FormData) {
   return id ? [id] : [];
 }
 
+function formatCreditNumber(value: number) {
+  const numeric = Math.trunc(Number(value || 0));
+  const sign = numeric < 0 ? "-" : "";
+  return `${sign}${Math.abs(numeric).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
+}
+
 function generationMessage(
   result: Awaited<ReturnType<typeof generateDrafts>>,
   verb: "generated" | "regenerated" = "generated",
 ) {
   const infinitive = verb === "generated" ? "generate" : "regenerate";
   const creditText = result.credits.spent
-    ? ` ${result.credits.spent} credits spent.`
+    ? ` ${formatCreditNumber(result.credits.spent)} credits spent.`
     : "";
 
   if (result.generated && result.failed) {

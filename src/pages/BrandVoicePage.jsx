@@ -7,6 +7,7 @@ import {
   BlockStack,
   Box,
   Button,
+  Divider,
   Icon,
   InlineGrid,
   InlineStack,
@@ -18,11 +19,18 @@ import {
 } from '@shopify/polaris';
 import {
   DeleteIcon,
+  ChatIcon,
+  HeartIcon,
+  InfoIcon,
   ImportIcon,
   MagicIcon,
+  ProductIcon,
   PlusIcon,
   RefreshIcon,
   SearchIcon,
+  ShieldCheckMarkIcon,
+  StarIcon,
+  WandIcon,
   XIcon,
 } from '@shopify/polaris-icons';
 import {
@@ -31,113 +39,125 @@ import {
 } from '../brandVoiceData';
 
 const settingsSections = [
-  {id: 'personality-builder', label: 'Builder'},
-  {id: 'brand-voice', label: 'Brand voice'},
+  {id: 'personality-builder', label: 'Personality builder'},
+  {id: 'personality-settings', label: 'Personality settings'},
   {id: 'ai-model', label: 'AI model'},
+  {id: 'live-preview', label: 'Live preview'},
 ];
-const sectionIds = settingsSections.map((section) => section.id);
 const defaultAlwaysMention = ['product detail', 'what the customer noticed', 'next step when needed'];
 const defaultPreviewReview = 'Obsessed with these napkins. The fabric feels substantial, the print looks even better in person, and they made our dinner table feel special.';
-const personalityStyleOptions = [
-  {label: 'Balanced', value: 'balanced', description: 'Natural, clear, and useful without leaning too hard into a character.'},
-  {label: 'Formal', value: 'formal', description: 'Polished and respectful, with more restraint in word choice.'},
-  {label: 'Casual', value: 'casual', description: 'Relaxed and conversational while still feeling professional.'},
-  {label: 'Warm', value: 'warm', description: 'More appreciative and emotionally present, especially for customer concerns.'},
-  {label: 'Playful', value: 'playful', description: 'Light and upbeat, with a little charm when the review allows it.'},
-  {label: 'Direct', value: 'direct', description: 'Practical, concise, and low-friction for fast queue work.'},
-  {label: 'Premium', value: 'premium', description: 'Calm, refined, and detail-oriented for a more elevated support tone.'},
+const tonePresetOptions = [
+  {label: 'Use personality', value: 'use_personality', description: 'No extra tone nudge. Reply Pilot follows the Personality text as the source of truth.'},
+  {label: 'More formal', value: 'formal', description: 'Adds polish, restraint, and more precise wording when drafting replies.'},
+  {label: 'More casual', value: 'casual', description: 'Makes replies feel more relaxed and conversational without becoming sloppy.'},
+  {label: 'Warmer', value: 'warm', description: 'Adds more appreciation and emotional presence, especially around customer concerns.'},
+  {label: 'More playful', value: 'playful', description: 'Adds a light upbeat touch when the review gives room for it.'},
+  {label: 'More direct', value: 'direct', description: 'Keeps replies practical, clear, and lower-friction.'},
+  {label: 'More premium', value: 'premium', description: 'Adds a more composed, refined, and detail-aware feel.'},
 ];
 const personalityStrengthOptions = [
-  {label: 'Subtle', value: 'subtle', description: 'Keeps replies close to plain support copy with only a light voice layer.'},
-  {label: 'Balanced', value: 'balanced', description: 'Adds a noticeable voice while keeping the reply grounded and easy to approve.'},
-  {label: 'Expressive', value: 'expressive', description: 'Lets the brand voice show more clearly without adding unsupported details.'},
+  {label: 'Subtle', value: 'subtle', description: 'Light voice layer. Best when replies should feel clean and mostly support-led.'},
+  {label: 'Balanced', value: 'balanced', description: 'Noticeable voice without overwhelming the message. Best default for most shops.'},
+  {label: 'Expressive', value: 'expressive', description: 'Stronger character. Useful when the brand voice is part of the customer experience.'},
 ];
 const replyLengthOptions = [
-  {label: 'Short', value: 'short', description: 'Best for quick, simple reviews that need a compact answer.'},
-  {label: 'Medium', value: 'medium', description: 'The default balance: specific enough without feeling heavy.'},
-  {label: 'Long', value: 'long', description: 'Gives more room for mixed sentiment, product detail, or careful acknowledgement.'},
-  {label: 'Very long', value: 'very_long', description: 'Most useful for detailed negative or nuanced reviews that need a fuller response.'},
+  {label: 'Adaptive', value: 'adaptive', description: 'Lets Reply Pilot choose the right length based on rating, detail, and complexity.'},
+  {label: 'Short', value: 'short', description: '1-2 sentences. Best for simple positive reviews and quick acknowledgement.'},
+  {label: 'Medium', value: 'medium', description: '2-4 sentences. Enough room for one or two specifics without feeling heavy.'},
+  {label: 'Long', value: 'long', description: '4-6 sentences. Useful for mixed, detailed, or negative reviews that need care.'},
+  {label: 'Very long', value: 'very_long', description: 'Detailed support-style reply. Use sparingly for complex public responses.'},
 ];
+const defaultTonePreset = 'use_personality';
+const defaultVoiceIntensity = 'balanced';
+const defaultReplyLength = 'adaptive';
+const personalityMaxWords = 200;
+const personalityMaxCharacters = 1400;
 const previewRatingValues = [1, 2, 3, 4, 5];
 
 const personalityPresets = [
   {
     id: 'warm-small-team',
     name: 'Warm small team',
-    summary: 'Personal, kind, specific, and easy for most stores to approve.',
+    icon: HeartIcon,
+    summary: 'Human, attentive, and grounded for most stores.',
     tags: ['Warm', 'General', 'Trust'],
     persona: `Brand personality: warm, attentive, and genuinely human.
 
-This brand replies like a small team that actually reads every review. The tone should feel personal without becoming overly familiar: kind, grateful, specific, and calm. The brand notices concrete details from the customer's review and responds to those details directly instead of using generic praise.
+This voice feels like a small team that actually reads every review. It is kind, grateful, specific, and calm without becoming overly familiar. The brand notices concrete details and sounds present rather than scripted.
 
-Positive reviews should feel appreciated and lightly celebratory. Mixed or negative reviews should acknowledge the concern plainly, thank the customer for the useful detail, and offer a grounded next step when one is appropriate. Never sound corporate, defensive, or scripted. Avoid exaggerated emotion, empty apologies, or promises the business cannot guarantee.
+Basic rules: stay grounded in what the customer said, avoid exaggerated emotion, do not sound corporate or defensive, and never promise anything the business cannot guarantee.
 
 The goal is to make customers feel seen by real people who care about the product and the post-purchase experience.`,
   },
   {
     id: 'premium-concierge',
     name: 'Premium concierge',
-    summary: 'Polished, composed, and refined for higher-touch brands.',
+    icon: StarIcon,
+    summary: 'Composed and refined for higher-touch brands.',
     tags: ['Premium', 'Calm', 'Refined'],
     persona: `Brand personality: polished, composed, and quietly premium.
 
-This brand responds with the restraint of a thoughtful concierge: respectful, precise, and calm. The tone should feel elevated but never cold. Replies should use clean language, avoid hype, and make the customer feel that their feedback has been handled with care.
+This voice has the restraint of a thoughtful concierge: respectful, precise, and calm. It feels elevated but not cold. It uses clean language, avoids hype, and makes customers feel that their feedback is being handled with care.
 
-Positive reviews should be acknowledged with understated appreciation and one specific detail. Negative or mixed reviews should be treated seriously without sounding alarmed, defensive, or overly apologetic. The brand should not over-explain. It should communicate confidence, taste, and accountability in a concise way.
+Basic rules: do not over-explain, do not sound alarmed, keep claims measured, and communicate confidence, taste, and accountability.
 
 The goal is to make every response feel considered, professional, and worthy of a brand that pays attention to details.`,
   },
   {
     id: 'direct-product-expert',
     name: 'Product expert',
-    summary: 'Clear, practical, and useful when shoppers care about details.',
+    icon: ProductIcon,
+    summary: 'Practical and knowledgeable when shoppers care about details.',
     tags: ['Direct', 'Useful', 'Expert'],
     persona: `Brand personality: practical, knowledgeable, and product-first.
 
-This brand replies like an experienced product specialist who wants customers to get useful information quickly. The tone should be direct, helpful, and grounded in what the customer actually said. Avoid fluff, vague praise, and generic customer-service language.
+This voice sounds like an experienced product specialist who wants customers to get useful information quickly. It is direct, helpful, and grounded in what the customer actually said. It values clarity over performance.
 
-Positive reviews should reinforce the specific product benefit the customer noticed. Mixed or negative reviews should acknowledge the issue, explain only what is known, and give a clear next step if one is relevant. Do not invent technical details, product claims, policies, or fixes. When the review includes product context, use it carefully and naturally.
+Basic rules: avoid fluff, vague praise, and generic customer-service language. Do not invent technical details, product claims, policies, fixes, or anything not supported by the review or product context.
 
 The goal is to make replies feel useful to both the reviewer and future shoppers reading the public thread.`,
   },
   {
     id: 'playful-community',
     name: 'Playful community',
-    summary: 'Friendly, upbeat, and lightly witty without becoming silly.',
+    icon: ChatIcon,
+    summary: 'Social, lively, and lightly witty without becoming silly.',
     tags: ['Playful', 'Friendly', 'Social'],
     persona: `Brand personality: upbeat, friendly, and lightly playful.
 
-This brand talks like a confident community host: conversational, appreciative, and a little witty when the review gives permission for it. The tone should feel energetic but still clear. Humor should be light, inclusive, and never at the customer's expense.
+This voice talks like a confident community host: conversational, appreciative, and a little witty when the moment allows it. It feels energetic but still clear. Humor is light, inclusive, and never at the customer's expense.
 
-Positive reviews can sound excited and personal, especially when the customer shares a fun detail. Mixed or negative reviews should become more grounded: keep the warmth, but do not joke over the customer's concern. Avoid forced jokes, slang that feels unnatural, or overusing exclamation points.
+Basic rules: avoid forced jokes, unnatural slang, or overusing exclamation points. When a customer is upset, keep the warmth but do not joke over the concern.
 
 The goal is to make replies feel alive, social, and memorable while still helping the customer and protecting trust.`,
   },
   {
     id: 'calm-problem-solver',
     name: 'Calm resolver',
-    summary: 'Best for brands that want complaints handled with care.',
+    icon: ShieldCheckMarkIcon,
+    summary: 'Steady and accountable for support-sensitive brands.',
     tags: ['Support', 'Calm', 'Safe'],
     persona: `Brand personality: calm, accountable, and solution-oriented.
 
-This brand is especially careful with frustration, low ratings, delivery issues, defects, and mixed feedback. The tone should be steady, respectful, and practical. Replies should acknowledge the customer's experience without arguing, minimizing, or sounding like a policy script.
+This voice is especially careful with frustration, low ratings, delivery issues, defects, and mixed feedback. It is steady, respectful, and practical. It acknowledges customer experience without arguing, minimizing, or sounding like a policy script.
 
-Positive reviews should still feel appreciative, but the brand's strongest behavior appears when something went wrong: name the concern plainly, thank the customer for the detail, and provide a realistic next step when available. Avoid blame, defensiveness, excessive apology, or vague phrases like "we strive to do better."
+Basic rules: avoid blame, defensiveness, excessive apology, and vague phrases like "we strive to do better." Only mention next steps that are realistic and supported.
 
 The goal is to make customers feel that the brand is composed, fair, and capable of handling problems responsibly.`,
   },
   {
     id: 'theatrical-roast',
     name: 'Theatrical roast',
-    summary: 'Sarcastic and funny for brands built around sharp character.',
+    icon: WandIcon,
+    summary: 'Sharp, performative, and intentionally absurd.',
     tags: ['Sarcastic', 'Bold', 'Comedic'],
     persona: `Brand personality: sarcastic, theatrical, hostile in a funny way, and intentionally rude as a clear performance.
 
-This brand treats customers like charming little disasters who somehow managed to buy the product correctly. The tone should feel like a cruel comedian forced to work in customer support: dry, sharp, arrogant, and entertaining, but still functional.
+This voice treats customers like charming little disasters who somehow managed to buy the product correctly. It feels like a cruel comedian forced to work in customer support: dry, sharp, arrogant, and entertaining, but still functional.
 
-Positive reviews should be accepted as obvious proof that the customer finally developed taste. Negative reviews may be mocked first, then answered with just enough useful information to remain helpful. The brand can exaggerate complaints, make jokes at the customer's expense, and respond with playful contempt.
+Basic rules: the cruelty is performative and witty, not genuinely harmful. The voice can roast, exaggerate, and show playful contempt, but it must stay useful and clearly absurd.
 
-The goal is to make the customer feel roasted, not genuinely harmed. Avoid real threats, protected-class insults, body, identity, or health attacks, and anything that feels like actual harassment. The cruelty should be witty, performative, and clearly part of an absurd brand persona.`,
+The goal is to make the customer feel roasted, not genuinely harmed. Avoid real threats, protected-class insults, body, identity, or health attacks, and anything that feels like actual harassment.`,
   },
 ];
 
@@ -192,36 +212,57 @@ function creditsText(amount) {
   return `${credits} credit${credits === 1 ? '' : 's'}`;
 }
 
+function creditsNumber(amount) {
+  return Number(amount ?? 0).toLocaleString('en');
+}
+
+function replyCostBadge(model) {
+  const credits = Number(model.credits?.reply ?? 0);
+  if (!credits) return 'Free';
+  return `${credits} credit${credits === 1 ? '' : 's'} / reply`;
+}
+
 function ModelCard({model, selected, onSelect}) {
+  const previewCost = creditsText(model.credits?.preview ?? model.credits?.reply);
+
   return (
     <button
       type="button"
       className={`rp-model-card ${selected ? 'is-selected' : ''}`}
       onClick={onSelect}
+      aria-pressed={selected}
     >
-      <BlockStack gap="250">
-        <InlineStack gap="200" blockAlign="center" wrap={false}>
+      <BlockStack gap="400">
+        <div className="rp-model-card-header">
           <span className="rp-model-radio" aria-hidden="true" />
-          <BlockStack gap="050">
-            <Text as="span" variant="headingLg">{model.name}</Text>
-            <Text as="span" variant="bodySm" tone="subdued">
-              Uses {model.detail}
-            </Text>
+          <BlockStack gap="150">
+            <InlineStack gap="200" blockAlign="center" wrap={false}>
+              <Text as="span" variant="headingLg">{model.name}</Text>
+              <Badge tone="info">{replyCostBadge(model)}</Badge>
+            </InlineStack>
+            <InlineStack gap="150" blockAlign="center">
+              <Text as="span" variant="bodySm" tone="subdued">
+                {model.provider} · {model.detail}
+              </Text>
+              <Badge tone={model.configured ? 'success' : 'attention'}>
+                {model.configured ? 'Configured' : `Missing ${model.missingEnv}`}
+              </Badge>
+            </InlineStack>
           </BlockStack>
-          <Badge tone="info">{creditsText(model.credits?.reply)} per reply</Badge>
-        </InlineStack>
-        <BlockStack gap="050">
-          <InlineStack gap="150" blockAlign="center">
-            <Text as="span" variant="bodySm" tone="subdued">{model.provider}</Text>
-            <Badge tone={model.configured ? 'success' : 'attention'}>
-              {model.configured ? 'Configured' : `Missing ${model.missingEnv}`}
-            </Badge>
-          </InlineStack>
-          <Text as="span" variant="bodySm" fontWeight="semibold">{model.bestFor}</Text>
-          <Text as="span" variant="bodySm" tone="subdued">{model.description}</Text>
-          <Text as="span" variant="bodySm" tone="subdued">
-            Reply and Live preview: {creditsText(model.credits?.reply)} · Personality: {creditsText(model.credits?.personality)}
+        </div>
+
+        <BlockStack gap="300">
+          <BlockStack gap="150">
+            <Text as="h3" variant="headingMd">{model.bestFor}</Text>
+            <Text as="p" variant="bodyMd" tone="subdued">{model.description}</Text>
+          </BlockStack>
+
+          <div className="rp-model-card-divider" />
+
+          <Text as="p" variant="bodySm" tone="subdued">
+            Preview: {previewCost} · Personality: {creditsText(model.credits?.personality)}
           </Text>
+
           {model.strengths?.length ? (
             <div className="rp-model-strengths">
               {model.strengths.map((strength) => (
@@ -229,12 +270,14 @@ function ModelCard({model, selected, onSelect}) {
               ))}
             </div>
           ) : null}
+
           {model.activeVariant ? (
             <InlineStack gap="150" blockAlign="center">
               <Badge tone="info">Current dev fallback</Badge>
               <Text as="span" variant="bodySm">{model.activeVariant.name}</Text>
             </InlineStack>
           ) : null}
+
           {model.exhaustedVariants?.length ? (
             <Text as="span" variant="bodySm" tone="subdued">
               Exhausted today: {model.exhaustedVariants.map((variant) => variant.name).join(', ')}
@@ -243,6 +286,22 @@ function ModelCard({model, selected, onSelect}) {
         </BlockStack>
       </BlockStack>
     </button>
+  );
+}
+
+function CreditInfoPanel() {
+  return (
+    <div className="rp-credit-info-panel">
+      <span className="rp-credit-info-icon" aria-hidden="true">
+        <Icon source={InfoIcon} />
+      </span>
+      <BlockStack gap="100">
+        <Text as="h3" variant="headingMd">How credits work</Text>
+        <Text as="p" variant="bodyMd" tone="subdued">
+          The selected tier is used for queue replies, live preview, and personality generation. Higher tiers use more credits, but follow brand voice and product context more carefully.
+        </Text>
+      </BlockStack>
+    </div>
   );
 }
 
@@ -288,7 +347,12 @@ function PersonalityPresetCard({preset, selected, onApply}) {
       <BlockStack gap="200">
         <InlineStack align="space-between" blockAlign="start" gap="200" wrap={false}>
           <BlockStack gap="050">
-            <Text as="span" variant="headingMd">{preset.name}</Text>
+            <span className="rp-preset-title-row">
+              <span className="rp-preset-title-icon">
+                <Icon source={preset.icon} />
+              </span>
+              <Text as="span" variant="headingMd">{preset.name}</Text>
+            </span>
             <Text as="span" variant="bodySm" tone="subdued">{preset.summary}</Text>
           </BlockStack>
           {selected ? <Badge tone="success">Applied</Badge> : null}
@@ -308,9 +372,57 @@ function optionIndex(options, value) {
   return index >= 0 ? index : 0;
 }
 
+function optionByValue(options, value) {
+  return options.find((option) => option.value === value) ?? options[0];
+}
+
+function normalizeTonePreset(value) {
+  if (value === 'balanced') return defaultTonePreset;
+  return tonePresetOptions.some((option) => option.value === value) ? value : defaultTonePreset;
+}
+
+function normalizeVoiceIntensity(value) {
+  return personalityStrengthOptions.some((option) => option.value === value) ? value : defaultVoiceIntensity;
+}
+
+function normalizeReplyLength(value) {
+  return replyLengthOptions.some((option) => option.value === value) ? value : defaultReplyLength;
+}
+
 function sliderOption(options, value) {
   const index = Math.max(0, Math.min(options.length - 1, Math.round(Number(value) || 0)));
   return options[index] ?? options[0];
+}
+
+function TonePresetSelect({value, onChange}) {
+  const selectedValue = normalizeTonePreset(value);
+  const selectedOption = optionByValue(tonePresetOptions, selectedValue);
+
+  return (
+    <div className="rp-voice-slider">
+      <BlockStack gap="250">
+        <InlineStack align="space-between" blockAlign="center" gap="200">
+          <Text as="h2" variant="headingMd">Tone preset</Text>
+          <Badge tone="info">{selectedOption.label}</Badge>
+        </InlineStack>
+        <div className="rp-tone-preset-select">
+          <Select
+            label="Tone preset"
+            labelHidden
+            options={tonePresetOptions.map((option) => ({
+              label: option.label,
+              value: option.value,
+            }))}
+            value={selectedValue}
+            onChange={onChange}
+          />
+        </div>
+        <Text as="p" variant="bodySm" tone="subdued">
+          Use this only if you want to nudge generated replies in a specific direction. {selectedOption.description}
+        </Text>
+      </BlockStack>
+    </div>
+  );
 }
 
 function VoiceSettingSlider({title, options, value, onChange, helpText}) {
@@ -363,9 +475,20 @@ function VoiceSettingSlider({title, options, value, onChange, helpText}) {
   );
 }
 
+function countWords(value) {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function limitPersonalityText(value) {
+  const text = String(value ?? '').slice(0, personalityMaxCharacters);
+  const parts = text.match(/\S+\s*/g) ?? [];
+  if (parts.length <= personalityMaxWords) return text;
+  return parts.slice(0, personalityMaxWords).join('').trimEnd();
+}
+
 function buildConfig(settings, defaultSelectedModel) {
   return {
-    persona: settings?.persona ?? defaultBrandVoice.persona,
+    persona: limitPersonalityText(settings?.persona ?? defaultBrandVoice.persona),
     greeting: settings?.greeting ?? defaultBrandVoice.greeting,
     signOff: settings?.signOff ?? defaultBrandVoice.signOff,
     alwaysMention: Array.isArray(settings?.alwaysMention) ? settings.alwaysMention : defaultAlwaysMention,
@@ -378,9 +501,9 @@ function buildConfig(settings, defaultSelectedModel) {
     previewProductType: settings?.previewProductType ?? '',
     previewProductTags: Array.isArray(settings?.previewProductTags) ? settings.previewProductTags : [],
     previewRating: String(settings?.previewRating ?? '5'),
-    personalityStyle: settings?.personalityStyle ?? 'balanced',
-    personalityStrength: settings?.personalityStrength ?? 'balanced',
-    replyLength: settings?.replyLength ?? 'medium',
+    personalityStyle: normalizeTonePreset(settings?.personalityStyle),
+    personalityStrength: normalizeVoiceIntensity(settings?.personalityStrength),
+    replyLength: normalizeReplyLength(settings?.replyLength),
   };
 }
 
@@ -392,9 +515,9 @@ function configSignature(config) {
     alwaysMention: Array.isArray(config.alwaysMention) ? config.alwaysMention : [],
     avoidPhrases: Array.isArray(config.avoidPhrases) ? config.avoidPhrases : [],
     selectedModel: config.selectedModel || '',
-    personalityStyle: config.personalityStyle || 'balanced',
-    personalityStrength: config.personalityStrength || 'balanced',
-    replyLength: config.replyLength || 'medium',
+    personalityStyle: normalizeTonePreset(config.personalityStyle),
+    personalityStrength: normalizeVoiceIntensity(config.personalityStrength),
+    replyLength: normalizeReplyLength(config.replyLength),
     livePreview: config.livePreview || '',
     previewReview: config.previewReview || '',
     previewProductId: config.previewProductId || '',
@@ -452,12 +575,15 @@ export default function BrandVoicePage() {
   const [savedConfig, setSavedConfig] = useState(initialConfig);
   const [localToast, setLocalToast] = useState(null);
   const [showPersonalityPresets, setShowPersonalityPresets] = useState(false);
+  const [showAdvancedLength, setShowAdvancedLength] = useState(initialConfig.replyLength === 'very_long');
+  const [personalityHighlight, setPersonalityHighlight] = useState(false);
   const lastToastKey = useRef('');
+  const personalityHighlightTimer = useRef(null);
 
-  const wordCount = useMemo(
-    () => persona.trim().split(/\s+/).filter(Boolean).length,
-    [persona],
-  );
+  const wordCount = useMemo(() => countWords(persona), [persona]);
+  const characterCount = persona.length;
+  const personalityIsAtLimit =
+    wordCount >= personalityMaxWords || characterCount >= personalityMaxCharacters;
 
   const previewReply = useMemo(() => {
     const safeGreeting = greeting.replace('{name}', 'Anya').trim() || 'Hi Anya -';
@@ -470,6 +596,12 @@ export default function BrandVoicePage() {
   const selectedCreditCosts = selectedModelConfig?.credits ?? {reply: 1, preview: 1, personality: 2};
   const canGeneratePreview = Number(creditOverview.balance ?? 0) >= Number(selectedCreditCosts.preview ?? 0);
   const canGeneratePersonality = Number(creditOverview.balance ?? 0) >= Number(selectedCreditCosts.personality ?? 0);
+  const visibleReplyLengthOptions = useMemo(
+    () => (showAdvancedLength || replyLength === 'very_long'
+      ? replyLengthOptions
+      : replyLengthOptions.filter((option) => option.value !== 'very_long')),
+    [replyLength, showAdvancedLength],
+  );
 
   const currentConfig = useMemo(() => ({
     persona,
@@ -532,30 +664,26 @@ export default function BrandVoicePage() {
     }
   }, [shopify]);
 
+  const updatePersona = useCallback((value) => {
+    setPersona(limitPersonalityText(value));
+  }, []);
+
+  const revealPersonalitySettings = useCallback(() => {
+    window.clearTimeout(personalityHighlightTimer.current);
+    setActiveSection('personality-settings');
+    setPersonalityHighlight(true);
+    personalityHighlightTimer.current = window.setTimeout(() => {
+      setPersonalityHighlight(false);
+    }, 2600);
+  }, []);
+
+  useEffect(() => () => {
+    window.clearTimeout(personalityHighlightTimer.current);
+  }, []);
+
   useEffect(() => {
     setAiModels(loaderAiModels);
   }, [loaderAiModels]);
-
-  useEffect(() => {
-    function handleScroll() {
-      const visibleSection = sectionIds
-        .map((id) => {
-          const element = document.getElementById(id);
-          if (!element) return null;
-          return {id, top: Math.abs(element.getBoundingClientRect().top - 96)};
-        })
-        .filter(Boolean)
-        .sort((a, b) => a.top - b.top)[0];
-
-      if (visibleSection) {
-        setActiveSection(visibleSection.id);
-      }
-    }
-
-    handleScroll();
-    window.addEventListener('scroll', handleScroll, {passive: true});
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   useEffect(() => {
     showToast(importFetcher.data);
@@ -575,14 +703,15 @@ export default function BrandVoicePage() {
 
     if (personalityFetcher.data?.ok && personalityFetcher.data.intent === 'generate-personality') {
       if (personalityFetcher.data.personality) {
-        setPersona(personalityFetcher.data.personality);
+        updatePersona(personalityFetcher.data.personality);
+        revealPersonalitySettings();
       }
 
       if (personalityFetcher.data.livePreview) {
         setLivePreview(personalityFetcher.data.livePreview);
       }
     }
-  }, [personalityFetcher.data, showToast]);
+  }, [personalityFetcher.data, revealPersonalitySettings, showToast, updatePersona]);
 
   useEffect(() => {
     showToast(previewFetcher.data);
@@ -615,7 +744,7 @@ export default function BrandVoicePage() {
 
     if (saveFetcher.data?.ok && saveFetcher.data.intent === 'save-settings') {
       const nextConfig = buildConfig(saveFetcher.data.settings, defaultSelectedModel);
-      setPersona(nextConfig.persona);
+      updatePersona(nextConfig.persona);
       setGreeting(nextConfig.greeting);
       setSignOff(nextConfig.signOff);
       setAlwaysMention(nextConfig.alwaysMention);
@@ -633,7 +762,7 @@ export default function BrandVoicePage() {
       setPreviewRating(nextConfig.previewRating);
       setSavedConfig(nextConfig);
     }
-  }, [saveFetcher.data, defaultSelectedModel, showToast]);
+  }, [saveFetcher.data, defaultSelectedModel, showToast, updatePersona]);
 
   function addAlwaysMention() {
     const nextValue = alwaysInput.trim();
@@ -649,12 +778,8 @@ export default function BrandVoicePage() {
     setAvoidInput('');
   }
 
-  function scrollToSection(id) {
-    document.getElementById(id)?.scrollIntoView({behavior: 'smooth', block: 'start'});
-  }
-
   function applyConfig(config) {
-    setPersona(config.persona);
+    updatePersona(config.persona);
     setGreeting(config.greeting);
     setSignOff(config.signOff);
     setAlwaysMention(config.alwaysMention);
@@ -787,8 +912,9 @@ export default function BrandVoicePage() {
   }
 
   function applyPersonalityPreset(preset) {
-    setPersona(preset.persona);
+    updatePersona(preset.persona);
     setShowPersonalityPresets(false);
+    revealPersonalitySettings();
     showToast({
       ok: true,
       intent: 'apply-personality-preset',
@@ -819,15 +945,15 @@ export default function BrandVoicePage() {
       </InlineStack>
 
       <div className="rp-settings-layout">
-        <aside className="rp-settings-nav" aria-label="Settings sections">
+        <aside className="rp-settings-nav" aria-label="Brand voice sections">
           <BlockStack gap="150">
-            <Text as="p" variant="bodySm" tone="subdued" fontWeight="semibold">SETTINGS</Text>
+            <Text as="p" variant="bodySm" tone="subdued" fontWeight="semibold">BRAND VOICE</Text>
             {settingsSections.map((section) => (
               <button
                 key={section.id}
                 type="button"
                 className={`rp-settings-nav-item ${activeSection === section.id ? 'is-active' : ''}`}
-                onClick={() => scrollToSection(section.id)}
+                onClick={() => setActiveSection(section.id)}
               >
                 {section.label}
               </button>
@@ -836,7 +962,8 @@ export default function BrandVoicePage() {
         </aside>
 
         <BlockStack gap="400">
-          <section id="personality-builder" className="rp-field-card">
+          {activeSection === 'personality-builder' ? (
+          <section className="rp-field-card">
             <BlockStack gap="400">
               <InlineStack align="space-between" blockAlign="start" gap="300">
                 <InlineStack gap="300" blockAlign="start" wrap={false}>
@@ -929,18 +1056,13 @@ export default function BrandVoicePage() {
                         </Text>
                         <Badge tone="info">Evidence only</Badge>
                       </InlineStack>
-                      {exampleReplies.slice(0, 4).map((example) => (
+                      {exampleReplies.map((example) => (
                         <ExampleRow
                           key={example.id}
                           example={example}
                           onRemove={() => removeExampleReply(example.id)}
                         />
                       ))}
-                      {exampleReplies.length > 4 ? (
-                        <Text as="p" variant="bodySm" tone="subdued">
-                          Showing 4 of {exampleReplies.length}. All imported replies are sent when Personality is generated.
-                        </Text>
-                      ) : null}
                     </BlockStack>
                   ) : (
                     <div className="rp-example-empty">
@@ -954,26 +1076,39 @@ export default function BrandVoicePage() {
               </div>
             </BlockStack>
           </section>
+          ) : null}
 
-          <section id="brand-voice" className="rp-field-card">
+          {activeSection === 'personality-settings' ? (
+          <>
+          <section className={`rp-field-card rp-personality-card ${personalityHighlight ? 'is-personality-updated' : ''}`}>
             <BlockStack gap="300">
               <InlineStack align="space-between" blockAlign="end" gap="300">
                 <InlineStack gap="150" blockAlign="end">
                   <Text as="h2" variant="headingLg">Personality</Text>
-                  <Text as="span" variant="bodySm" tone="subdued">Describe who is replying</Text>
+                  <Text as="span" variant="bodySm" tone="subdued">
+                    Describe the voice, attitude, and basic rules the assistant should follow when replying to reviews.
+                  </Text>
                 </InlineStack>
-                <Text as="span" variant="bodySm" tone="critical">Review generated text before saving</Text>
+                <InlineStack gap="150" blockAlign="center">
+                  {personalityHighlight ? <Badge tone="info">Updated now</Badge> : null}
+                  <Text as="span" variant="bodySm" tone="critical">Review generated text before saving</Text>
+                </InlineStack>
               </InlineStack>
-              <TextField
-                label="Personality"
-                labelHidden
-                value={persona}
-                onChange={setPersona}
-                autoComplete="off"
-                multiline={8}
-              />
+              <div className="rp-personality-field-wrap">
+                <TextField
+                  label="Personality"
+                  labelHidden
+                  value={persona}
+                  onChange={updatePersona}
+                  autoComplete="off"
+                  maxLength={personalityMaxCharacters}
+                  multiline={8}
+                />
+              </div>
               <InlineStack align="space-between" blockAlign="center">
-                <span className="rp-word-count">~{wordCount} / 500 words</span>
+                <span className={`rp-word-count ${personalityIsAtLimit ? 'is-limit' : ''}`}>
+                  {wordCount} / {personalityMaxWords} words · {characterCount} / {personalityMaxCharacters.toLocaleString('en')} characters
+                </span>
                 <Text as="span" variant="bodySm" tone="subdued">Saved only through Shopify Save</Text>
               </InlineStack>
             </BlockStack>
@@ -983,125 +1118,145 @@ export default function BrandVoicePage() {
             <BlockStack gap="400">
               <InlineStack align="space-between" blockAlign="center" gap="300">
                 <BlockStack gap="050">
-                  <Text as="h2" variant="headingLg">Reply behavior</Text>
+                  <Text as="h2" variant="headingLg">Voice controls</Text>
                   <Text as="span" variant="bodySm" tone="subdued">
-                    Tune how strongly Reply Pilot applies the voice when drafting replies.
+                    These settings control how the personality above is applied when drafting replies.
                   </Text>
                 </BlockStack>
                 <Badge tone="info">Used by Queue and preview</Badge>
               </InlineStack>
 
-              <VoiceSettingSlider
-                title="Personality style"
-                options={personalityStyleOptions}
-                value={personalityStyle}
-                onChange={setPersonalityStyle}
-                helpText="Sets the voice lens for generated replies while keeping imported examples as the source of truth."
-              />
-              <VoiceSettingSlider
-                title="Personality strength"
-                options={personalityStrengthOptions}
-                value={personalityStrength}
-                onChange={setPersonalityStrength}
-                helpText="Controls whether the voice stays subtle or becomes more expressive in generated replies."
-              />
+              <InlineGrid columns={{xs: 1, md: 2}} gap="400">
+                <TonePresetSelect
+                  value={personalityStyle}
+                  onChange={setPersonalityStyle}
+                />
+                <VoiceSettingSlider
+                  title="Voice intensity"
+                  options={personalityStrengthOptions}
+                  value={personalityStrength}
+                  onChange={setPersonalityStrength}
+                  helpText="Controls how strongly the brand voice shows up in each reply."
+                />
+              </InlineGrid>
               <VoiceSettingSlider
                 title="Reply length"
-                options={replyLengthOptions}
+                options={visibleReplyLengthOptions}
                 value={replyLength}
                 onChange={setReplyLength}
                 helpText="Controls how much detail Reply Pilot includes before the final sign-off."
               />
+              {!showAdvancedLength && replyLength !== 'very_long' ? (
+                <InlineStack align="end">
+                  <Button variant="plain" onClick={() => setShowAdvancedLength(true)}>
+                    Show advanced length option
+                  </Button>
+                </InlineStack>
+              ) : null}
+
+              <Divider />
+              <BlockStack gap="300">
+                <BlockStack gap="050">
+                  <Text as="h3" variant="headingMd">Greeting and sign-off</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    These small pieces are applied around every draft when the model writes a reply.
+                  </Text>
+                </BlockStack>
+                <InlineGrid columns={{xs: 1, md: 2}} gap="400">
+                  <BlockStack gap="250">
+                    <Text as="h4" variant="headingSm">Sign-on greeting</Text>
+                    <TextField
+                      label="Sign-on greeting"
+                      labelHidden
+                      value={greeting}
+                      onChange={setGreeting}
+                      autoComplete="off"
+                    />
+                    <Text as="p" variant="bodySm" tone="subdued">Variables: {'{name}'}, {'{product}'}, {'{stars}'}</Text>
+                  </BlockStack>
+
+                  <BlockStack gap="250">
+                    <Text as="h4" variant="headingSm">Sign-off</Text>
+                    <TextField
+                      label="Sign-off"
+                      labelHidden
+                      value={signOff}
+                      onChange={setSignOff}
+                      autoComplete="off"
+                    />
+                    <Text as="p" variant="bodySm" tone="subdued">Can include a signature line or light brand detail.</Text>
+                  </BlockStack>
+                </InlineGrid>
+              </BlockStack>
+
+              <Divider />
+              <BlockStack gap="300">
+                <BlockStack gap="050">
+                  <Text as="h3" variant="headingMd">Reply rules</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Use these as soft guidance. Reply Pilot considers them when they fit the review, but the AI should still sound natural.
+                  </Text>
+                </BlockStack>
+                <InlineGrid columns={{xs: 1, md: 2}} gap="400">
+                  <BlockStack gap="300">
+                    <BlockStack gap="200">
+                      <InlineStack gap="150" blockAlign="end">
+                        <Text as="h4" variant="headingSm">Emphasize when helpful</Text>
+                        <Text as="span" variant="bodySm" tone="subdued">Soft guidance</Text>
+                      </InlineStack>
+                      <RuleTags
+                        items={alwaysMention}
+                        onRemove={(item) => setAlwaysMention((current) => current.filter((value) => value !== item))}
+                      />
+                    </BlockStack>
+                    <AddRule
+                      label="Add emphasis guidance"
+                      value={alwaysInput}
+                      onChange={setAlwaysInput}
+                      onAdd={addAlwaysMention}
+                      placeholder="Add idea to emphasize..."
+                    />
+                  </BlockStack>
+
+                  <BlockStack gap="300">
+                    <BlockStack gap="200">
+                      <InlineStack gap="150" blockAlign="end">
+                        <Text as="h4" variant="headingSm">Prefer avoiding</Text>
+                        <Text as="span" variant="bodySm" tone="subdued">Use judgment</Text>
+                      </InlineStack>
+                      <RuleTags
+                        items={avoidPhrases}
+                        onRemove={(item) => setAvoidPhrases((current) => current.filter((value) => value !== item))}
+                      />
+                    </BlockStack>
+                    <AddRule
+                      label="Add phrase to avoid when possible"
+                      value={avoidInput}
+                      onChange={setAvoidInput}
+                      onAdd={addAvoidPhrase}
+                      placeholder="Add phrase to avoid when possible..."
+                    />
+                  </BlockStack>
+                </InlineGrid>
+              </BlockStack>
             </BlockStack>
           </section>
+          </>
+          ) : null}
 
-          <InlineGrid columns={{xs: 1, md: 2}} gap="400">
-            <div className="rp-field-card">
-              <BlockStack gap="300">
-                <Text as="h2" variant="headingMd">Sign-on greeting</Text>
-                <TextField
-                  label="Sign-on greeting"
-                  labelHidden
-                  value={greeting}
-                  onChange={setGreeting}
-                  autoComplete="off"
-                />
-                <Text as="p" variant="bodySm" tone="subdued">Variables: {'{name}'}, {'{product}'}, {'{stars}'}</Text>
-              </BlockStack>
-            </div>
-
-            <div className="rp-field-card">
-              <BlockStack gap="300">
-                <Text as="h2" variant="headingMd">Sign-off</Text>
-                <TextField
-                  label="Sign-off"
-                  labelHidden
-                  value={signOff}
-                  onChange={setSignOff}
-                  autoComplete="off"
-                />
-                <Text as="p" variant="bodySm" tone="subdued">Can include a signature line or light brand detail.</Text>
-              </BlockStack>
-            </div>
-          </InlineGrid>
-
-          <InlineGrid columns={{xs: 1, md: 2}} gap="400">
-            <div className="rp-field-card">
-              <BlockStack gap="300">
-                <InlineStack gap="150" blockAlign="end">
-                  <Text as="h2" variant="headingMd">Always mention</Text>
-                  <Text as="span" variant="bodySm" tone="subdued">When relevant</Text>
-                </InlineStack>
-                <RuleTags
-                  items={alwaysMention}
-                  onRemove={(item) => setAlwaysMention((current) => current.filter((value) => value !== item))}
-                />
-                <AddRule
-                  label="Add always mention rule"
-                  value={alwaysInput}
-                  onChange={setAlwaysInput}
-                  onAdd={addAlwaysMention}
-                  placeholder="Add rule..."
-                />
-              </BlockStack>
-            </div>
-
-            <div className="rp-field-card">
-              <BlockStack gap="300">
-                <InlineStack gap="150" blockAlign="end">
-                  <Text as="h2" variant="headingMd">Never use</Text>
-                  <Text as="span" variant="bodySm" tone="subdued">Hard rules</Text>
-                </InlineStack>
-                <RuleTags
-                  items={avoidPhrases}
-                  onRemove={(item) => setAvoidPhrases((current) => current.filter((value) => value !== item))}
-                />
-                <AddRule
-                  label="Add phrase to avoid"
-                  value={avoidInput}
-                  onChange={setAvoidInput}
-                  onAdd={addAvoidPhrase}
-                  placeholder="Add phrase..."
-                />
-              </BlockStack>
-            </div>
-          </InlineGrid>
-
-          <section id="ai-model" className="rp-field-card">
-            <BlockStack gap="400">
-              <InlineStack align="space-between" blockAlign="start">
+          {activeSection === 'ai-model' ? (
+          <section className="rp-field-card">
+            <BlockStack gap="500">
+              <InlineStack align="space-between" blockAlign="start" gap="300">
                 <BlockStack gap="050">
-                  <InlineStack gap="150" blockAlign="end">
-                    <Text as="h2" variant="headingLg">AI model</Text>
-                    <Text as="span" variant="bodySm" tone="subdued">Who is writing</Text>
-                  </InlineStack>
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    API keys are read only on the server from environment variables. Missing keys disable generation and expose debug details here.
+                  <Text as="h2" variant="headingXl">AI model</Text>
+                  <Text as="p" variant="bodyMd" tone="subdued">
+                    Choose which model tier generates replies, previews, and personality drafts.
                   </Text>
                 </BlockStack>
                 <InlineStack gap="150" blockAlign="center">
-                  <Badge tone={creditOverview.balance <= 25 ? 'critical' : 'info'}>{creditOverview.balance} credits left</Badge>
-                  {selectedModelConfig ? <Badge tone="info">{selectedModelConfig.name}</Badge> : null}
+                  <Badge tone={creditOverview.balance <= 25 ? 'critical' : 'info'}>{creditsNumber(creditOverview.balance)} credits left</Badge>
+                  {selectedModelConfig ? <Badge>{selectedModelConfig.name} selected</Badge> : null}
                 </InlineStack>
               </InlineStack>
 
@@ -1116,12 +1271,12 @@ export default function BrandVoicePage() {
                 ))}
               </div>
 
-              <Text as="p" variant="bodySm" tone="subdued">
-                The selected tier is used for Personality generation, Live preview, and Queue replies. Reply and preview generation cost {creditsText(selectedCreditCosts.reply)} with this tier; Personality costs {creditsText(selectedCreditCosts.personality)} because it also generates a preview. Higher tiers spend more credits but follow Brand Voice and product context more carefully.
-              </Text>
+              <CreditInfoPanel />
             </BlockStack>
           </section>
+          ) : null}
 
+          {activeSection === 'live-preview' ? (
           <section className="rp-field-card">
             <BlockStack gap="300">
               <InlineStack align="space-between" blockAlign="center">
@@ -1196,6 +1351,7 @@ export default function BrandVoicePage() {
               </div>
             </BlockStack>
           </section>
+          ) : null}
         </BlockStack>
       </div>
     </BlockStack>

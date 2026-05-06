@@ -134,6 +134,7 @@ model CreditAccount {
   shop             String   @unique
   startingCredits  Int      @default(100)
   purchasedCredits Int      @default(0)
+  bonusCredits     Int      @default(0)
   spentCredits     Int      @default(0)
   refundedCredits  Int      @default(0)
   balance          Int      @default(100)

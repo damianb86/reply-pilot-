@@ -42,7 +42,7 @@ const providers = [
     name: 'Judge.me',
     status: 'Available',
     available: true,
-    logo: '/provider-logos/judgeme.webp',
+    logo: '/provider-logos/judgeme.png',
     tone: 'teal',
     initials: 'J',
   },
@@ -320,7 +320,13 @@ function CurrentConnectionCard({connection, fetcher}) {
   );
 }
 
-function AfterConnectionCard({connected}) {
+function shopifyAdminAppPath(appHandle, appPath) {
+  const safeHandle = String(appHandle || 'igu').replace(/^\/+|\/+$/g, '');
+  const safePath = String(appPath || '').replace(/^\/+/, '');
+  return `shopify://admin/apps/${safeHandle}/${safePath}`;
+}
+
+function AfterConnectionCard({connected, appHandle}) {
   const steps = connected
     ? [
         {icon: ImportIcon, tone: 'green', title: 'Import reviews', text: "We'll keep your reviews synced and ready to process."},
@@ -354,8 +360,21 @@ function AfterConnectionCard({connected}) {
           <>
             <Divider />
             <BlockStack gap="200">
-              <Button url="/app/brand-voice" icon={ExternalIcon}>Open brand voice setup</Button>
-              <Button url="/app/reviews" variant="plain" icon={ExternalIcon}>View imported reviews</Button>
+              <Button
+                url={shopifyAdminAppPath(appHandle, 'app/brand-voice')}
+                target="_top"
+                icon={ExternalIcon}
+              >
+                Open brand voice setup
+              </Button>
+              <Button
+                url={shopifyAdminAppPath(appHandle, 'app/reviews')}
+                target="_top"
+                variant="plain"
+                icon={ExternalIcon}
+              >
+                View imported reviews
+              </Button>
             </BlockStack>
           </>
         ) : null}
@@ -689,7 +708,7 @@ export default function DashboardPage() {
 
         <BlockStack gap="300">
           {!connected ? <CurrentConnectionCard connection={connection} fetcher={fetcher} /> : null}
-          <AfterConnectionCard connected={connected} />
+          <AfterConnectionCard connected={connected} appHandle={loaderData.appHandle} />
         </BlockStack>
       </InlineGrid>
 

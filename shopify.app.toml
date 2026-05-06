@@ -4,7 +4,7 @@ client_id = "54e8e57d7f234f7651a96f600f2bb3d2"
 name = "Igu"
 application_url = "https://igu.tudominio.com"
 embedded = true
-handle = "igu"
+handle = "reply-pilot"
 
 [build]
 automatically_update_urls_on_dev = true

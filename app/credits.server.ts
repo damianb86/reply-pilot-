@@ -7,6 +7,8 @@ type AdminGraphql = {
 type CreditOperation = "reply" | "preview" | "personality";
 
 const INITIAL_FREE_CREDITS = 100;
+const FIRST_PURCHASE_BONUS_RATE = 0.35;
+const FIRST_PURCHASE_BONUS_PERCENT = Math.round(FIRST_PURCHASE_BONUS_RATE * 100);
 const CREDIT_MULTIPLIERS: Record<string, number> = {
   dev: 0,
   basic: 1,
@@ -130,9 +132,18 @@ function formatCurrency(amountCents: number, currencyCode: string) {
   }).format(amountCents / 100);
 }
 
-function packageView(pkg: (typeof CREDIT_PACKAGES)[number]) {
+function firstPurchaseBonusCredits(credits: number) {
+  return Math.round(credits * FIRST_PURCHASE_BONUS_RATE);
+}
+
+function packageView(pkg: (typeof CREDIT_PACKAGES)[number], includeFirstPurchaseBonus = false) {
+  const bonusCredits = includeFirstPurchaseBonus ? firstPurchaseBonusCredits(pkg.credits) : 0;
   return {
     ...pkg,
+    firstPurchaseBonusAvailable: includeFirstPurchaseBonus,
+    firstPurchaseBonusCredits: bonusCredits,
+    firstPurchaseTotalCredits: pkg.credits + bonusCredits,
+    firstPurchaseBonusPercent: FIRST_PURCHASE_BONUS_PERCENT,
     price: pkg.amountCents / 100,
     priceLabel: formatCurrency(pkg.amountCents, pkg.currencyCode),
   };
@@ -173,16 +184,46 @@ async function accountForShop(shop: string, tx: typeof db = db) {
 
 export async function getCreditOverview(shop: string) {
   const account = await accountForShop(shop);
-  const totalAllocated = account.startingCredits + account.purchasedCredits + account.refundedCredits;
+  const [latestPurchaseEntry, latestGrantEntry] = await Promise.all([
+    db.creditLedgerEntry.findFirst({
+      where: { shop, type: "purchase" },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.creditLedgerEntry.findFirst({
+      where: { shop, type: "grant" },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+  const latestMeterEntry = latestPurchaseEntry ?? latestGrantEntry;
+  const firstPurchaseBonusAvailable = !latestPurchaseEntry && account.purchasedCredits === 0 && account.bonusCredits === 0;
+  const totalAllocated =
+    account.startingCredits + account.purchasedCredits + account.bonusCredits + account.refundedCredits;
+  const creditMeterBase = Math.max(
+    1,
+    latestMeterEntry?.balanceAfter ?? account.startingCredits ?? INITIAL_FREE_CREDITS,
+  );
+  const creditMeterRemainingPercent = Math.min(
+    100,
+    Math.max(0, Math.round((account.balance / creditMeterBase) * 100)),
+  );
   return {
     balance: account.balance,
     spent: account.spentCredits,
     purchased: account.purchasedCredits,
+    bonus: account.bonusCredits,
     granted: account.startingCredits,
     refunded: account.refundedCredits,
     totalAllocated,
     usedPercent: totalAllocated > 0 ? Math.min(100, Math.round((account.spentCredits / totalAllocated) * 100)) : 0,
-    packages: CREDIT_PACKAGES.map(packageView),
+    creditMeter: {
+      baseCredits: creditMeterBase,
+      remainingPercent: creditMeterRemainingPercent,
+      consumedPercent: 100 - creditMeterRemainingPercent,
+      source: latestMeterEntry?.type === "purchase" ? "latest_purchase" : "welcome_grant",
+    },
+    firstPurchaseBonusAvailable,
+    firstPurchaseBonusPercent: FIRST_PURCHASE_BONUS_PERCENT,
+    packages: CREDIT_PACKAGES.map((pkg) => packageView(pkg, firstPurchaseBonusAvailable)),
     modelCosts: {
       dev: creditCostsForModel("dev"),
       basic: creditCostsForModel("basic"),
@@ -284,13 +325,28 @@ export async function refundCredits(
 async function grantPurchasedCredits(shop: string, purchaseId: string, credits: number) {
   await accountForShop(shop);
 
-  await db.$transaction(async (tx) => {
+  return db.$transaction(async (tx) => {
     const updatedPurchase = await tx.creditPurchase.updateMany({
       where: { id: purchaseId, shop, status: { not: "credited" } },
       data: { status: "credited", lastError: null },
     });
 
-    if (updatedPurchase.count !== 1) return;
+    if (updatedPurchase.count !== 1) {
+      return { credited: false, credits, bonusCredits: 0, totalCredits: 0, firstPurchaseBonus: false };
+    }
+
+    const calculatedBonusCredits = firstPurchaseBonusCredits(credits);
+    let bonusCredits = 0;
+    if (calculatedBonusCredits) {
+      const bonusUpdate = await tx.creditAccount.updateMany({
+        where: { shop, purchasedCredits: 0, bonusCredits: 0 },
+        data: {
+          balance: { increment: calculatedBonusCredits },
+          bonusCredits: { increment: calculatedBonusCredits },
+        },
+      });
+      bonusCredits = bonusUpdate.count === 1 ? calculatedBonusCredits : 0;
+    }
 
     const account = await tx.creditAccount.update({
       where: { shop },
@@ -309,8 +365,41 @@ async function grantPurchasedCredits(shop: string, purchaseId: string, credits: 
         description: "Purchased credits",
         referenceType: "credit_purchase",
         referenceId: purchaseId,
+        metadataJson: bonusCredits
+          ? JSON.stringify({
+              paidCredits: credits,
+              firstPurchaseBonusCredits: bonusCredits,
+              firstPurchaseBonusPercent: FIRST_PURCHASE_BONUS_PERCENT,
+            })
+          : null,
       },
     });
+
+    if (bonusCredits) {
+      await tx.creditLedgerEntry.create({
+        data: {
+          shop,
+          type: "bonus",
+          amount: bonusCredits,
+          balanceAfter: account.balance,
+          description: `${FIRST_PURCHASE_BONUS_PERCENT}% first purchase welcome bonus`,
+          referenceType: "credit_purchase",
+          referenceId: purchaseId,
+          metadataJson: JSON.stringify({
+            paidCredits: credits,
+            bonusRate: FIRST_PURCHASE_BONUS_RATE,
+          }),
+        },
+      });
+    }
+
+    return {
+      credited: true,
+      credits,
+      bonusCredits,
+      totalCredits: credits + bonusCredits,
+      firstPurchaseBonus: bonusCredits > 0,
+    };
   });
 }
 
@@ -428,7 +517,13 @@ export async function finalizeCreditPurchase(shop: string, purchaseId: string, a
   const status = String(node.status || "").toLowerCase();
 
   if (status === "active") {
-    await grantPurchasedCredits(shop, purchase.id, purchase.credits);
+    const granted = await grantPurchasedCredits(shop, purchase.id, purchase.credits);
+    if (granted.bonusCredits > 0) {
+      return {
+        ok: true,
+        message: `${granted.credits} credits added plus ${granted.bonusCredits} welcome bonus credits.`,
+      };
+    }
     return { ok: true, message: `${purchase.credits} credits added to your shop.` };
   }
 

@@ -24,17 +24,19 @@ type ImportedReply = {
 };
 
 const DEFAULT_PERSONALITY =
-  "I keep replies warm, concise, and specific. I thank customers without sounding scripted, mention the exact detail they shared, and keep the tone human rather than corporate. When something goes wrong, I acknowledge it directly, apologize without overexplaining, and point to the next practical step. I avoid exaggerated praise, generic customer-service phrases, and details that were not already provided.";
+  "I speak with a warm, human, and attentive voice. I notice the real detail in each customer's review and sound present rather than scripted. I stay grounded in what the customer actually said, avoid exaggerated praise, and do not invent details that were not provided. When something goes wrong, I acknowledge it directly and keep the response calm, honest, and useful.";
 const DEFAULT_GREETING = "Hi {name} -";
 const DEFAULT_SIGN_OFF = "- The team";
 const DEFAULT_ALWAYS_MENTION = ["product detail", "what the customer noticed", "next step when needed"];
 const DEFAULT_AVOID_PHRASES = ["valued customer", "reach out", "we strive"];
-const DEFAULT_PERSONALITY_STYLE = "balanced";
+const DEFAULT_PERSONALITY_STYLE = "use_personality";
 const DEFAULT_PERSONALITY_STRENGTH = "balanced";
-const DEFAULT_REPLY_LENGTH = "medium";
+const DEFAULT_REPLY_LENGTH = "adaptive";
 const DEFAULT_PREVIEW_RATING = 5;
 const DEFAULT_PREVIEW_REVIEW =
   "Obsessed with these napkins. The fabric feels substantial, the print looks even better in person, and they made our dinner table feel special.";
+const PERSONALITY_MAX_WORDS = 200;
+const PERSONALITY_MAX_CHARS = 1400;
 
 function readObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -92,11 +94,18 @@ function cleanStringList(values: string[] | undefined, fallback: string[]) {
   return cleaned.length ? cleaned : fallback;
 }
 
+function limitPersonalityText(value: string | null | undefined, fallback = DEFAULT_PERSONALITY) {
+  const text = (value?.trim() || fallback).slice(0, PERSONALITY_MAX_CHARS);
+  const parts = text.match(/\S+\s*/g) ?? [];
+  if (parts.length <= PERSONALITY_MAX_WORDS) return text;
+  return parts.slice(0, PERSONALITY_MAX_WORDS).join("").trimEnd();
+}
+
 function mapBrandVoiceSettings(
   settings: Awaited<ReturnType<typeof db.brandVoiceSetting.findUnique>> | null,
 ) {
   return {
-    persona: settings?.personality || DEFAULT_PERSONALITY,
+    persona: limitPersonalityText(settings?.personality),
     greeting: settings?.greeting || DEFAULT_GREETING,
     signOff: settings?.signOff || DEFAULT_SIGN_OFF,
     alwaysMention: readStringListJson(settings?.alwaysMentionJson, DEFAULT_ALWAYS_MENTION),
@@ -318,7 +327,7 @@ export async function generateBrandVoicePersonality(input: {
     modelId: input.modelId,
     replies: input.replies,
     context: {
-      personality: input.personality,
+      personality: limitPersonalityText(input.personality),
       greeting: input.greeting,
       signOff: input.signOff,
       alwaysMention: input.alwaysMention,
@@ -381,7 +390,7 @@ export async function saveBrandVoiceSettings(
   },
 ) {
   const data = {
-    personality: input.personality?.trim() || DEFAULT_PERSONALITY,
+    personality: limitPersonalityText(input.personality),
     greeting: input.greeting?.trim() || DEFAULT_GREETING,
     signOff: input.signOff?.trim() || DEFAULT_SIGN_OFF,
     alwaysMentionJson: JSON.stringify(cleanStringList(input.alwaysMention, DEFAULT_ALWAYS_MENTION)),
@@ -430,7 +439,7 @@ export async function generateBrandVoicePreview(input: {
   return generateLivePreview({
     modelId: input.modelId,
     context: {
-      personality: input.personality,
+      personality: limitPersonalityText(input.personality),
       greeting: input.greeting,
       signOff: input.signOff,
       alwaysMention: input.alwaysMention,

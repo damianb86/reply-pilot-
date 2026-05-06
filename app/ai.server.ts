@@ -92,14 +92,15 @@ type GenerateTextOptions = {
   reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh";
 };
 
-const PERSONALITY_STYLE_INSTRUCTIONS: Record<string, string> = {
-  balanced: "Balanced: natural, clear, helpful, and not overly stylized.",
-  formal: "Formal: polished, respectful, precise, and restrained.",
-  casual: "Casual: relaxed, conversational, simple, and approachable.",
-  warm: "Warm: kind, appreciative, emotionally present, and human.",
-  playful: "Playful: light, upbeat, charming, and a little witty without being silly.",
-  direct: "Direct: concise, practical, confident, and low-friction.",
-  premium: "Premium: calm, refined, thoughtful, and detail-oriented.",
+const TONE_PRESET_INSTRUCTIONS: Record<string, string> = {
+  use_personality: "Use personality: do not add an extra tone nudge; follow the Personality field as the source of truth.",
+  balanced: "Use personality: do not add an extra tone nudge; follow the Personality field as the source of truth.",
+  formal: "More formal: add polish, restraint, and precise wording while preserving the Personality field.",
+  casual: "More casual: make wording more relaxed and conversational while preserving the Personality field.",
+  warm: "Warmer: add more appreciation and emotional presence where appropriate while preserving the Personality field.",
+  playful: "More playful: add light charm or wit only when the review gives room for it.",
+  direct: "More direct: keep wording practical, clear, and low-friction while preserving the Personality field.",
+  premium: "More premium: make wording more composed, refined, and detail-aware while preserving the Personality field.",
 };
 
 const PERSONALITY_STRENGTH_INSTRUCTIONS: Record<string, string> = {
@@ -109,6 +110,12 @@ const PERSONALITY_STRENGTH_INSTRUCTIONS: Record<string, string> = {
 };
 
 const REPLY_LENGTH_INSTRUCTIONS: Record<string, { label: string; instruction: string; maxTokens: number }> = {
+  adaptive: {
+    label: "Adaptive",
+    instruction:
+      "Choose the reply length based on review complexity: usually 1-4 sentences before the sign-off, shorter for simple positive reviews and fuller only for nuanced, mixed, or negative reviews.",
+    maxTokens: 2200,
+  },
   short: {
     label: "Short",
     instruction: "Write a short reply: 1-2 compact sentences before the sign-off.",
@@ -116,17 +123,17 @@ const REPLY_LENGTH_INSTRUCTIONS: Record<string, { label: string; instruction: st
   },
   medium: {
     label: "Medium",
-    instruction: "Write a medium reply: 2-3 developed sentences before the sign-off.",
+    instruction: "Write a medium reply: 2-4 developed sentences before the sign-off.",
     maxTokens: 1600,
   },
   long: {
     label: "Long",
-    instruction: "Write a long reply: 3-5 thoughtful sentences before the sign-off.",
+    instruction: "Write a long reply: 4-6 thoughtful sentences before the sign-off.",
     maxTokens: 2800,
   },
   very_long: {
     label: "Very long",
-    instruction: "Write a very long reply: 5-7 useful sentences before the sign-off, without filler.",
+    instruction: "Write a detailed support-style reply before the sign-off, without filler. Use only for complex public responses.",
     maxTokens: 4096,
   },
 };
@@ -134,6 +141,8 @@ const REPLY_LENGTH_INSTRUCTIONS: Record<string, { label: string; instruction: st
 const DEFAULT_JSON_MAX_TOKENS = 1600;
 const DEFAULT_TEXT_MAX_TOKENS = 1600;
 const PERSONALITY_MAX_TOKENS = 4096;
+const PERSONALITY_DESCRIPTION_MAX_WORDS = 200;
+const PERSONALITY_DESCRIPTION_MAX_CHARS = 1400;
 const GEMINI_RETRY_MAX_TOKENS = 8192;
 const DEFAULT_PREVIEW_REVIEW =
   "Obsessed with these napkins. The fabric feels substantial, the print looks even better in person, and they made our dinner table feel special.";
@@ -203,11 +212,11 @@ const AI_MODELS: AiModelConfig[] = [
     model: GEMINI_POOL[0].model,
     envKey: "GEMINI_API_KEY",
     visibleInProduction: false,
-    bestFor: "Internal testing without spending production OpenAI quota",
+    bestFor: "For internal testing",
     description:
-      "Development-only tier. It uses the Gemini/Gemma fallback stack so the team can test prompts, imports, and queue flows without exposing this option to merchants.",
+      "Use the development fallback stack to test prompts, imports, and queue flows without spending production credits.",
     detail: "Gemini stack",
-    strengths: ["Development only", "Daily fallback pool", "Low-risk testing"],
+    strengths: ["Development only", "Low-risk testing", "Fallback pool"],
   },
   {
     id: "basic",
@@ -216,11 +225,11 @@ const AI_MODELS: AiModelConfig[] = [
     name: "Basic",
     model: process.env.OPENAI_BASIC_MODEL || "gpt-5.4-nano",
     envKey: "OPENAI_API_KEY",
-    bestFor: "Lowest-cost reply generation for simple, high-volume queues",
+    bestFor: "Lowest-cost generation",
     description:
-      "Best when cost and speed matter most. It handles clear, straightforward reviews well, but is less nuanced with tricky sentiment, detailed product context, or a highly specific brand voice.",
+      "Best for simple, high-volume reviews when cost and speed matter most. Less reliable with nuanced tone or complex context.",
     detail: "gpt-5.4-nano",
-    strengths: ["Lowest cost", "Fast generation", "Good for simple reviews"],
+    strengths: ["Lowest cost", "Fast generation", "Simple reviews"],
   },
   {
     id: "pro",
@@ -229,11 +238,11 @@ const AI_MODELS: AiModelConfig[] = [
     name: "Pro",
     model: process.env.OPENAI_PRO_MODEL || "gpt-5.4-mini",
     envKey: "OPENAI_API_KEY",
-    bestFor: "Balanced quality, cost, and brand-voice consistency",
+    bestFor: "Best balance for most shops",
     description:
-      "Recommended for most shops. It follows Brand Voice more reliably than Basic, handles mixed reviews better, and usually produces warmer, more specific replies without jumping to the highest-cost tier.",
+      "A strong default tier with better tone matching, more reliable instructions, and better handling of mixed reviews.",
     detail: "gpt-5.4-mini",
-    strengths: ["Better tone matching", "More reliable instructions", "Good cost-quality balance"],
+    strengths: ["Recommended", "Better tone matching", "Reliable instructions"],
   },
   {
     id: "premium",
@@ -242,11 +251,11 @@ const AI_MODELS: AiModelConfig[] = [
     name: "Premium",
     model: process.env.OPENAI_PREMIUM_MODEL || "gpt-5.4",
     envKey: "OPENAI_API_KEY",
-    bestFor: "Highest-quality replies for complex reviews and premium support tone",
+    bestFor: "Highest quality output",
     description:
-      "Best quality tier. It is more careful with product details, subtle customer sentiment, negative reviews, and polished human-sounding language. It costs more, but should need fewer edits on important replies.",
+      "Best for complex reviews, subtle sentiment, and more polished brand voice with fewer edits needed.",
     detail: "gpt-5.4",
-    strengths: ["Most polished replies", "Best nuance", "Strongest context handling"],
+    strengths: ["Best nuance", "Polished replies", "Strongest context"],
   },
 ];
 
@@ -494,11 +503,11 @@ function compactReplies(replies: ImportedReply[]) {
 }
 
 function personalityStyleInstruction(style?: string) {
-  return PERSONALITY_STYLE_INSTRUCTIONS[style || ""] ?? PERSONALITY_STYLE_INSTRUCTIONS.balanced;
+  return TONE_PRESET_INSTRUCTIONS[style || ""] ?? TONE_PRESET_INSTRUCTIONS.use_personality;
 }
 
 function replyLengthInstruction(length?: string) {
-  return REPLY_LENGTH_INSTRUCTIONS[length || ""] ?? REPLY_LENGTH_INSTRUCTIONS.medium;
+  return REPLY_LENGTH_INSTRUCTIONS[length || ""] ?? REPLY_LENGTH_INSTRUCTIONS.adaptive;
 }
 
 function normalizeRating(value?: number | string | null) {
@@ -562,14 +571,15 @@ function personalityPrompt(replies: ImportedReply[], context: BrandVoiceContext 
     "Generate the Personality field for Reply Pilot, a Shopify app that drafts public replies to product reviews.",
     "Use ONLY the imported merchant replies as evidence. Do not invent identity, names, locations, family relationships, product origin, policies, languages, materials, or brand facts.",
     "If a detail is not clearly present in the replies, leave it out.",
-    "Focus on how the merchant speaks: warmth, directness, apology style, gratitude, word choice, cadence, specificity, boundaries, and how they treat customers.",
-    `Preferred style lens: ${personalityStyleInstruction(context.personalityStyle)} Use this as a light preference only; evidence from replies wins.`,
-    `Personality strength: ${personalityStrengthInstruction(context.personalityStrength)}`,
-    `Reply length preference to capture: ${replyLengthInstruction(context.replyLength).label}.`,
-    "Write in first person as durable voice guidance, for example: \"I keep replies warm, concise, and specific...\"",
-    "Do not write \"you are\", \"the merchant is\", or a biography.",
-    "Output plain English text only. No JSON, no Markdown, no title, no bullets.",
-    "Write 140-360 words. Finish with a complete sentence.",
+    "Focus on the durable voice and basic rules the assistant should follow: attitude, boundaries, word choice, cadence, specificity, apology style, gratitude style, and how the merchant treats customers.",
+    "Do not include drafting controls such as reply length, sentence count, tone preset, voice intensity, format, or how strongly to apply the voice. Those controls are configured separately.",
+    "Match the same structure as Reply Pilot's built-in presets.",
+    "Start exactly with: \"Brand personality: \" followed by 3-6 concise traits inferred from the replies.",
+    "Then write three short plain-text paragraphs that start with these exact phrases: \"This voice\", \"Basic rules:\", and \"The goal\".",
+    "The content should describe how the brand speaks and behaves in replies, not who owns the business.",
+    "Do not write \"you are\", \"I am\", \"the merchant is\", or a biography.",
+    "Output plain English text only. No JSON, no Markdown, no bullets.",
+    `Write 90-180 words. Never exceed ${PERSONALITY_DESCRIPTION_MAX_WORDS} words or ${PERSONALITY_DESCRIPTION_MAX_CHARS} characters. Finish with a complete sentence.`,
     "",
     `Current Personality draft, only for continuity if useful: ${context.personality || "none"}`,
     `Greeting pattern: ${context.greeting || "none"}`,
@@ -592,21 +602,22 @@ function previewPrompt(context: BrandVoiceContext) {
     "You are Reply Pilot. Generate one public reply to a product review using the merchant voice below.",
     "Output the reply text only. No JSON, no Markdown, no label.",
     "Write like a thoughtful human merchant, not a review analyst.",
-    "Respect the configured style and length. Do not make the reply shorter than requested.",
+    "Respect the configured tone preset, voice intensity, and length. Do not make the reply shorter than requested.",
     "Do not summarize the review point-by-point, mirror every clause, or sound like a template.",
     "Mention at most two concrete review details, then respond to what matters.",
     "Use the same language as the review when it is clear; otherwise use English.",
     "Never invent numbers, counts, percentages, statistics, policies, people, timelines, materials, guarantees, or product claims.",
-    "Always Mention items are merchant rules/facts. Use them only if directly relevant, and do not turn vague notes into invented specifics.",
+    "Emphasis guidance is optional context, not mandatory wording. Use it only when it naturally fits the review and helps the reply.",
+    "Avoid-preference phrases are wording to avoid when practical. They are not a reason to make the reply awkward; use judgment.",
     "Avoid robotic analysis phrases like \"balanced review\", \"practical tradeoffs\", \"it is helpful to hear\", or \"details like that matter\".",
-    `Style: ${personalityStyleInstruction(context.personalityStyle)}`,
-    `Personality strength: ${personalityStrengthInstruction(context.personalityStrength)}`,
+    `Tone preset: ${personalityStyleInstruction(context.personalityStyle)}`,
+    `Voice intensity: ${personalityStrengthInstruction(context.personalityStrength)}`,
     `Length: ${replyLengthInstruction(context.replyLength).instruction}`,
     `The final line must be this exact sign-off: ${signOff}`,
-    `Always mention when relevant, without inventing supporting details: ${alwaysMention}`,
-    `Never use these phrases or patterns: ${avoidPhrases}`,
+    `Emphasize when helpful, without forcing these words or inventing supporting details: ${alwaysMention}`,
+    `Prefer avoiding these phrases or patterns when a natural alternative exists: ${avoidPhrases}`,
     "",
-    `Personality: ${context.personality || "Warm, concise, and specific."}`,
+    `Personality: ${context.personality || "Warm, human, and specific."}`,
     `Greeting to use if greeting the customer: ${greeting}`,
     `Sign-off pattern: ${signOff}`,
     ...productContextLines({
@@ -638,20 +649,21 @@ function reviewReplyPrompt(context: ReviewReplyContext) {
     "Mention at most two concrete review details, then respond to what matters.",
     "Do not invent numbers, counts, percentages, statistics, product materials, policies, shipping facts, guarantees, discounts, people, timelines, or private customer details.",
     "Do not add a number unless that exact number appears in the review, product context, rating, or a concrete Brand Voice rule.",
-    "Always Mention items are merchant rules/facts. Use them only if directly relevant, and do not turn vague notes into invented specifics.",
-    "If an Always Mention item is vague, test-like, or impossible to ground in the review, ignore it.",
+    "Emphasis guidance is optional context, not mandatory wording. Use it only when it naturally fits the review and helps the reply.",
+    "If an emphasis item is vague, test-like, or impossible to ground in the review, ignore it.",
+    "Avoid-preference phrases are wording to avoid when practical. They are not a reason to make the reply awkward; use judgment.",
     "Avoid robotic analysis phrases like \"balanced review\", \"practical tradeoffs\", \"real park conditions\", \"it is helpful to hear\", or \"details like that matter\".",
     "Match the response to the star rating: 5 stars can be appreciative, 4 stars should acknowledge the minor gap, 3 stars should be balanced and practical, 1-2 stars should be apologetic and focused on next steps.",
     "For mixed reviews, appreciate the positive detail, plainly acknowledge the concern, and avoid over-explaining or promising fixes you cannot guarantee.",
-    `Style: ${personalityStyleInstruction(context.personalityStyle)}`,
-    `Personality strength: ${personalityStrengthInstruction(context.personalityStrength)}`,
+    `Tone preset: ${personalityStyleInstruction(context.personalityStyle)}`,
+    `Voice intensity: ${personalityStrengthInstruction(context.personalityStrength)}`,
     `Length: ${replyLengthInstruction(context.replyLength).instruction}`,
     `The final line must be this exact sign-off: ${signOff}`,
-    `Always mention when relevant, without inventing supporting details: ${alwaysMention}`,
-    `Never use these phrases or patterns: ${avoidPhrases}`,
+    `Emphasize when helpful, without forcing these words or inventing supporting details: ${alwaysMention}`,
+    `Prefer avoiding these phrases or patterns when a natural alternative exists: ${avoidPhrases}`,
     nudge ? `Requested adjustment: ${nudge}` : "Requested adjustment: none",
     "",
-    `Personality: ${context.personality || "Warm, concise, and specific."}`,
+    `Personality: ${context.personality || "Warm, human, and specific."}`,
     `Greeting to use if greeting the customer: ${greeting}`,
     `Customer first name only: ${firstName}`,
     ...productContextLines({
@@ -682,14 +694,14 @@ function reviewReplyRevisionPrompt(context: ReviewReplyRevisionContext) {
     "Do not summarize the review again or restart the reply from scratch.",
     "If the instruction asks for an unsafe or unsupported change, apply the closest safe wording while staying grounded in the review.",
     `Merchant instruction, maximum 100 characters: ${context.instruction}`,
-    `Style: ${personalityStyleInstruction(context.personalityStyle)}`,
-    `Personality strength: ${personalityStrengthInstruction(context.personalityStrength)}`,
+    `Tone preset: ${personalityStyleInstruction(context.personalityStyle)}`,
+    `Voice intensity: ${personalityStrengthInstruction(context.personalityStrength)}`,
     `Length preference: ${replyLengthInstruction(context.replyLength).instruction}`,
     `The final line must be this exact sign-off: ${signOff}`,
-    `Always mention when relevant, without inventing supporting details: ${alwaysMention}`,
-    `Never use these phrases or patterns: ${avoidPhrases}`,
+    `Emphasize when helpful, without forcing these words or inventing supporting details: ${alwaysMention}`,
+    `Prefer avoiding these phrases or patterns when a natural alternative exists: ${avoidPhrases}`,
     "",
-    `Personality: ${context.personality || "Warm, concise, and specific."}`,
+    `Personality: ${context.personality || "Warm, human, and specific."}`,
     ...productContextLines({
       productTitle: context.productTitle,
       productType: context.productType,
@@ -751,6 +763,31 @@ function cleanPlainText(text: string) {
     .replace(/^personality\s*:\s*/i, "")
     .replace(/^["“]|["”]$/g, "")
     .trim();
+}
+
+function limitPersonalityDescription(text: string) {
+  const clean = compactWhitespace(text);
+  const words = clean.split(/\s+/).filter(Boolean);
+  let limited = words.length > PERSONALITY_DESCRIPTION_MAX_WORDS
+    ? words.slice(0, PERSONALITY_DESCRIPTION_MAX_WORDS).join(" ")
+    : clean;
+
+  if (limited.length > PERSONALITY_DESCRIPTION_MAX_CHARS) {
+    limited = limited.slice(0, PERSONALITY_DESCRIPTION_MAX_CHARS).trim();
+  }
+
+  if (limited.length === clean.length) return limited;
+
+  const sentenceEnd = Math.max(
+    limited.lastIndexOf("."),
+    limited.lastIndexOf("!"),
+    limited.lastIndexOf("?"),
+  );
+  if (sentenceEnd > Math.floor(PERSONALITY_DESCRIPTION_MAX_CHARS * 0.55)) {
+    return limited.slice(0, sentenceEnd + 1).trim();
+  }
+
+  return `${limited.replace(/[,:;\s]+$/g, "").trim()}.`;
 }
 
 function extractOpenAiText(body: unknown) {
@@ -1020,13 +1057,13 @@ export async function generateBrandVoicePersonalityText(input: {
       responseFormat: "text",
       maxTokens: PERSONALITY_MAX_TOKENS,
       system:
-        "Write a plain-text Personality field from evidence only. Never invent merchant identity or facts. Finish complete sentences.",
+        "Write a preset-style plain-text Personality field from evidence only. Start with Brand personality traits. Never invent merchant identity or facts. Finish complete sentences.",
       temperature: 0.2,
       textVerbosity: "medium",
       reasoningEffort: "low",
     },
   );
-  const personality = cleanPlainText(text);
+  const personality = limitPersonalityDescription(cleanPlainText(text));
 
   if (!personality) {
     throw new AiProviderError(`${config.name} did not return a Personality.`, {

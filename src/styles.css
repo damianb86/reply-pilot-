@@ -126,7 +126,7 @@ select {
   height: 8px;
   border-radius: 999px;
   overflow: hidden;
-  background: #e3edf8;
+  background: #edf1f5;
   box-shadow: inset 0 0 0 1px rgba(44, 110, 203, 0.08);
 }
 
@@ -134,7 +134,16 @@ select {
   height: 100%;
   border-radius: inherit;
   display: block;
+  transition: width 180ms ease;
   background: linear-gradient(90deg, #2c6ecb 0%, #67c1ff 70%, #9de7c2 100%);
+}
+
+.rp-credit-meter.is-low {
+  background: #f6ded8;
+}
+
+.rp-credit-meter.is-low span {
+  background: linear-gradient(90deg, #b42318 0%, #f79009 100%);
 }
 
 .rp-credit-meta {
@@ -162,6 +171,61 @@ select {
 .rp-credit-balance.is-low {
   background: #fff1f0;
   color: #8e1f0b;
+}
+
+.rp-credit-welcome-bonus {
+  flex: 0 0 auto;
+  width: max-content;
+  padding: 4px 10px;
+  border: 1px solid #bfe6dc;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  color: #0f6b5c;
+  background: #f0fbf7;
+  text-align: right;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.rp-credit-package-stack {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rp-credit-package-base {
+  padding: 2px 7px;
+  border: 1px solid #b8d6ff;
+  border-radius: 999px;
+  color: #1f4e8c;
+  background: #eef6ff;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.rp-credit-package-bonus {
+  position: absolute;
+  top: -10px;
+  right: -18px;
+  z-index: 1;
+  padding: 0 5px;
+  border: 1px solid #b9e4d2;
+  border-radius: 999px;
+  color: #0b6b52;
+  background: #f0fbf6;
+  box-shadow: 0 1px 3px rgba(15, 107, 92, 0.12);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.rp-credit-buy-form {
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .rp-credit-balance-number {
@@ -722,6 +786,66 @@ select {
   background: #ffffff;
 }
 
+.rp-personality-card {
+  border-color: #b7d5ff;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow:
+    inset 4px 0 0 #8bbcff,
+    0 1px 0 rgba(32, 34, 35, 0.03);
+}
+
+.rp-personality-card.is-personality-updated {
+  animation: rp-personality-card-updated 2600ms ease-out;
+}
+
+.rp-personality-field-wrap {
+  border-radius: 8px;
+}
+
+.rp-personality-card.is-personality-updated .rp-personality-field-wrap {
+  animation: rp-personality-field-updated 2600ms ease-out;
+}
+
+@keyframes rp-personality-card-updated {
+  0% {
+    border-color: #005bd3;
+    background: #eef6ff;
+    box-shadow:
+      inset 4px 0 0 #005bd3,
+      0 0 0 4px rgba(0, 91, 211, 0.16),
+      0 10px 28px rgba(0, 91, 211, 0.14);
+  }
+
+  45% {
+    border-color: #6babff;
+    background: #f4f9ff;
+    box-shadow:
+      inset 4px 0 0 #4f9cff,
+      0 0 0 2px rgba(0, 91, 211, 0.1),
+      0 6px 18px rgba(0, 91, 211, 0.08);
+  }
+
+  100% {
+    border-color: #b7d5ff;
+    background: #ffffff;
+    box-shadow:
+      inset 4px 0 0 #8bbcff,
+      0 1px 0 rgba(32, 34, 35, 0.03);
+  }
+}
+
+@keyframes rp-personality-field-updated {
+  0%,
+  42% {
+    box-shadow: 0 0 0 3px rgba(0, 91, 211, 0.18);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 91, 211, 0);
+  }
+}
+
 .rp-local-toast {
   position: fixed;
   top: 18px;
@@ -743,6 +867,11 @@ select {
 .rp-word-count {
   color: var(--rp-muted);
   font-size: 0.82rem;
+}
+
+.rp-word-count.is-limit {
+  color: #8e4b10;
+  font-weight: 650;
 }
 
 .rp-tag-list {
@@ -819,39 +948,98 @@ select {
 }
 
 .rp-model-card {
-  min-height: 210px;
-  padding: 16px;
+  width: 100%;
+  min-height: 284px;
+  padding: 22px;
   border: 1px solid var(--rp-border);
-  border-radius: 8px;
+  border-radius: 12px;
   background: #ffffff;
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background 120ms ease;
+}
+
+.rp-model-card:hover {
+  border-color: #b8ccf8;
+  box-shadow: 0 4px 14px rgba(31, 58, 138, 0.06);
 }
 
 .rp-model-card.is-selected {
   border-color: #005bd3;
+  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
   box-shadow: 0 0 0 1px #005bd3;
 }
 
+.rp-model-card-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
 .rp-model-radio {
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
+  margin-top: 3px;
   border: 1px solid #8c9196;
   border-radius: 999px;
   display: inline-grid;
   place-items: center;
+  flex: 0 0 auto;
+  background: #ffffff;
 }
 
 .rp-model-radio::after {
   content: '';
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: transparent;
 }
 
 .rp-model-card.is-selected .rp-model-radio::after {
   background: #005bd3;
+}
+
+.rp-model-card-divider {
+  height: 1px;
+  background: #dfe3e8;
+}
+
+.rp-model-strengths {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rp-credit-info-panel {
+  padding: 22px 24px;
+  border: 1px solid #9fc4ff;
+  border-radius: 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  background: #f8fbff;
+}
+
+.rp-credit-info-icon {
+  width: 34px;
+  height: 34px;
+  border: 2px solid #005bd3;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #005bd3;
+  background: #ffffff;
+}
+
+.rp-credit-info-icon .Polaris-Icon {
+  color: currentColor;
 }
 
 .rp-personality-preset-grid {
@@ -882,6 +1070,31 @@ select {
   box-shadow: 0 0 0 1px #005bd3;
 }
 
+.rp-preset-title-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.rp-preset-title-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #005bd3;
+  background: #eaf3ff;
+  flex: 0 0 auto;
+}
+
+.rp-preset-title-icon .Polaris-Icon {
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+}
+
 .rp-builder-method {
   padding: 16px;
   border: 1px solid var(--rp-border);
@@ -897,16 +1110,13 @@ select {
   margin-top: -4px;
 }
 
-.rp-model-strengths {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
-}
-
 .rp-voice-slider + .rp-voice-slider {
   padding-top: 18px;
   border-top: 1px solid var(--rp-border);
+}
+
+.rp-tone-preset-select {
+  max-width: 420px;
 }
 
 .rp-voice-slider-steps {

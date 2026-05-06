@@ -207,6 +207,7 @@ await prisma.$executeRawUnsafe(`
     "shop" TEXT NOT NULL UNIQUE,
     "startingCredits" INTEGER NOT NULL DEFAULT 100,
     "purchasedCredits" INTEGER NOT NULL DEFAULT 0,
+    "bonusCredits" INTEGER NOT NULL DEFAULT 0,
     "spentCredits" INTEGER NOT NULL DEFAULT 0,
     "refundedCredits" INTEGER NOT NULL DEFAULT 0,
     "balance" INTEGER NOT NULL DEFAULT 100,
@@ -214,6 +215,8 @@ await prisma.$executeRawUnsafe(`
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   )
 `);
+
+await addColumnIfMissing("CreditAccount", "bonusCredits", "INTEGER NOT NULL DEFAULT 0");
 
 await prisma.$executeRawUnsafe(`
   CREATE TABLE IF NOT EXISTS "CreditLedgerEntry" (

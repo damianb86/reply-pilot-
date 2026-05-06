@@ -4,7 +4,7 @@ import db from "../db.server";
 import { sendContactEmail } from "../email.server";
 import HelpPage from "../../src/pages/HelpPage";
 
-const DEFAULT_CONTACT_EMAIL = "support@example.com";
+const DEFAULT_CONTACT_EMAIL = "damianbe86@gmail.com";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await authenticate.admin(request);
