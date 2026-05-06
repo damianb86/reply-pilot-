@@ -167,13 +167,35 @@ function ReviewBubble() {
 function ResultBanner({result}) {
   if (!result?.message) return null;
 
-  return (
-    <Banner tone={result.ok ? 'success' : 'critical'}>
-      <BlockStack gap="150">
+  if (result.ok) {
+    return (
+      <Banner tone="success">
         <Text as="p" variant="bodyMd">{result.message}</Text>
-        {!result.ok && result.error ? (
-          <pre className="rp-json-preview is-error">{JSON.stringify(result.error, null, 2)}</pre>
+      </Banner>
+    );
+  }
+
+  const statusText = result.error?.status
+    ? `Judge.me returned ${result.error.status}${result.error.statusText ? ` ${result.error.statusText}` : ''}.`
+    : null;
+  const timeoutMs = result.error?.timeoutMs || result.error?.details?.timeoutMs;
+  const timeoutText = timeoutMs
+    ? `The request timed out after ${Math.round(timeoutMs / 1000)} seconds.`
+    : null;
+
+  return (
+    <Banner tone="critical">
+      <BlockStack gap="200">
+        <Text as="p" variant="bodyMd" fontWeight="semibold">
+          We couldn't connect Judge.me.
+        </Text>
+        <Text as="p" variant="bodyMd">{result.message}</Text>
+        {statusText || timeoutText ? (
+          <Text as="p" variant="bodySm" tone="subdued">{statusText || timeoutText}</Text>
         ) : null}
+        <Text as="p" variant="bodySm" tone="subdued">
+          Check the Judge.me shop identifier and Private API token, then try again.
+        </Text>
       </BlockStack>
     </Banner>
   );
@@ -202,8 +224,8 @@ function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl}) {
   const [showToken, setShowToken] = useState(false);
   const pendingIntent = fetcher.formData?.get('intent');
   const timeout = useFetcherTimeout(fetcher, {
-    timeoutMs: 20000,
-    message: 'Judge.me did not respond in time. Please check the credentials and try again later.',
+    timeoutMs: 30000,
+    message: 'Judge.me did not respond in time. Please try again later.',
   });
   const isSubmitting = timeout.pending && pendingIntent === 'connect-token';
 
@@ -696,7 +718,7 @@ export default function DashboardPage() {
   const loaderData = useLoaderData();
   const fetcher = useFetcher();
   const timeout = useFetcherTimeout(fetcher, {
-    timeoutMs: 20000,
+    timeoutMs: 30000,
     message: 'The Connect action is taking longer than expected. Please try again later.',
   });
   const [showProviderSetup, setShowProviderSetup] = useState(false);

@@ -96,6 +96,22 @@ function readString(value: unknown) {
   return typeof value === "string" ? value : null;
 }
 
+function readStringList(value: unknown) {
+  if (typeof value === "string" && value.trim()) return [value.trim()];
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const object = item as JsonObject;
+        return readString(object.message) || readString(object.error) || readString(object.detail);
+      }
+      return null;
+    })
+    .filter((item): item is string => Boolean(item));
+}
+
 function readBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") return value === "true";
@@ -135,6 +151,32 @@ function judgeMeTimeoutMs() {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_JUDGEME_TIMEOUT_MS;
 }
 
+function judgeMeResponseMessage(body: unknown) {
+  if (typeof body === "string" && body.trim()) return body.trim();
+
+  const data = readObject(body);
+  const directMessage =
+    readString(data.error) ||
+    readString(data.message) ||
+    readString(data.detail) ||
+    readString(data.description);
+  if (directMessage) return directMessage;
+
+  const nestedError = readObject(data.error);
+  const nestedMessage =
+    readString(nestedError.message) ||
+    readString(nestedError.error) ||
+    readString(nestedError.detail);
+  if (nestedMessage) return nestedMessage;
+
+  const listMessage = [
+    ...readStringList(data.errors),
+    ...readStringList(data.messages),
+  ].join(" ");
+
+  return listMessage || null;
+}
+
 async function parseJudgeMeResponse(response: Response) {
   const text = await response.text();
   if (!text) return null;
@@ -159,6 +201,7 @@ export async function callJudgeMeApi(
   const timeoutMs = judgeMeTimeoutMs();
   const url = new URL(`${JUDGEME_API_BASE}${path}`);
   url.searchParams.set("shop_domain", normalizeShopDomain(options.shopDomain));
+  url.searchParams.set("api_token", options.apiToken);
 
   for (const [key, value] of Object.entries(options.searchParams ?? {})) {
     if (value === undefined) continue;
@@ -204,8 +247,7 @@ export async function callJudgeMeApi(
 
   if (!response.ok) {
     const message =
-      readString(readObject(body).error) ||
-      readString(readObject(body).message) ||
+      judgeMeResponseMessage(body) ||
       `Judge.me request failed with ${response.status} ${response.statusText}`;
 
     throw new JudgeMeApiError(message, {
@@ -222,17 +264,43 @@ export async function callJudgeMeApi(
   return body;
 }
 
+async function optionalJudgeMeApi(
+  path: string,
+  options: Parameters<typeof callJudgeMeApi>[1],
+) {
+  try {
+    return {
+      ok: true as const,
+      body: await callJudgeMeApi(path, options),
+    };
+  } catch (error) {
+    const serialized = serializeJudgeMeError(error);
+    return {
+      ok: false as const,
+      error: {
+        endpoint: path,
+        message: serialized.message,
+        status: serialized.status,
+        statusText: serialized.statusText,
+      },
+    };
+  }
+}
+
 export async function buildJudgeMeSnapshot(apiToken: string, shopDomain: string) {
   const normalizedShopDomain = normalizeShopDomain(shopDomain);
-  const [accountResponse, countResponse, reviewsResponse, settingsResponse] = await Promise.all([
-    callJudgeMeApi("/shops/info", { apiToken, shopDomain: normalizedShopDomain }),
-    callJudgeMeApi("/reviews/count", { apiToken, shopDomain: normalizedShopDomain }),
-    callJudgeMeApi("/reviews", {
+  const accountResponse = await callJudgeMeApi("/shops/info", {
+    apiToken,
+    shopDomain: normalizedShopDomain,
+  });
+  const [countResult, reviewsResult, settingsResult] = await Promise.all([
+    optionalJudgeMeApi("/reviews/count", { apiToken, shopDomain: normalizedShopDomain }),
+    optionalJudgeMeApi("/reviews", {
       apiToken,
       shopDomain: normalizedShopDomain,
       searchParams: { per_page: 5, page: 1 },
     }),
-    callJudgeMeApi("/settings", {
+    optionalJudgeMeApi("/settings", {
       apiToken,
       shopDomain: normalizedShopDomain,
       searchParams: {
@@ -245,6 +313,12 @@ export async function buildJudgeMeSnapshot(apiToken: string, shopDomain: string)
       },
     }),
   ]);
+  const countResponse = countResult.ok ? countResult.body : null;
+  const reviewsResponse = reviewsResult.ok ? reviewsResult.body : null;
+  const settingsResponse = settingsResult.ok ? settingsResult.body : null;
+  const optionalErrors = [countResult, reviewsResult, settingsResult]
+    .filter((result) => !result.ok)
+    .map((result) => result.error);
 
   const account = readObject(readObject(accountResponse).shop ?? accountResponse);
   const reviews = Array.isArray(readObject(reviewsResponse).reviews)
@@ -263,6 +337,7 @@ export async function buildJudgeMeSnapshot(apiToken: string, shopDomain: string)
       reviewCount: countResponse,
       reviews: reviewsResponse,
       settings: settingsResponse,
+      optionalErrors,
     },
   };
 }
