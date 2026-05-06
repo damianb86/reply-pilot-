@@ -49,8 +49,8 @@ function PackageCard({pkg, fetcher}) {
             <span className="rp-credit-package-stack">
               <span className="rp-credit-package-base">{formatCreditNumber(pkg.credits)} credits</span>
               {hasWelcomeBonus ? (
-                <span className="rp-credit-package-bonus" title="First purchase bonus">
-                  +{formatCreditNumber(pkg.firstPurchaseBonusCredits)} credits
+                <span className="rp-credit-package-bonus" title="First purchase total with welcome bonus">
+                  {formatCreditNumber(pkg.firstPurchaseTotalCredits)} credits
                 </span>
               ) : null}
             </span>
