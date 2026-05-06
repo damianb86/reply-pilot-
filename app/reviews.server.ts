@@ -15,13 +15,16 @@ import {
   type AppSettings,
 } from "./settings.server";
 import {
-  creditCostForOperation,
+  creditCostForReviewReply,
   getCreditOverview,
+  productDescriptionCreditMultiplier,
   refundCredits,
   spendCredits,
 } from "./credits.server";
 import {
   findProductByTitle,
+  loadShopifyProductByHandle,
+  loadShopifyProductById,
   loadShopifyProducts,
   type ShopifyProductSummary,
 } from "./shopify-products.server";
@@ -918,7 +921,7 @@ function mapDraft(record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[nu
   };
 }
 
-async function loadQueueAiConfig(shop: string) {
+async function loadQueueAiConfig(shop: string, appSettings: AppSettings) {
   const settings = await db.brandVoiceSetting.findUnique({
     where: { shop },
     select: { selectedModel: true },
@@ -928,7 +931,10 @@ async function loadQueueAiConfig(shop: string) {
   const selectedModel = aiModels.find((model) => model.id === selectedModelId) ?? aiModels[0] ?? null;
   const activeVariant = selectedModel?.activeVariant ?? null;
   const dailyLimitReached = selectedModel?.provider === "Google" && !activeVariant;
-  const replyCreditCost = creditCostForOperation(selectedModelId, "reply");
+  const productDescriptionMultiplier = productDescriptionCreditMultiplier(appSettings.useProductDescription);
+  const replyCreditCost = creditCostForReviewReply(selectedModelId, {
+    useProductDescription: appSettings.useProductDescription,
+  });
 
   return {
     selectedModelId,
@@ -941,6 +947,8 @@ async function loadQueueAiConfig(shop: string) {
     displayName: activeVariant?.name || selectedModel?.name || "AI model",
     provider: selectedModel?.provider || activeVariant?.provider || "",
     replyCreditCost,
+    productDescriptionMultiplier,
+    useProductDescription: appSettings.useProductDescription,
   };
 }
 
@@ -999,7 +1007,7 @@ export async function loadReviewsPageData(
   return {
     connected: Boolean(connection && connection.status === "connected"),
     connectionStatus: connection?.status ?? "not_connected",
-    aiConfig: await loadQueueAiConfig(shop),
+    aiConfig: await loadQueueAiConfig(shop, appSettings),
     credits: await getCreditOverview(shop),
     syncResult,
     syncError:
@@ -1028,18 +1036,69 @@ async function loadBrandVoiceForDrafts(shop: string) {
   };
 }
 
-function productContextForRecord(
+function sourceProductLookup(record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number]) {
+  const sourceReview = readObject(safeJsonParse(record.sourceReviewJson));
+  const externalId = sourceReview.product_external_id;
+  return {
+    externalId: typeof externalId === "number" ? String(externalId) : readString(externalId),
+    handle: readString(sourceReview.product_handle),
+  };
+}
+
+function shopifyProductGid(value: string) {
+  const cleanValue = value.trim();
+  if (!cleanValue) return "";
+  if (cleanValue.startsWith("gid://shopify/Product/")) return cleanValue;
+  if (/^\d+$/.test(cleanValue)) return `gid://shopify/Product/${cleanValue}`;
+  return "";
+}
+
+async function loadDetailedProductForRecord(
   record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number],
   products: ShopifyProductSummary[],
+  admin?: AdminGraphql,
+) {
+  if (!admin) return null;
+
+  const lookup = sourceProductLookup(record);
+  const externalGid = shopifyProductGid(lookup.externalId);
+  if (externalGid) {
+    const product = await loadShopifyProductById(admin, externalGid).catch(() => null);
+    if (product) return product;
+  }
+
+  if (lookup.handle) {
+    const product = await loadShopifyProductByHandle(admin, lookup.handle).catch(() => null);
+    if (product) return product;
+  }
+
+  const matchedProduct = findProductByTitle(products, record.productTitle);
+  if (matchedProduct?.id) {
+    const product = await loadShopifyProductById(admin, matchedProduct.id).catch(() => null);
+    if (product) return product;
+  }
+
+  return null;
+}
+
+async function productContextForRecord(
+  record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number],
+  products: ShopifyProductSummary[],
+  options: { admin?: AdminGraphql; useProductDescription?: boolean } = {},
 ) {
   const matchedProduct = findProductByTitle(products, record.productTitle);
+  const detailedProduct = options.useProductDescription
+    ? await loadDetailedProductForRecord(record, products, options.admin)
+    : null;
+  const product = detailedProduct ?? matchedProduct;
+  const storedTags = readStringListJson(record.productTagsJson);
+
   return {
-    productTitle: record.productTitle || matchedProduct?.title || "Store review",
-    productType: record.productType || matchedProduct?.productType || "",
-    productTags: readStringListJson(record.productTagsJson).length
-      ? readStringListJson(record.productTagsJson)
-      : matchedProduct?.tags ?? [],
-    matchedProduct,
+    productTitle: record.productTitle || product?.title || "Store review",
+    productType: record.productType || product?.productType || "",
+    productTags: storedTags.length ? storedTags : product?.tags ?? [],
+    productDescription: options.useProductDescription ? product?.description || "" : "",
+    matchedProduct: product,
   };
 }
 
@@ -1047,9 +1106,14 @@ async function generateReplyForRecord(
   record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number],
   products: ShopifyProductSummary[],
   brandVoice: Awaited<ReturnType<typeof loadBrandVoiceForDrafts>>,
+  appSettings: AppSettings,
+  admin?: AdminGraphql,
   nudge?: string,
 ) {
-  const productContext = productContextForRecord(record, products);
+  const productContext = await productContextForRecord(record, products, {
+    admin,
+    useProductDescription: appSettings.useProductDescription,
+  });
   const result = await generateReviewReplyText({
     modelId: brandVoice.selectedModel,
     context: {
@@ -1067,6 +1131,7 @@ async function generateReplyForRecord(
       productTitle: productContext.productTitle,
       productType: productContext.productType,
       productTags: productContext.productTags,
+      productDescription: productContext.productDescription,
       nudge,
     },
   });
@@ -1111,7 +1176,9 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
     generated: 0,
     failed: 0,
     credits: {
-      costPerDraft: creditCostForOperation(brandVoice.selectedModel, "reply"),
+      costPerDraft: creditCostForReviewReply(brandVoice.selectedModel, {
+        useProductDescription: appSettings.useProductDescription,
+      }),
       requested: 0,
       spent: 0,
       refunded: 0,
@@ -1123,12 +1190,16 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
     description: `Generate ${records.length} review ${records.length === 1 ? "reply" : "replies"}`,
     referenceType: "queue_generate",
     referenceId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    metadata: { modelId: brandVoice.selectedModel, count: records.length },
+    metadata: {
+      modelId: brandVoice.selectedModel,
+      count: records.length,
+      useProductDescription: appSettings.useProductDescription,
+    },
   });
 
   for (const record of records) {
     try {
-      const generated = await generateReplyForRecord(record, products, brandVoice);
+      const generated = await generateReplyForRecord(record, products, brandVoice, appSettings, admin);
       const confidence = buildConfidence({
         reviewBody: record.reviewBody,
         rating: record.rating ?? 0,
@@ -1207,7 +1278,9 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
     generated: 0,
     failed: 0,
     credits: {
-      costPerDraft: creditCostForOperation(brandVoice.selectedModel, "reply"),
+      costPerDraft: creditCostForReviewReply(brandVoice.selectedModel, {
+        useProductDescription: appSettings.useProductDescription,
+      }),
       requested: 0,
       spent: 0,
       refunded: 0,
@@ -1219,12 +1292,16 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
     description: `Regenerate ${records.length} review ${records.length === 1 ? "reply" : "replies"}`,
     referenceType: "queue_regenerate",
     referenceId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    metadata: { modelId: brandVoice.selectedModel, count: records.length },
+    metadata: {
+      modelId: brandVoice.selectedModel,
+      count: records.length,
+      useProductDescription: appSettings.useProductDescription,
+    },
   });
 
   for (const record of records) {
     try {
-      const generated = await generateReplyForRecord(record, products, brandVoice, nudge);
+      const generated = await generateReplyForRecord(record, products, brandVoice, appSettings, admin, nudge);
       const confidence = buildConfidence({
         reviewBody: record.reviewBody,
         rating: record.rating ?? 0,
@@ -1338,13 +1415,21 @@ export async function reviseDraft(shop: string, id: string, instruction: string,
     loadBrandVoiceForDrafts(shop),
     loadAppSettings(shop),
   ]);
-  const productContext = productContextForRecord(record, products);
-  const cost = creditCostForOperation(brandVoice.selectedModel, "reply");
+  const productContext = await productContextForRecord(record, products, {
+    admin,
+    useProductDescription: appSettings.useProductDescription,
+  });
+  const cost = creditCostForReviewReply(brandVoice.selectedModel, {
+    useProductDescription: appSettings.useProductDescription,
+  });
   const charge = await spendCredits(shop, cost, {
     description: "Revise review reply",
     referenceType: "queue_revise",
     referenceId: record.id,
-    metadata: { modelId: brandVoice.selectedModel },
+    metadata: {
+      modelId: brandVoice.selectedModel,
+      useProductDescription: appSettings.useProductDescription,
+    },
   });
 
   try {
@@ -1365,6 +1450,7 @@ export async function reviseDraft(shop: string, id: string, instruction: string,
         productTitle: productContext.productTitle,
         productType: productContext.productType,
         productTags: productContext.productTags,
+        productDescription: productContext.productDescription,
         currentDraft: record.draft,
         instruction: trimmedInstruction,
       },

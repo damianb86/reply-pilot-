@@ -264,6 +264,7 @@ function ReviewsContent() {
   const aiConfigured = aiConfig.configured !== false;
   const aiDisplayName = aiConfig.displayName || aiConfig.activeVariant?.name || aiConfig.selectedModel?.name || 'Brand Voice model';
   const aiProvider = aiConfig.provider || aiConfig.activeVariant?.provider || aiConfig.selectedModel?.provider || 'AI';
+  const productDescriptionMultiplier = Number(aiConfig.productDescriptionMultiplier ?? 1);
   const creditBalance = Number(pageData.credits?.balance ?? 0);
   const replyCreditCost = Number(aiConfig.replyCreditCost ?? 1);
 
@@ -640,6 +641,7 @@ function ReviewsContent() {
               <Text as="span" variant="bodySm" tone="subdued">{aiProvider} from Brand Voice</Text>
               <Badge tone={creditBalance < replyCreditCost ? 'critical' : 'info'}>{creditBalance} credits</Badge>
               <Text as="span" variant="bodySm" tone="subdued">{creditLabel(1)} per reply</Text>
+              {productDescriptionMultiplier > 1 ? <Badge tone="attention">Product descriptions {productDescriptionMultiplier}x</Badge> : null}
               <Badge>{pageData.connected ? 'Judge.me connected' : 'Source missing'}</Badge>
               <Badge tone={pageData.connected ? 'success' : 'attention'}>{pageData.connected ? 'Ready' : 'Setup needed'}</Badge>
             </InlineStack>

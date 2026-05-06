@@ -84,13 +84,13 @@ function ModelSpendCard({name, costs}) {
           <Text as="p" variant="bodySm" tone="subdued">AI model tier</Text>
         </BlockStack>
         <Text as="p" variant="bodyMd">
-          The AI agent spends {costs.reply} credit{costs.reply === 1 ? '' : 's'} per reply or preview.
+          The AI agent spends {costs.reply} credit{costs.reply === 1 ? '' : 's'} per review reply.
         </Text>
         <Text as="p" variant="bodySm" tone="subdued">
           With this model, 1.000 credits answers about {replyCapacity(1000, costs.reply)} review replies.
         </Text>
         <Text as="p" variant="bodySm" tone="subdued">
-          {costs.personality} credits to generate Personality from past replies.
+          Live previews use {costs.preview} credit{costs.preview === 1 ? '' : 's'}. Personality uses {costs.personality} credits.
         </Text>
       </BlockStack>
     </Card>
@@ -192,6 +192,9 @@ export default function CreditsPage() {
             <Text as="p" variant="bodyMd" tone="subdued">
               Credits are spent when the AI agent generates replies, live previews, or Personality drafts. The cost depends on the AI model tier selected in Settings.
             </Text>
+            {credits.useProductDescription ? (
+              <Badge tone="attention">Product descriptions enabled: reply costs are {credits.productDescriptionMultiplier}x</Badge>
+            ) : null}
           </BlockStack>
           <InlineGrid columns={{xs: 1, md: 3}} gap="300">
             <ModelSpendCard name="Basic" costs={modelCosts.basic ?? {reply: 1, personality: 2}} />

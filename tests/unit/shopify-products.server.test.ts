@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   findProductByTitle,
+  loadShopifyProductByHandle,
   loadShopifyProductById,
   loadShopifyProducts,
 } from "../../app/shopify-products.server";
@@ -20,8 +21,10 @@ describe("shopify-products.server", () => {
       {
         id: "gid://shopify/Product/1",
         title: "Linen napkins",
+        handle: "",
         productType: "Home",
         tags: ["table", "linen"],
+        description: undefined,
       },
     ]);
   });
@@ -38,6 +41,9 @@ describe("shopify-products.server", () => {
         product: {
           id: "gid://shopify/Product/1",
           title: "Linen napkins",
+          handle: "linen-napkins",
+          description:
+            '<p>Soft&nbsp;<strong>linen</strong> for the table.</p><script>window.bad = true;</script>',
           productType: "Home",
           tags: ["table"],
         },
@@ -47,6 +53,36 @@ describe("shopify-products.server", () => {
     const product = await loadShopifyProductById(admin, "gid://shopify/Product/1");
 
     expect(product?.title).toBe("Linen napkins");
+    expect(product?.description).toBe("Soft linen for the table.");
     expect(findProductByTitle([product!], "napkins")).toBe(product);
+  });
+
+  it("loads one product by handle with description", async () => {
+    const admin = adminWithJson({
+      data: {
+        products: {
+          edges: [
+            {
+              node: {
+                id: "gid://shopify/Product/1",
+                title: "Linen napkins",
+                handle: "linen-napkins",
+                description:
+                  "<style>.x{display:none}</style><ul><li>Durable linen napkins</li><li>Daily meals &amp; hosting</li></ul>",
+                productType: "Home",
+                tags: ["table"],
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const product = await loadShopifyProductByHandle(admin, "linen-napkins");
+
+    expect(product).toMatchObject({
+      handle: "linen-napkins",
+      description: "Durable linen napkins Daily meals & hosting",
+    });
   });
 });

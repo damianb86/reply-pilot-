@@ -75,6 +75,7 @@ type ReviewReplyContext = {
   productTitle?: string | null;
   productType?: string | null;
   productTags?: string[];
+  productDescription?: string | null;
   nudge?: string | null;
 };
 
@@ -559,12 +560,17 @@ function productContextLines(input: {
   productTitle?: string | null;
   productType?: string | null;
   productTags?: string[];
+  productDescription?: string | null;
 }) {
   const tags = input.productTags?.filter(Boolean).slice(0, 12).join(", ") || "none";
+  const description = input.productDescription?.trim();
   return [
     `Product title: ${input.productTitle?.trim() || "Store review"}`,
     `Product type: ${input.productType?.trim() || "unknown"}`,
     `Product tags: ${tags}`,
+    description
+      ? `Product description, merchant-provided context. Use only when directly relevant and do not overquote it: ${description}`
+      : "Product description: not included",
   ];
 }
 
@@ -709,6 +715,7 @@ function reviewReplyPrompt(context: ReviewReplyContext) {
       productTitle: context.productTitle,
       productType: context.productType,
       productTags: context.productTags,
+      productDescription: context.productDescription,
     }),
     `Rating: ${rating} out of 5 stars`,
     `Review: "${context.reviewBody}"`,
@@ -745,6 +752,7 @@ function reviewReplyRevisionPrompt(context: ReviewReplyRevisionContext) {
       productTitle: context.productTitle,
       productType: context.productType,
       productTags: context.productTags,
+      productDescription: context.productDescription,
     }),
     `Rating: ${rating} out of 5 stars`,
     `Review: "${context.reviewBody}"`,

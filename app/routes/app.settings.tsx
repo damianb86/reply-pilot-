@@ -2,6 +2,10 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import SettingsPage from "../../src/pages/SettingsPage";
 import { loadBrandVoicePageData } from "../brand-voice.server";
 import {
+  creditCostForReviewReply,
+  productDescriptionCreditMultiplier,
+} from "../credits.server";
+import {
   cleanupExpiredReviewHistory,
   loadAppSettings,
   saveAppSettings,
@@ -15,7 +19,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     loadAppSettings(session.shop),
     loadBrandVoicePageData(session.shop),
   ]);
-  return { settings, brandVoice };
+  return {
+    settings,
+    brandVoice,
+    productDescriptionCreditMultiplier: productDescriptionCreditMultiplier(true),
+    productDescriptionReplyCosts: {
+      basic: creditCostForReviewReply("basic", { useProductDescription: true }),
+      pro: creditCostForReviewReply("pro", { useProductDescription: true }),
+      premium: creditCostForReviewReply("premium", { useProductDescription: true }),
+    },
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {

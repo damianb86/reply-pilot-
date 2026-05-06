@@ -217,13 +217,13 @@ function creditsNumber(amount) {
   return Number(amount ?? 0).toLocaleString('en');
 }
 
-function replyCostBadge(model) {
-  const credits = Number(model.credits?.reply ?? 0);
+function replyCostBadge(model, multiplier = 1) {
+  const credits = Number(model.credits?.reply ?? 0) * Number(multiplier || 1);
   if (!credits) return 'Free';
   return `${credits} credit${credits === 1 ? '' : 's'} / reply`;
 }
 
-function ModelCard({model, selected, onSelect}) {
+function ModelCard({model, selected, onSelect, replyCreditMultiplier = 1}) {
   const previewCost = creditsText(model.credits?.preview ?? model.credits?.reply);
 
   return (
@@ -239,7 +239,7 @@ function ModelCard({model, selected, onSelect}) {
           <BlockStack gap="150">
             <InlineStack gap="200" blockAlign="center" wrap={false}>
               <Text as="span" variant="headingLg">{model.name}</Text>
-              <Badge tone="info">{replyCostBadge(model)}</Badge>
+              <Badge tone="info">{replyCostBadge(model, replyCreditMultiplier)}</Badge>
             </InlineStack>
           </BlockStack>
         </div>
@@ -526,6 +526,7 @@ export default function BrandVoicePage({
   embedded = false,
   activeSection: controlledActiveSection,
   onActiveSectionChange,
+  replyCreditMultiplier = 1,
 } = {}) {
   const shopify = useAppBridge();
   const routeLoaderData = useLoaderData();
@@ -1297,6 +1298,7 @@ export default function BrandVoicePage({
                 <InlineStack gap="150" blockAlign="center">
                   <Badge tone={creditOverview.balance <= 25 ? 'critical' : 'info'}>{creditsNumber(creditOverview.balance)} credits left</Badge>
                   {selectedModelConfig ? <Badge>{selectedModelConfig.name} selected</Badge> : null}
+                  {replyCreditMultiplier > 1 ? <Badge tone="attention">Product descriptions {replyCreditMultiplier}x replies</Badge> : null}
                 </InlineStack>
               </InlineStack>
 
@@ -1307,6 +1309,7 @@ export default function BrandVoicePage({
                     model={model}
                     selected={selectedModel === model.id}
                     onSelect={() => setSelectedModel(model.id)}
+                    replyCreditMultiplier={replyCreditMultiplier}
                   />
                 ))}
               </div>

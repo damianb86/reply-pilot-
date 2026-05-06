@@ -8,8 +8,10 @@ type AdminGraphql = {
 export type ShopifyProductSummary = {
   id: string;
   title: string;
+  handle: string;
   productType: string;
   tags: string[];
+  description?: string;
 };
 
 const PRODUCTS_QUERY = `#graphql
@@ -19,6 +21,7 @@ const PRODUCTS_QUERY = `#graphql
         node {
           id
           title
+          handle
           productType
           tags
         }
@@ -32,8 +35,27 @@ const PRODUCT_BY_ID_QUERY = `#graphql
     product(id: $id) {
       id
       title
+      handle
+      description
       productType
       tags
+    }
+  }
+`;
+
+const PRODUCT_BY_HANDLE_QUERY = `#graphql
+  query ReplyPilotProductByHandle($query: String!) {
+    products(first: 1, query: $query) {
+      edges {
+        node {
+          id
+          title
+          handle
+          description
+          productType
+          tags
+        }
+      }
     }
   }
 `;
@@ -58,6 +80,58 @@ function normalizeTitle(value: string) {
   return value.trim().toLowerCase();
 }
 
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;|&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, code) => {
+      try {
+        return String.fromCodePoint(Number.parseInt(code, 10));
+      } catch {
+        return " ";
+      }
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => {
+      try {
+        return String.fromCodePoint(Number.parseInt(code, 16));
+      } catch {
+        return " ";
+      }
+    });
+}
+
+function cleanProductDescription(value: unknown) {
+  return decodeHtmlEntities(readString(value))
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(br|hr)\b[^>]*>/gi, " ")
+    .replace(/<\/(p|div|section|article|li|ul|ol|h[1-6]|tr|td|th)>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 1600);
+}
+
+function productFromNode(nodeValue: unknown): ShopifyProductSummary | null {
+  const node = readObject(nodeValue);
+  const title = readString(node.title);
+  if (!title) return null;
+
+  return {
+    id: readString(node.id),
+    title,
+    handle: readString(node.handle),
+    productType: readString(node.productType),
+    tags: readTags(node.tags),
+    description: cleanProductDescription(node.description),
+  };
+}
+
 export async function loadShopifyProducts(
   admin?: AdminGraphql | null,
   first = 100,
@@ -77,20 +151,13 @@ export async function loadShopifyProducts(
   const edges = readObject(products).edges;
   if (!Array.isArray(edges)) return [];
 
-  return edges
-    .map((edge) => {
-      const node = readObject(readObject(edge).node);
-      const title = readString(node.title);
-      if (!title) return null;
+  const summaries: ShopifyProductSummary[] = [];
+  for (const edge of edges) {
+    const product = productFromNode(readObject(edge).node);
+    if (product) summaries.push({...product, description: undefined});
+  }
 
-      return {
-        id: readString(node.id),
-        title,
-        productType: readString(node.productType),
-        tags: readTags(node.tags),
-      };
-    })
-    .filter((product): product is ShopifyProductSummary => Boolean(product));
+  return summaries;
 }
 
 export async function loadShopifyProductById(
@@ -108,16 +175,30 @@ export async function loadShopifyProductById(
     throw new Error(`Shopify product query failed: ${JSON.stringify(errors).slice(0, 1200)}`);
   }
 
-  const product = readObject(readObject(readObject(body).data).product);
-  const title = readString(product.title);
-  if (!title) return null;
+  return productFromNode(readObject(readObject(readObject(body).data).product));
+}
 
-  return {
-    id: readString(product.id),
-    title,
-    productType: readString(product.productType),
-    tags: readTags(product.tags),
-  };
+export async function loadShopifyProductByHandle(
+  admin: AdminGraphql,
+  handle: string,
+): Promise<ShopifyProductSummary | null> {
+  const cleanHandle = handle.trim();
+  if (!cleanHandle) return null;
+
+  const escapedHandle = cleanHandle.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const response = await admin.graphql(PRODUCT_BY_HANDLE_QUERY, {
+    variables: { query: `handle:"${escapedHandle}"` },
+  });
+  const body = (await response.json()) as unknown;
+  const errors = readObject(body).errors;
+  if (Array.isArray(errors) && errors.length) {
+    throw new Error(`Shopify product query failed: ${JSON.stringify(errors).slice(0, 1200)}`);
+  }
+
+  const edges = readObject(readObject(readObject(body).data).products).edges;
+  if (!Array.isArray(edges) || !edges[0]) return null;
+
+  return productFromNode(readObject(edges[0]).node);
 }
 
 export function findProductByTitle(

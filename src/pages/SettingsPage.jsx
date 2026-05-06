@@ -4,6 +4,7 @@ import {useFetcher, useLoaderData, useLocation} from 'react-router';
 import {SaveBar, useAppBridge} from '@shopify/app-bridge-react';
 import {
   Badge,
+  Banner,
   BlockStack,
   Box,
   Button,
@@ -34,6 +35,7 @@ const defaultSettings = {
   routeSensitiveReviews: true,
   routeLowStarReviews: true,
   sendReplyEmail: false,
+  useProductDescription: false,
   defaultQueueRange: '7-days',
   defaultQueueSort: 'newest',
   showSkippedByDefault: false,
@@ -53,6 +55,12 @@ const queueSortOptions = [
   {label: 'Oldest first', value: 'oldest'},
 ];
 
+const defaultProductDescriptionReplyCosts = {
+  basic: 2,
+  pro: 6,
+  premium: 18,
+};
+
 const retentionOptions = [
   {label: '12 months', value: '12-months'},
   {label: '24 months', value: '24-months'},
@@ -68,6 +76,12 @@ function buildSettings(settings) {
 
 function settingsSignature(settings) {
   return JSON.stringify(buildSettings(settings));
+}
+
+function formatMultiplier(value) {
+  const multiplier = Number(value);
+  if (!Number.isFinite(multiplier)) return '1.5';
+  return String(Number(multiplier.toFixed(2)));
 }
 
 function FieldRow({label, description, children}) {
@@ -132,6 +146,14 @@ export default function SettingsPage() {
   const saveFetcher = useFetcher();
   const cleanupFetcher = useFetcher();
   const lastToastKey = useRef('');
+  const configuredProductDescriptionMultiplier = Number(loaderData.productDescriptionCreditMultiplier ?? 1.5);
+  const productDescriptionMultiplier = Number.isFinite(configuredProductDescriptionMultiplier)
+    ? configuredProductDescriptionMultiplier
+    : 1.5;
+  const productDescriptionReplyCosts = {
+    ...defaultProductDescriptionReplyCosts,
+    ...(loaderData.productDescriptionReplyCosts ?? {}),
+  };
   const [activeSection, setActiveSection] = useState(() => {
     const requestedSection = new URLSearchParams(location.search).get('section');
     return requestedSection && [...brandVoiceSectionIds, ...generalSettingsNav.map((item) => item.id)].includes(requestedSection)
@@ -280,6 +302,7 @@ export default function SettingsPage() {
               embedded
               activeSection={activeSection}
               onActiveSectionChange={setActiveSection}
+              replyCreditMultiplier={settings.useProductDescription ? productDescriptionMultiplier : 1}
             />
           ) : null}
 
@@ -368,6 +391,30 @@ export default function SettingsPage() {
                   onChange={(value) => set('sendReplyEmail', value)}
                 />
               </FieldRow>
+              <FieldRow
+                label="Use product descriptions"
+                description="Adds the Shopify product description to AI reply context when Reply Pilot can match the reviewed product."
+              >
+                <Checkbox
+                  label="Use product descriptions"
+                  checked={settings.useProductDescription}
+                  onChange={(value) => set('useProductDescription', value)}
+                />
+              </FieldRow>
+              {settings.useProductDescription ? (
+                <div className="rp-field-row">
+                  <Banner tone="warning">
+                    <BlockStack gap="100">
+                      <Text as="p" variant="bodyMd" fontWeight="semibold">
+                        Product descriptions increase reply-generation credits by {formatMultiplier(productDescriptionMultiplier)}x.
+                      </Text>
+                      <Text as="p" variant="bodyMd">
+                        Basic replies cost {productDescriptionReplyCosts.basic} credits, Pro replies cost {productDescriptionReplyCosts.pro} credits, and Premium replies cost {productDescriptionReplyCosts.premium} credits while this setting is enabled. Descriptions are stripped of HTML, cleaned, and shortened before they are sent to the AI.
+                      </Text>
+                    </BlockStack>
+                  </Banner>
+                </div>
+              ) : null}
             </SectionCard>
           ) : null}
 

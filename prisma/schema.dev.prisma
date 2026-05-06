@@ -163,11 +163,14 @@ model CreditPurchase {
   shop              String
   packageId         String
   credits           Int
+  bonusCredits      Int      @default(0)
+  totalCredits      Int      @default(0)
   amountCents       Int
   currencyCode      String   @default("USD")
   status            String   @default("pending")
   shopifyPurchaseId String?  @unique
   confirmationUrl   String?
+  billingName       String?
   lastError         String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

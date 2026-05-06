@@ -1,11 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   CreditError,
   creditCostForOperation,
+  creditCostForReviewReply,
   creditCostsForModel,
   creditMultiplierForModel,
+  productDescriptionCreditMultiplier,
   serializeCreditError,
 } from "../../app/credits.server";
+
+const originalProductDescriptionMultiplier = process.env.PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER;
+
+afterEach(() => {
+  if (originalProductDescriptionMultiplier === undefined) {
+    delete process.env.PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER;
+  } else {
+    process.env.PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER = originalProductDescriptionMultiplier;
+  }
+});
 
 describe("credits.server", () => {
   it("maps model tiers to credit multipliers", () => {
@@ -25,6 +37,22 @@ describe("credits.server", () => {
       preview: 12,
       personality: 24,
     });
+  });
+
+  it("applies the product description multiplier to reply costs", () => {
+    delete process.env.PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER;
+    expect(productDescriptionCreditMultiplier(false)).toBe(1);
+    expect(productDescriptionCreditMultiplier(true)).toBe(1.5);
+    expect(creditCostForReviewReply("basic", { useProductDescription: true })).toBe(2);
+    expect(creditCostForReviewReply("pro", { useProductDescription: true })).toBe(6);
+    expect(creditCostForReviewReply("premium", { useProductDescription: true })).toBe(18);
+  });
+
+  it("reads the product description multiplier from the environment", () => {
+    process.env.PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER = "2.25";
+
+    expect(productDescriptionCreditMultiplier(true)).toBe(2.25);
+    expect(creditCostForReviewReply("pro", { useProductDescription: true })).toBe(9);
   });
 
   it("serializes credit errors without losing shortfall details", () => {

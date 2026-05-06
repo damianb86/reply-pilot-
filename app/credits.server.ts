@@ -1,4 +1,5 @@
 import db from "./db.server";
+import { loadAppSettings } from "./settings.server";
 
 type AdminGraphql = {
   graphql: (query: string, options?: { variables?: Record<string, unknown> }) => Promise<Response>;
@@ -9,6 +10,7 @@ type CreditOperation = "reply" | "preview" | "personality";
 const INITIAL_FREE_CREDITS = 100;
 const FIRST_PURCHASE_BONUS_RATE = 0.35;
 const FIRST_PURCHASE_BONUS_PERCENT = Math.round(FIRST_PURCHASE_BONUS_RATE * 100);
+const DEFAULT_PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER = 1.5;
 const CREDIT_MULTIPLIERS: Record<string, number> = {
   dev: 0,
   basic: 1,
@@ -115,6 +117,28 @@ export function creditCostForOperation(modelId: string | null | undefined, opera
   return OPERATION_BASE_COSTS[operation] * creditMultiplierForModel(modelId);
 }
 
+function configuredProductDescriptionMultiplier() {
+  const configured = Number(
+    process.env.PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER ?? DEFAULT_PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER,
+  );
+  return Number.isFinite(configured) && configured >= 1
+    ? configured
+    : DEFAULT_PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER;
+}
+
+export function productDescriptionCreditMultiplier(enabled?: boolean | null) {
+  return enabled ? configuredProductDescriptionMultiplier() : 1;
+}
+
+export function creditCostForReviewReply(
+  modelId: string | null | undefined,
+  options: { useProductDescription?: boolean | null } = {},
+) {
+  return Math.ceil(
+    creditCostForOperation(modelId, "reply") * productDescriptionCreditMultiplier(options.useProductDescription),
+  );
+}
+
 export function creditCostsForModel(modelId?: string | null) {
   return {
     multiplier: creditMultiplierForModel(modelId),
@@ -132,8 +156,21 @@ function formatCurrency(amountCents: number, currencyCode: string) {
   }).format(amountCents / 100);
 }
 
+function formatCreditCount(credits: number) {
+  return new Intl.NumberFormat("en").format(Math.max(0, Math.round(credits)));
+}
+
 function firstPurchaseBonusCredits(credits: number) {
   return Math.round(credits * FIRST_PURCHASE_BONUS_RATE);
+}
+
+function creditPurchaseBillingName(pkg: (typeof CREDIT_PACKAGES)[number], bonusCredits: number) {
+  const totalCredits = pkg.credits + bonusCredits;
+  if (bonusCredits > 0) {
+    return `Reply Pilot ${formatCreditCount(totalCredits)} credits (${formatCreditCount(pkg.credits)} + ${formatCreditCount(bonusCredits)} first-purchase bonus)`;
+  }
+
+  return `Reply Pilot ${formatCreditCount(pkg.credits)} credits`;
 }
 
 function packageView(pkg: (typeof CREDIT_PACKAGES)[number], includeFirstPurchaseBonus = false) {
@@ -180,6 +217,16 @@ async function accountForShop(shop: string, tx: typeof db = db) {
     if (account) return account;
     throw new CreditError("Could not initialize credits for this shop.");
   }
+}
+
+async function firstPurchaseBonusAvailableForShop(shop: string) {
+  const account = await accountForShop(shop);
+  const latestPurchaseEntry = await db.creditLedgerEntry.findFirst({
+    where: { shop, type: "purchase" },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return !latestPurchaseEntry && account.purchasedCredits === 0 && account.bonusCredits === 0;
 }
 
 export async function getCreditOverview(shop: string) {
@@ -322,7 +369,12 @@ export async function refundCredits(
   return getCreditOverview(shop);
 }
 
-async function grantPurchasedCredits(shop: string, purchaseId: string, credits: number) {
+async function grantPurchasedCredits(
+  shop: string,
+  purchaseId: string,
+  credits: number,
+  expectedBonusCredits = 0,
+) {
   await accountForShop(shop);
 
   return db.$transaction(async (tx) => {
@@ -335,17 +387,16 @@ async function grantPurchasedCredits(shop: string, purchaseId: string, credits: 
       return { credited: false, credits, bonusCredits: 0, totalCredits: 0, firstPurchaseBonus: false };
     }
 
-    const calculatedBonusCredits = firstPurchaseBonusCredits(credits);
     let bonusCredits = 0;
-    if (calculatedBonusCredits) {
+    if (expectedBonusCredits) {
       const bonusUpdate = await tx.creditAccount.updateMany({
         where: { shop, purchasedCredits: 0, bonusCredits: 0 },
         data: {
-          balance: { increment: calculatedBonusCredits },
-          bonusCredits: { increment: calculatedBonusCredits },
+          balance: { increment: expectedBonusCredits },
+          bonusCredits: { increment: expectedBonusCredits },
         },
       });
-      bonusCredits = bonusUpdate.count === 1 ? calculatedBonusCredits : 0;
+      bonusCredits = bonusUpdate.count === 1 ? expectedBonusCredits : 0;
     }
 
     const account = await tx.creditAccount.update({
@@ -431,13 +482,20 @@ export async function createCreditPurchase(
   returnUrl: string,
 ) {
   const pkg = readPackage(packageId);
+  const bonusAvailable = await firstPurchaseBonusAvailableForShop(shop);
+  const bonusCredits = bonusAvailable ? firstPurchaseBonusCredits(pkg.credits) : 0;
+  const totalCredits = pkg.credits + bonusCredits;
+  const billingName = creditPurchaseBillingName(pkg, bonusCredits);
   const purchase = await db.creditPurchase.create({
     data: {
       shop,
       packageId: pkg.id,
       credits: pkg.credits,
+      bonusCredits,
+      totalCredits,
       amountCents: pkg.amountCents,
       currencyCode: pkg.currencyCode,
+      billingName,
       status: "pending",
     },
   });
@@ -447,7 +505,7 @@ export async function createCreditPurchase(
   try {
     const response = await admin.graphql(APP_PURCHASE_CREATE, {
       variables: {
-        name: `Reply Pilot ${pkg.credits} credits`,
+        name: billingName,
         returnUrl: callbackUrl.toString(),
         price: {
           amount: pkg.amountCents / 100,
@@ -502,7 +560,8 @@ export async function finalizeCreditPurchase(shop: string, purchaseId: string, a
   }
 
   if (purchase.status === "credited") {
-    return { ok: true, message: `${purchase.credits} credits were already added.` };
+    const totalCredits = purchase.totalCredits || purchase.credits + purchase.bonusCredits;
+    return { ok: true, message: `${formatCreditCount(totalCredits)} credits were already added.` };
   }
 
   if (!purchase.shopifyPurchaseId) {
@@ -517,14 +576,14 @@ export async function finalizeCreditPurchase(shop: string, purchaseId: string, a
   const status = String(node.status || "").toLowerCase();
 
   if (status === "active") {
-    const granted = await grantPurchasedCredits(shop, purchase.id, purchase.credits);
+    const granted = await grantPurchasedCredits(shop, purchase.id, purchase.credits, purchase.bonusCredits);
     if (granted.bonusCredits > 0) {
       return {
         ok: true,
-        message: `${granted.credits} credits added plus ${granted.bonusCredits} welcome bonus credits.`,
+        message: `${formatCreditCount(granted.totalCredits)} credits added (${formatCreditCount(granted.credits)} purchased + ${formatCreditCount(granted.bonusCredits)} welcome bonus).`,
       };
     }
-    return { ok: true, message: `${purchase.credits} credits added to your shop.` };
+    return { ok: true, message: `${formatCreditCount(purchase.credits)} credits added to your shop.` };
   }
 
   await db.creditPurchase.update({
@@ -545,7 +604,7 @@ export async function finalizeCreditPurchase(shop: string, purchaseId: string, a
 }
 
 export async function loadCreditPageData(shop: string) {
-  const [credits, recentPurchases, recentLedger] = await Promise.all([
+  const [credits, recentPurchases, recentLedger, settings] = await Promise.all([
     getCreditOverview(shop),
     db.creditPurchase.findMany({
       where: { shop },
@@ -557,14 +616,33 @@ export async function loadCreditPageData(shop: string) {
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
+    loadAppSettings(shop),
   ]);
+  const replyMultiplier = productDescriptionCreditMultiplier(settings.useProductDescription);
+  const modelCosts = Object.fromEntries(
+    Object.entries(credits.modelCosts).map(([key, costs]) => [
+      key,
+      {
+        ...costs,
+        reply: creditCostForReviewReply(key, { useProductDescription: settings.useProductDescription }),
+      },
+    ]),
+  );
 
   return {
-    credits,
+    credits: {
+      ...credits,
+      modelCosts,
+      useProductDescription: settings.useProductDescription,
+      productDescriptionMultiplier: replyMultiplier,
+    },
     recentPurchases: recentPurchases.map((purchase) => ({
       id: purchase.id,
       packageId: purchase.packageId,
       credits: purchase.credits,
+      bonusCredits: purchase.bonusCredits,
+      totalCredits: purchase.totalCredits || purchase.credits + purchase.bonusCredits,
+      billingName: purchase.billingName,
       priceLabel: formatCurrency(purchase.amountCents, purchase.currencyCode),
       status: purchase.status,
       createdAt: purchase.createdAt.toISOString(),
