@@ -59,8 +59,8 @@ function generationMessage(
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { admin, session } = await authenticate.admin(request);
-  return loadReviewsPageData(session.shop, { sync: true, admin });
+  const { session } = await authenticate.admin(request);
+  return loadReviewsPageData(session.shop);
 }
 
 export async function action({ request }: ActionFunctionArgs) {

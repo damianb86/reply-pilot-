@@ -50,6 +50,10 @@ function compactJson(value: unknown) {
   return JSON.stringify(value ?? null);
 }
 
+function compactJsonString(value: unknown, maxLength = 16000) {
+  return JSON.stringify(value ?? null).slice(0, maxLength);
+}
+
 function readStringListJson(value?: string | null) {
   if (!value) return [];
   try {
@@ -97,6 +101,19 @@ function compactError(error: unknown) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown AI generation error.";
+}
+
+function judgeMeAlreadyRepliedMessage(error: unknown) {
+  const text = [
+    error instanceof Error ? error.message : "",
+    error instanceof JudgeMeApiError ? JSON.stringify(error.details ?? "") : "",
+  ].join(" ").toLowerCase();
+
+  return text.includes("already") && (
+    text.includes("taken") ||
+    text.includes("reply") ||
+    text.includes("replied")
+  );
 }
 
 function initialsFromName(name: string) {
@@ -422,6 +439,8 @@ function reviewFields(rawReview: unknown) {
     customer,
     initials: initialsFromName(customer),
     productTitle: readString(review.product_title) || "Store review",
+    productExternalId: readString(review.product_external_id),
+    productHandle: readString(review.product_handle),
     reviewBody: body,
     rating,
     sourceCreatedAt: Number.isNaN(createdAt.getTime()) ? new Date() : createdAt,
@@ -519,8 +538,135 @@ function hasReplyMetadata(review: Record<string, unknown>) {
   return Boolean(readString(review.reply_date) || readString(review.replied_at));
 }
 
+function htmlDecode(value: string) {
+  return value
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+}
+
+function textFromHtml(value: string) {
+  return htmlDecode(
+    value
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>\s*<p[^>]*>/gi, "\n\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+\n/g, "\n")
+      .replace(/\n\s+/g, "\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim(),
+  );
+}
+
+function widgetHtmlFromResponse(response: unknown) {
+  if (typeof response === "string") return response;
+  const data = readObject(response);
+  const candidates = [
+    data.widget,
+    data.html,
+    data.body,
+    data.review_widget,
+    data.product_review,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+  }
+
+  return "";
+}
+
+function extractReplyTextFromWidgetReviewBlock(block: string) {
+  const specificMatch =
+    block.match(/<[^>]+class=["'][^"']*jdgm-rev__reply-content[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i) ||
+    block.match(/<[^>]+class=["'][^"']*jdgm-rev__reply[^"']*["'][^>]*>([\s\S]*?)(?:<[^>]+class=["'][^"']*jdgm-rev__actions|<\/article>|$)/i) ||
+    block.match(/<[^>]+class=["'][^"']*(?:reply|response)[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i);
+  const content = specificMatch ? textFromHtml(specificMatch[1] ?? "") : "";
+  return content
+    .replace(/^.*?\breplied\s*:?\s*/i, "")
+    .trim();
+}
+
+function extractWidgetReplies(response: unknown) {
+  const html = widgetHtmlFromResponse(response);
+  const replies = new Map<string, JudgeMeSourceReply>();
+  if (!html) return replies;
+
+  const reviewMatches = [...html.matchAll(/data-review-id=["']([^"']+)["']/gi)];
+  for (let index = 0; index < reviewMatches.length; index += 1) {
+    const match = reviewMatches[index];
+    const reviewId = match?.[1];
+    if (!reviewId || match.index === undefined) continue;
+
+    const nextMatch = reviewMatches[index + 1];
+    const block = html.slice(match.index, nextMatch?.index ?? html.length);
+    const content = extractReplyTextFromWidgetReviewBlock(block);
+    if (!content) continue;
+
+    replies.set(reviewId, {
+      present: true,
+      content,
+      createdAt: null,
+      author: "Judge.me",
+      visibility: "public",
+      contentAvailable: true,
+    });
+  }
+
+  return replies;
+}
+
+function readCachedReply(rawReview: Record<string, unknown>): JudgeMeSourceReply | null {
+  const cache = readObject(rawReview.__replyPilot);
+  const sourceReply = readObject(cache.sourceReply);
+  if (sourceReply.present === true || sourceReply.present === "true") {
+    return {
+      present: true,
+      content: readReplyContent(sourceReply),
+      createdAt: readReplyDate(sourceReply),
+      author: readReplyAuthor(sourceReply),
+      visibility: readString(sourceReply.visibility) || "public",
+      contentAvailable: Boolean(readReplyContent(sourceReply)),
+    };
+  }
+
+  const reply = sourceReplyFromCandidate(cache.sourceReply, "public");
+  return reply?.present ? reply : null;
+}
+
+function mergeCachedReply(rawReview: unknown, reply: JudgeMeSourceReply) {
+  const review = readObject(rawReview);
+  return {
+    ...review,
+    __replyPilot: {
+      ...readObject(review.__replyPilot),
+      sourceReply: reply,
+      sourceReplySyncedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function markRawReviewAsAlreadyReplied(rawReview: unknown, message: string) {
+  return mergeCachedReply(rawReview, {
+    present: true,
+    content: "",
+    createdAt: null,
+    author: "Judge.me",
+    visibility: "public",
+    contentAvailable: false,
+    message,
+  } as JudgeMeSourceReply & { message: string });
+}
+
 function extractJudgeMeSourceReply(rawReview: unknown): JudgeMeSourceReply | null {
   const review = readObject(rawReview);
+  const cachedReply = readCachedReply(review);
+  if (cachedReply) return cachedReply;
+
   const directCandidates: Array<[unknown, string]> = [
     [review.reply, "public"],
     [review.public_reply, "public"],
@@ -583,6 +729,55 @@ async function getConnectedJudgeMeCredentials(shop: string) {
   };
 }
 
+type ImportedJudgeMeReview = {
+  rawReview: unknown;
+  fields: ReturnType<typeof reviewFields>;
+};
+
+async function loadWidgetRepliesForImportedReviews(
+  reviews: ImportedJudgeMeReview[],
+  credentials: { apiToken: string; shopDomain: string },
+) {
+  const replies = new Map<string, JudgeMeSourceReply>();
+  const grouped = new Map<string, ImportedJudgeMeReview[]>();
+
+  for (const review of reviews) {
+    const key = review.fields.productExternalId
+      ? `external_id:${review.fields.productExternalId}`
+      : review.fields.productHandle
+        ? `handle:${review.fields.productHandle}`
+        : "";
+    if (!key) continue;
+    grouped.set(key, [...(grouped.get(key) ?? []), review]);
+  }
+
+  for (const [key, group] of grouped) {
+    const [kind, value] = key.split(":");
+    const missingIds = new Set(group.map((review) => review.fields.id).filter(Boolean));
+    const maxPages = Math.min(12, Math.max(2, Math.ceil(missingIds.size / 5) + 3));
+
+    for (let page = 1; page <= maxPages && missingIds.size; page += 1) {
+      const response = await callJudgeMeApi("/widgets/product_review", {
+        apiToken: credentials.apiToken,
+        shopDomain: credentials.shopDomain,
+        searchParams: {
+          page,
+          per_page: 5,
+          ...(kind === "external_id" ? { external_id: value } : { handle: value }),
+        },
+      });
+
+      const widgetReplies = extractWidgetReplies(response);
+      for (const [reviewId, reply] of widgetReplies) {
+        replies.set(reviewId, reply);
+        missingIds.delete(reviewId);
+      }
+    }
+  }
+
+  return replies;
+}
+
 export async function syncJudgeMeReviews(shop: string, admin?: AdminGraphql) {
   const credentials = await getConnectedJudgeMeCredentials(shop);
   if (!credentials) return { connected: false, imported: 0 };
@@ -596,11 +791,20 @@ export async function syncJudgeMeReviews(shop: string, admin?: AdminGraphql) {
   const reviews = Array.isArray(readObject(response).reviews)
     ? (readObject(response).reviews as unknown[])
     : [];
+  const importedReviews = reviews
+    .map((rawReview) => ({ rawReview, fields: reviewFields(rawReview) }))
+    .filter((review) => Boolean(review.fields.id));
+  const widgetReplies = await loadWidgetRepliesForImportedReviews(importedReviews, credentials).catch(() => (
+    new Map<string, JudgeMeSourceReply>()
+  ));
   let imported = 0;
 
-  for (const rawReview of reviews) {
-    const fields = reviewFields(rawReview);
+  for (const importedReview of importedReviews) {
+    const { fields } = importedReview;
     if (!fields.id) continue;
+    const rawReview = widgetReplies.has(fields.id)
+      ? mergeCachedReply(importedReview.rawReview, widgetReplies.get(fields.id) as JudgeMeSourceReply)
+      : importedReview.rawReview;
     const product = findProductByTitle(products, fields.productTitle);
     const productType = product?.productType || null;
     const productTagsJson = compactTags(product?.tags);
@@ -1231,6 +1435,19 @@ export async function approveAndSendDrafts(shop: string, ids: string[]) {
 
   for (const record of records) {
     try {
+      const sourceReply = extractJudgeMeSourceReply(safeJsonParse(record.sourceReviewJson));
+      if (sourceReply?.present) {
+        const message = sourceReply.contentAvailable
+          ? "This review already has a public Judge.me reply. Judge.me does not allow creating a second public reply through the API."
+          : "Judge.me indicates this review already has a reply. Refresh Reviews to try loading the public reply before sending a replacement.";
+        errors.push({ id: record.id, reviewId: record.sourceReviewId, message });
+        await db.reviewDraft.update({
+          where: { id: record.id },
+          data: { lastError: message },
+        });
+        continue;
+      }
+
       const numericReviewId = Number(record.sourceReviewId);
       await callJudgeMeApi("/replies", {
         method: "POST",
@@ -1253,11 +1470,19 @@ export async function approveAndSendDrafts(shop: string, ids: string[]) {
       });
       sent += 1;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown Judge.me send error";
+      const message = judgeMeAlreadyRepliedMessage(error)
+        ? "Judge.me rejected this send because the review already has a reply. Refresh Reviews to cache and display the existing public reply."
+        : error instanceof Error ? error.message : "Unknown Judge.me send error";
       errors.push({ id: record.id, reviewId: record.sourceReviewId, message });
+      const sourceReview = safeJsonParse(record.sourceReviewJson);
       await db.reviewDraft.update({
         where: { id: record.id },
-        data: { lastError: message },
+        data: {
+          lastError: message,
+          sourceReviewJson: judgeMeAlreadyRepliedMessage(error)
+            ? compactJsonString(markRawReviewAsAlreadyReplied(sourceReview, message))
+            : record.sourceReviewJson,
+        },
       });
     }
   }
