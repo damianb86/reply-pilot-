@@ -189,14 +189,28 @@ export async function action({ request }: ActionFunctionArgs) {
       const ids = parseIds(formData);
       const result = await approveAndSendDrafts(session.shop, ids);
       const data = await loadReviewsPageData(session.shop);
+      const blockedCount = result.alreadyReplied.length;
+      const sentMessage = result.sent
+        ? `${result.sent} review${result.sent === 1 ? "" : "s"} approved and sent.`
+        : "";
+      const alreadyRepliedMessage = blockedCount
+        ? blockedCount === 1
+          ? "Judge.me rejected this review because it already has a reply."
+          : `Judge.me rejected ${blockedCount} reviews because they already have replies.`
+        : "";
+      const failureMessage = result.errors.length
+        ? `${result.errors.length} failed.`
+        : "";
+      const message = [sentMessage, alreadyRepliedMessage || failureMessage]
+        .filter(Boolean)
+        .join(" ");
 
       return {
         ok: result.errors.length === 0,
         intent,
-        message: result.errors.length
-          ? `${result.sent} sent, ${result.errors.length} failed.`
-          : `${result.sent} review${result.sent === 1 ? "" : "s"} approved and sent.`,
+        message: message || "No reviews were sent.",
         error: result.errors.length ? { details: result.errors } : undefined,
+        alreadyReplied: result.alreadyReplied,
         ...data,
       };
     }

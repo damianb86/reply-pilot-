@@ -50,10 +50,6 @@ function compactJson(value: unknown) {
   return JSON.stringify(value ?? null);
 }
 
-function compactJsonString(value: unknown, maxLength = 16000) {
-  return JSON.stringify(value ?? null).slice(0, maxLength);
-}
-
 function readStringListJson(value?: string | null) {
   if (!value) return [];
   try {
@@ -454,6 +450,7 @@ type JudgeMeSourceReply = {
   author: string;
   visibility: string;
   contentAvailable: boolean;
+  message?: string;
 };
 
 function readReplyContent(value: unknown): string {
@@ -623,14 +620,17 @@ function extractWidgetReplies(response: unknown) {
 function readCachedReply(rawReview: Record<string, unknown>): JudgeMeSourceReply | null {
   const cache = readObject(rawReview.__replyPilot);
   const sourceReply = readObject(cache.sourceReply);
+  const content = readReplyContent(sourceReply);
+
   if (sourceReply.present === true || sourceReply.present === "true") {
     return {
       present: true,
-      content: readReplyContent(sourceReply),
+      content,
       createdAt: readReplyDate(sourceReply),
       author: readReplyAuthor(sourceReply),
       visibility: readString(sourceReply.visibility) || "public",
-      contentAvailable: Boolean(readReplyContent(sourceReply)),
+      contentAvailable: Boolean(content),
+      message: readString(sourceReply.message) || undefined,
     };
   }
 
@@ -659,7 +659,7 @@ function markRawReviewAsAlreadyReplied(rawReview: unknown, message: string) {
     visibility: "public",
     contentAvailable: false,
     message,
-  } as JudgeMeSourceReply & { message: string });
+  });
 }
 
 function extractJudgeMeSourceReply(rawReview: unknown): JudgeMeSourceReply | null {
@@ -805,9 +805,25 @@ export async function syncJudgeMeReviews(shop: string, admin?: AdminGraphql) {
     const rawReview = widgetReplies.has(fields.id)
       ? mergeCachedReply(importedReview.rawReview, widgetReplies.get(fields.id) as JudgeMeSourceReply)
       : importedReview.rawReview;
+    const externalReply = extractJudgeMeSourceReply(rawReview);
     const product = findProductByTitle(products, fields.productTitle);
     const productType = product?.productType || null;
     const productTagsJson = compactTags(product?.tags);
+    const externalReplyData = externalReply?.present
+      ? {
+          draft: "",
+          confidence: 0,
+          aiModelId: null,
+          aiModelName: null,
+          aiProviderName: null,
+          aiProviderModel: null,
+          draftGeneratedAt: null,
+          draftEditedAt: null,
+          draftRevisionCount: 0,
+          humanRequired: false,
+          lastError: null,
+        }
+      : {};
 
     const existing = await db.reviewDraft.findUnique({
       where: {
@@ -833,6 +849,7 @@ export async function syncJudgeMeReviews(shop: string, admin?: AdminGraphql) {
           sourceCreatedAt: fields.sourceCreatedAt,
           sourceReviewJson: compactJson(rawReview),
           lastSyncedAt: new Date(),
+          ...externalReplyData,
         },
       });
     } else {
@@ -1081,9 +1098,9 @@ type DraftGenerationResult = {
 };
 
 export async function generateDrafts(shop: string, ids: string[], admin?: AdminGraphql) {
-  const records = await db.reviewDraft.findMany({
+  const records = (await db.reviewDraft.findMany({
     where: { shop, id: { in: ids }, status: "pending", draft: "" },
-  });
+  })).filter((record) => !extractJudgeMeSourceReply(safeJsonParse(record.sourceReviewJson))?.present);
   const [products, brandVoice, appSettings] = await Promise.all([
     loadShopifyProducts(admin).catch(() => [] as ShopifyProductSummary[]),
     loadBrandVoiceForDrafts(shop),
@@ -1177,9 +1194,9 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
 }
 
 export async function regenerateDrafts(shop: string, ids: string[], nudge?: string, admin?: AdminGraphql) {
-  const records = await db.reviewDraft.findMany({
+  const records = (await db.reviewDraft.findMany({
     where: { shop, id: { in: ids }, status: "pending", draft: { not: "" } },
-  });
+  })).filter((record) => !extractJudgeMeSourceReply(safeJsonParse(record.sourceReviewJson))?.present);
   const [products, brandVoice, appSettings] = await Promise.all([
     loadShopifyProducts(admin).catch(() => [] as ShopifyProductSummary[]),
     loadBrandVoiceForDrafts(shop),
@@ -1420,6 +1437,30 @@ export async function restoreDrafts(shop: string, ids: string[]) {
   return result.count;
 }
 
+async function markDraftAsExternalJudgeMeReply(
+  record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number],
+  message: string,
+) {
+  const sourceReview = safeJsonParse(record.sourceReviewJson);
+  await db.reviewDraft.update({
+    where: { id: record.id },
+    data: {
+      sourceReviewJson: compactJson(markRawReviewAsAlreadyReplied(sourceReview, message)),
+      draft: "",
+      confidence: 0,
+      aiModelId: null,
+      aiModelName: null,
+      aiProviderName: null,
+      aiProviderModel: null,
+      draftGeneratedAt: null,
+      draftEditedAt: null,
+      draftRevisionCount: 0,
+      humanRequired: false,
+      lastError: null,
+    },
+  });
+}
+
 export async function approveAndSendDrafts(shop: string, ids: string[]) {
   const credentials = await getConnectedJudgeMeCredentials(shop);
   if (!credentials) {
@@ -1431,6 +1472,7 @@ export async function approveAndSendDrafts(shop: string, ids: string[]) {
     where: { shop, id: { in: ids }, status: "pending", draft: { not: "" } },
   });
   const errors: Array<{ id: string; reviewId: string; message: string }> = [];
+  const alreadyReplied: Array<{ id: string; reviewId: string; message: string }> = [];
   let sent = 0;
 
   for (const record of records) {
@@ -1438,13 +1480,10 @@ export async function approveAndSendDrafts(shop: string, ids: string[]) {
       const sourceReply = extractJudgeMeSourceReply(safeJsonParse(record.sourceReviewJson));
       if (sourceReply?.present) {
         const message = sourceReply.contentAvailable
-          ? "This review already has a public Judge.me reply. Judge.me does not allow creating a second public reply through the API."
-          : "Judge.me indicates this review already has a reply. Refresh Reviews to try loading the public reply before sending a replacement.";
-        errors.push({ id: record.id, reviewId: record.sourceReviewId, message });
-        await db.reviewDraft.update({
-          where: { id: record.id },
-          data: { lastError: message },
-        });
+          ? "Judge.me already has a public reply for this review. Reply Pilot did not send or change anything."
+          : "Judge.me already has an external reply for this review, but Reply Pilot could not import the reply text.";
+        alreadyReplied.push({ id: record.id, reviewId: record.sourceReviewId, message });
+        await markDraftAsExternalJudgeMeReply(record, message);
         continue;
       }
 
@@ -1470,22 +1509,20 @@ export async function approveAndSendDrafts(shop: string, ids: string[]) {
       });
       sent += 1;
     } catch (error) {
-      const message = judgeMeAlreadyRepliedMessage(error)
-        ? "Judge.me rejected this send because the review already has a reply. Refresh Reviews to cache and display the existing public reply."
-        : error instanceof Error ? error.message : "Unknown Judge.me send error";
-      errors.push({ id: record.id, reviewId: record.sourceReviewId, message });
-      const sourceReview = safeJsonParse(record.sourceReviewJson);
-      await db.reviewDraft.update({
-        where: { id: record.id },
-        data: {
-          lastError: message,
-          sourceReviewJson: judgeMeAlreadyRepliedMessage(error)
-            ? compactJsonString(markRawReviewAsAlreadyReplied(sourceReview, message))
-            : record.sourceReviewJson,
-        },
-      });
+      if (judgeMeAlreadyRepliedMessage(error)) {
+        const message = "Judge.me rejected this review because it already has a reply. Reply Pilot did not send or change anything.";
+        alreadyReplied.push({ id: record.id, reviewId: record.sourceReviewId, message });
+        await markDraftAsExternalJudgeMeReply(record, message);
+      } else {
+        const message = error instanceof Error ? error.message : "Unknown Judge.me send error";
+        errors.push({ id: record.id, reviewId: record.sourceReviewId, message });
+        await db.reviewDraft.update({
+          where: { id: record.id },
+          data: { lastError: message },
+        });
+      }
     }
   }
 
-  return { sent, errors };
+  return { sent, errors, alreadyReplied };
 }

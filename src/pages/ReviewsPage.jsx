@@ -309,6 +309,7 @@ function ReviewsContent() {
   const visibleIds = filteredReviews.map((review) => review.id);
   const activeHasDraft = hasDraft(activeReview);
   const activeHasJudgeMeReply = hasJudgeMeReply(activeReview);
+  const activeCanUseAiDraft = activeReview?.status === 'pending' && !activeHasJudgeMeReply;
   const highConfidenceVisible = filteredReviews.filter((review) => (
     review.status === 'pending' && hasDraft(review) && review.confidence >= highConfidenceThreshold
   ));
@@ -317,14 +318,17 @@ function ReviewsContent() {
   ));
   const selectedVisibleIds = selectedIds.filter((id) => visibleIds.includes(id));
   const selectedPendingIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'pending');
-  const selectedGeneratedPendingIds = selectedPendingIds.filter((id) => hasDraft(filteredReviews.find((review) => review.id === id)));
+  const selectedGeneratedPendingIds = selectedPendingIds.filter((id) => {
+    const review = filteredReviews.find((item) => item.id === id);
+    return hasDraft(review) && !hasJudgeMeReply(review);
+  });
   const selectedUngeneratedPendingIds = selectedPendingIds.filter((id) => {
     const review = filteredReviews.find((item) => item.id === id);
     return !hasDraft(review) && !hasJudgeMeReply(review);
   });
   const selectedJudgeMeReplyIds = selectedPendingIds.filter((id) => {
     const review = filteredReviews.find((item) => item.id === id);
-    return hasJudgeMeReply(review) && !hasDraft(review);
+    return hasJudgeMeReply(review);
   });
   const selectedSkippedIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'skipped');
   const selectedSentIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'sent');
@@ -412,10 +416,10 @@ function ReviewsContent() {
 
       if (!activeReview) return;
 
-      if (event.key === 'Enter' && activeReview.status === 'pending' && hasDraft(activeReview)) {
+      if (event.key === 'Enter' && activeCanUseAiDraft && hasDraft(activeReview)) {
         event.preventDefault();
         submitAction('send', [activeReview.id]);
-      } else if (event.key.toLowerCase() === 'e' && activeReview.status === 'pending') {
+      } else if (event.key.toLowerCase() === 'e' && activeCanUseAiDraft) {
         event.preventDefault();
         setIsEditing(true);
       } else if (event.key.toLowerCase() === 'j' || event.key === 'ArrowDown') {
@@ -486,7 +490,7 @@ function ReviewsContent() {
   }
 
   function handleSaveDraft() {
-    if (!activeReview || activeReview.status === 'skipped' || !draftValue.trim()) return;
+    if (!activeReview || !activeCanUseAiDraft || !draftValue.trim()) return;
 
     const formData = new FormData();
     formData.set('intent', 'update-draft');
@@ -496,7 +500,7 @@ function ReviewsContent() {
   }
 
   function handleReviseDraft() {
-    if (!activeReview || activeReview.status !== 'pending' || !activeHasDraft || !draftInstruction.trim()) return;
+    if (!activeReview || !activeCanUseAiDraft || !activeHasDraft || !draftInstruction.trim()) return;
 
     const formData = new FormData();
     formData.set('intent', 'revise-draft');
@@ -540,7 +544,7 @@ function ReviewsContent() {
               <span className="rp-draft-ready">✶ draft ready</span>
             ) : null}
             {review.human ? <Badge tone="critical">Human</Badge> : null}
-            {review.lastError ? <Badge tone="critical">AI error</Badge> : null}
+            {review.lastError && !hasJudgeMeReply(review) ? <Badge tone="critical">AI error</Badge> : null}
           </InlineStack>
         </div>
       </IndexTable.Cell>
@@ -820,7 +824,7 @@ function ReviewsContent() {
                           <Text as="p" variant="bodyMd">{activeReview.judgeMeReply.content}</Text>
                         ) : (
                           <Text as="p" variant="bodyMd" tone="subdued">
-                            Judge.me indicates this review already has a reply, but the API response did not include the reply text. Check Judge.me before drafting a replacement.
+                            {activeReview.judgeMeReply?.message || 'Judge.me already has an external reply for this review, but Reply Pilot could not import the reply text.'}
                           </Text>
                         )}
                         <InlineStack gap="200" blockAlign="center">
@@ -837,7 +841,7 @@ function ReviewsContent() {
                     </div>
                   ) : null}
 
-                  {activeReview.lastError ? (
+                  {activeReview.lastError && !activeHasJudgeMeReply ? (
                     <Banner tone="critical">
                       <BlockStack gap="150">
                         <Text as="p" variant="bodyMd">The last AI generation attempt for this review failed.</Text>
@@ -846,68 +850,74 @@ function ReviewsContent() {
                     </Banner>
                   ) : null}
 
-                  <InlineStack align="space-between" blockAlign="center">
-                    <InlineStack gap="200" blockAlign="center">
-                      <Icon source={MagicIcon} tone="critical" />
-                      <Text as="h3" variant="headingMd" tone="critical">AI draft</Text>
-                    </InlineStack>
-                    {activeHasDraft ? (
-                      <InlineStack gap="200" blockAlign="center">
-                        {activeReview.aiModel ? (
-                          <Text as="span" variant="bodySm" tone="subdued">
-                            {activeReview.aiModel.name}
-                          </Text>
-                        ) : null}
-                        <ConfidenceMeter value={activeReview.confidence} />
-                      </InlineStack>
-                    ) : (
-                      <Badge tone="info">Not generated</Badge>
-                    )}
-                  </InlineStack>
-
-                  <div className="rp-draft-box">
-                    {isEditing ? (
-                      <BlockStack gap="300">
-                        <TextField
-                          label="Draft reply"
-                          labelHidden
-                          value={draftValue}
-                          onChange={setDraftValue}
-                          multiline={8}
-                          autoComplete="off"
-                        />
-                        <InlineStack align="end" gap="200">
-                          <Button onClick={() => { setDraftValue(activeReview.draft); setIsEditing(false); }}>
-                            Cancel
-                          </Button>
-                          <Button variant="primary" loading={isSubmitting && fetcher.formData?.get('intent') === 'update-draft'} onClick={handleSaveDraft}>
-                            Save draft
-                          </Button>
+                  {activeHasJudgeMeReply ? (
+                    <Banner tone="info">
+                      <Text as="p" variant="bodyMd">
+                        This review is already answered in Judge.me. Reply Pilot cleared the AI draft and will not generate, edit, regenerate, or approve another public reply for it.
+                      </Text>
+                    </Banner>
+                  ) : (
+                    <>
+                      <InlineStack align="space-between" blockAlign="center">
+                        <InlineStack gap="200" blockAlign="center">
+                          <Icon source={MagicIcon} tone="critical" />
+                          <Text as="h3" variant="headingMd" tone="critical">AI draft</Text>
                         </InlineStack>
-                      </BlockStack>
-                    ) : !activeHasDraft ? (
-                      <BlockStack gap="250" align="center">
-                        <DraftPlaceholderIllustration />
-                        <Text as="h3" variant="headingMd" alignment="center">
-                          {activeHasJudgeMeReply ? 'Replacement draft not generated' : 'Draft not generated yet'}
-                        </Text>
-                        <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
-                          {activeHasJudgeMeReply
-                            ? 'This review already has a Judge.me reply. Generate a replacement only if you want to review and send a new response.'
-                            : 'Generate the first message when you are ready. Reply Pilot will use Brand Voice, product context, star rating, and this review.'}
-                        </Text>
-                        {activeReview.status === 'pending' ? (
-                          <Button icon={MagicIcon} variant="primary" disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
-                            {activeHasJudgeMeReply ? 'Generate replacement' : 'Generate message'} · {creditLabel(1)}
-                          </Button>
-                        ) : null}
-                      </BlockStack>
-                    ) : (
-                      <Text as="p" variant="bodyLg">{activeReview.draft}</Text>
-                    )}
-                  </div>
+                        {activeHasDraft ? (
+                          <InlineStack gap="200" blockAlign="center">
+                            {activeReview.aiModel ? (
+                              <Text as="span" variant="bodySm" tone="subdued">
+                                {activeReview.aiModel.name}
+                              </Text>
+                            ) : null}
+                            <ConfidenceMeter value={activeReview.confidence} />
+                          </InlineStack>
+                        ) : (
+                          <Badge tone="info">Not generated</Badge>
+                        )}
+                      </InlineStack>
 
-                  {activeReview.status === 'pending' && activeHasDraft ? (
+                      <div className="rp-draft-box">
+                        {isEditing ? (
+                          <BlockStack gap="300">
+                            <TextField
+                              label="Draft reply"
+                              labelHidden
+                              value={draftValue}
+                              onChange={setDraftValue}
+                              multiline={8}
+                              autoComplete="off"
+                            />
+                            <InlineStack align="end" gap="200">
+                              <Button onClick={() => { setDraftValue(activeReview.draft); setIsEditing(false); }}>
+                                Cancel
+                              </Button>
+                              <Button variant="primary" loading={isSubmitting && fetcher.formData?.get('intent') === 'update-draft'} onClick={handleSaveDraft}>
+                                Save draft
+                              </Button>
+                            </InlineStack>
+                          </BlockStack>
+                        ) : !activeHasDraft ? (
+                          <BlockStack gap="250" align="center">
+                            <DraftPlaceholderIllustration />
+                            <Text as="h3" variant="headingMd" alignment="center">Draft not generated yet</Text>
+                            <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
+                              Generate the first message when you are ready. Reply Pilot will use Brand Voice, product context, star rating, and this review.
+                            </Text>
+                            {activeReview.status === 'pending' ? (
+                              <Button icon={MagicIcon} variant="primary" disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
+                                Generate message · {creditLabel(1)}
+                              </Button>
+                            ) : null}
+                          </BlockStack>
+                        ) : (
+                          <Text as="p" variant="bodyLg">{activeReview.draft}</Text>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {activeReview.status === 'pending' && activeHasDraft && !activeHasJudgeMeReply ? (
                     <div className="rp-draft-adjuster">
                       <BlockStack gap="250">
                         <InlineStack align="space-between" blockAlign="center" gap="300">
@@ -974,18 +984,26 @@ function ReviewsContent() {
                         <Button icon={SendIcon} size="large" fullWidth disabled>
                           Already sent
                         </Button>
+                      ) : activeHasJudgeMeReply ? (
+                        <Button icon={XIcon} variant="primary" size="large" fullWidth disabled={isSubmitting} loading={isSubmitting && fetcher.formData?.get('intent') === 'skip'} onClick={() => submitSingle('skip', activeReview.id)}>
+                          Don't reply
+                        </Button>
                       ) : !activeHasDraft ? (
                         <Button icon={MagicIcon} variant="primary" size="large" fullWidth disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
-                          {activeHasJudgeMeReply ? 'Generate replacement' : 'Generate message'} · {creditLabel(1)}
+                          Generate message · {creditLabel(1)}
                         </Button>
                       ) : (
                         <Button icon={SendIcon} variant="primary" size="large" fullWidth loading={isSubmitting && fetcher.formData?.get('intent') === 'send'} onClick={() => submitSingle('send', activeReview.id)}>
-                          {activeHasJudgeMeReply ? 'Approve replacement' : 'Approve & send'}
+                          Approve & send
                         </Button>
                       )}
-                      <Button icon={EditIcon} accessibilityLabel="Edit draft" disabled={activeReview.status !== 'pending'} onClick={() => setIsEditing(true)} />
-                      <Button icon={RefreshIcon} accessibilityLabel={`Regenerate draft, ${creditLabel(1)}`} disabled={!aiConfigured || isSubmitting || activeReview.status !== 'pending' || !activeHasDraft || !hasCreditsFor(1)} onClick={() => submitSingle('regenerate', activeReview.id)} />
-                      <Button icon={XIcon} accessibilityLabel="Do not reply" disabled={isSubmitting || activeReview.status !== 'pending'} onClick={() => submitSingle('skip', activeReview.id)} />
+                      {!activeHasJudgeMeReply ? (
+                        <>
+                          <Button icon={EditIcon} accessibilityLabel="Edit draft" disabled={activeReview.status !== 'pending'} onClick={() => setIsEditing(true)} />
+                          <Button icon={RefreshIcon} accessibilityLabel={`Regenerate draft, ${creditLabel(1)}`} disabled={!aiConfigured || isSubmitting || activeReview.status !== 'pending' || !activeHasDraft || !hasCreditsFor(1)} onClick={() => submitSingle('regenerate', activeReview.id)} />
+                          <Button icon={XIcon} accessibilityLabel="Do not reply" disabled={isSubmitting || activeReview.status !== 'pending'} onClick={() => submitSingle('skip', activeReview.id)} />
+                        </>
+                      ) : null}
                     </InlineStack>
                     {activeReview.status === 'skipped' ? (
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
@@ -994,6 +1012,10 @@ function ReviewsContent() {
                     ) : activeReview.status === 'sent' ? (
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
                         This reply has already been sent and is shown for review only.
+                      </Text>
+                    ) : activeHasJudgeMeReply ? (
+                      <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+                        Mark it as Don't reply to clear it from Reviews without changing the existing Judge.me reply.
                       </Text>
                     ) : !activeHasDraft ? (
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
