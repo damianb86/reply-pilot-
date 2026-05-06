@@ -15,6 +15,7 @@ import {
   Text,
 } from '@shopify/polaris';
 import BrandVoicePage, {brandVoiceSettingsSections} from './BrandVoicePage';
+import {useFetcherTimeout} from '../hooks/useFetcherTimeout';
 
 const generalSettingsNav = [
   {id: 'general', label: 'General'},
@@ -147,6 +148,16 @@ export default function SettingsPage() {
   );
   const isBrandVoiceSection = brandVoiceSectionIds.has(activeSection);
   const brandVoiceActionPath = useMemo(() => `/app/brand-voice${location.search || ''}`, [location.search]);
+  const saveTimeout = useFetcherTimeout(saveFetcher, {
+    timeoutMs: 20000,
+    message: 'Saving settings took too long. Please try again later.',
+  });
+  const cleanupTimeout = useFetcherTimeout(cleanupFetcher, {
+    timeoutMs: 30000,
+    message: 'Deleting expired history took too long. Please try again later.',
+  });
+  const saveResult = saveTimeout.result || saveFetcher.data;
+  const cleanupResult = cleanupTimeout.result || cleanupFetcher.data;
 
   useEffect(() => {
     const requestedSection = new URLSearchParams(location.search).get('section');
@@ -173,22 +184,22 @@ export default function SettingsPage() {
   }, [shopify]);
 
   useEffect(() => {
-    showToast(saveFetcher.data);
+    showToast(saveResult);
     if (saveFetcher.data?.ok && saveFetcher.data.settings) {
       const nextSettings = buildSettings(saveFetcher.data.settings);
       setSettings(nextSettings);
       setSavedSettings(nextSettings);
     }
-  }, [saveFetcher.data, showToast]);
+  }, [saveFetcher.data, saveResult, showToast]);
 
   useEffect(() => {
-    showToast(cleanupFetcher.data);
+    showToast(cleanupResult);
     if (cleanupFetcher.data?.settings) {
       const nextSettings = buildSettings(cleanupFetcher.data.settings);
       setSettings(nextSettings);
       setSavedSettings(nextSettings);
     }
-  }, [cleanupFetcher.data, showToast]);
+  }, [cleanupFetcher.data, cleanupResult, showToast]);
 
   function set(key, value) {
     setSettings((current) => ({...current, [key]: value}));
@@ -216,7 +227,7 @@ export default function SettingsPage() {
   return (
     <BlockStack gap="400">
       <SaveBar open={isDirty}>
-        <button variant="primary" disabled={saveFetcher.state !== 'idle'} onClick={handleSave}>Save</button>
+        <button variant="primary" disabled={saveTimeout.pending} onClick={handleSave}>Save</button>
         <button onClick={handleDiscard}>Discard</button>
       </SaveBar>
 
@@ -366,8 +377,8 @@ export default function SettingsPage() {
               description="Control how long sent and skipped review history remains available in Reply Pilot."
               action={(
                 <Button
-                  loading={cleanupFetcher.state !== 'idle'}
-                  disabled={isDirty || settings.dataRetention === 'forever'}
+                  loading={cleanupTimeout.pending}
+                  disabled={cleanupTimeout.pending || isDirty || settings.dataRetention === 'forever'}
                   onClick={handleCleanup}
                 >
                   Delete expired history now

@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types, react/no-unescaped-entities */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {useFetcher, useLoaderData} from 'react-router';
+import {useFetcher, useLoaderData, useLocation} from 'react-router';
 import {useAppBridge} from '@shopify/app-bridge-react';
 import {
   Autocomplete,
@@ -28,6 +28,7 @@ import {
   SendIcon,
   XIcon,
 } from '@shopify/polaris-icons';
+import {useFetcherTimeout} from '../hooks/useFetcherTimeout';
 
 function Stars({rating}) {
   return (
@@ -67,7 +68,7 @@ function CustomerCell({review}) {
   );
 }
 
-function QueueEmptyState({connected, onRefresh}) {
+function QueueEmptyState({connected, connectUrl, onRefresh, refreshing}) {
   return (
     <div className="rp-queue-empty">
       <span className="rp-empty-mark is-blue">
@@ -82,8 +83,8 @@ function QueueEmptyState({connected, onRefresh}) {
         </Text>
       </BlockStack>
       <InlineStack gap="200" align="center">
-        <Button icon={RefreshIcon} onClick={onRefresh}>Refresh queue</Button>
-        {!connected ? <Button url="/app/dashboard" variant="primary">Go to Connect</Button> : null}
+        <Button icon={RefreshIcon} loading={refreshing} disabled={refreshing} onClick={onRefresh}>Refresh queue</Button>
+        {!connected ? <Button url={connectUrl} variant="primary">Go to Connect</Button> : null}
       </InlineStack>
     </div>
   );
@@ -232,6 +233,7 @@ function ProductFilter({products, value, onChange}) {
 
 function ReviewsContent() {
   const loaderData = useLoaderData();
+  const location = useLocation();
   const fetcher = useFetcher();
   const shopify = useAppBridge();
   const lastToastKey = useRef('');
@@ -301,11 +303,18 @@ function ReviewsContent() {
   const selectedSkippedIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'skipped');
   const selectedSentIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'sent');
   const selectedCount = selectedVisibleIds.length;
-  const isSubmitting = fetcher.state !== 'idle';
+  const timeout = useFetcherTimeout(fetcher, {
+    timeoutMs: 120000,
+    message: 'The Queue action took too long. Please try again later.',
+  });
+  const actionResult = timeout.result || fetcher.data;
+  const isSubmitting = timeout.pending;
   const pendingIntent = String(fetcher.formData?.get('intent') ?? '');
   const pendingIds = readPendingIds(fetcher.formData);
   const isBulkAiProcessing = isSubmitting && ['generate', 'regenerate'].includes(pendingIntent) && pendingIds.length > 1;
   const bulkProcessingVerb = pendingIntent === 'regenerate' ? 'Regenerating' : 'Generating';
+  const isSyncing = isSubmitting && pendingIntent === 'sync';
+  const connectUrl = `/app/dashboard${location.search || ''}`;
   const creditsFor = useCallback((count) => Math.max(0, count * replyCreditCost), [replyCreditCost]);
   const creditLabel = useCallback((count) => {
     const cost = creditsFor(count);
@@ -361,8 +370,8 @@ function ReviewsContent() {
   }, [fetcher.data]);
 
   useEffect(() => {
-    showToast(fetcher.data);
-  }, [fetcher.data, showToast]);
+    showToast(actionResult);
+  }, [actionResult, showToast]);
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -527,7 +536,7 @@ function ReviewsContent() {
         </div>
       ) : null}
 
-      <ResultBanner result={fetcher.data} syncError={pageData.syncError} />
+      <ResultBanner result={actionResult} syncError={pageData.syncError} />
       {isBulkAiProcessing ? (
         <div className="rp-processing-overlay" role="status" aria-live="assertive">
           <div className="rp-processing-modal">
@@ -573,7 +582,7 @@ function ReviewsContent() {
             Review approvals stay table-first for speed while the AI draft remains visible in the side panel.
           </Text>
         </BlockStack>
-        <Button icon={RefreshIcon} loading={isSubmitting && fetcher.formData?.get('intent') === 'sync'} onClick={handleRefresh}>
+        <Button icon={RefreshIcon} loading={isSyncing} disabled={isSyncing} onClick={handleRefresh}>
           Refresh
         </Button>
       </InlineStack>
@@ -723,7 +732,12 @@ function ReviewsContent() {
                 {rowMarkup}
               </IndexTable>
             ) : (
-              <QueueEmptyState connected={pageData.connected} onRefresh={handleRefresh} />
+              <QueueEmptyState
+                connected={pageData.connected}
+                connectUrl={connectUrl}
+                refreshing={isSyncing}
+                onRefresh={handleRefresh}
+              />
             )}
           </div>
 
@@ -924,7 +938,7 @@ function ReviewsContent() {
               <div className="rp-detail-body">
                 <Card>
                   <BlockStack gap="250" align="center">
-                    <span className="rp-empty-mark">
+                    <span className="rp-empty-mark rp-detail-empty-mark">
                       <Icon source={MagicIcon} tone="base" />
                     </span>
                     <Text as="h2" variant="headingMd" alignment="center">Nothing selected</Text>

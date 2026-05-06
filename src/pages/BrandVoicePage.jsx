@@ -37,6 +37,7 @@ import {
   defaultAvoidPhrases,
   defaultBrandVoice,
 } from '../brandVoiceData';
+import {useFetcherTimeout} from '../hooks/useFetcherTimeout';
 
 export const brandVoiceSettingsSections = [
   {id: 'personality-builder', label: 'Personality builder'},
@@ -543,6 +544,26 @@ export default function BrandVoicePage({
   const personalityFetcher = useFetcher();
   const previewFetcher = useFetcher();
   const productFetcher = useFetcher();
+  const saveTimeout = useFetcherTimeout(saveFetcher, {
+    timeoutMs: 20000,
+    message: 'Saving Brand Voice took too long. Please try again later.',
+  });
+  const importTimeout = useFetcherTimeout(importFetcher, {
+    timeoutMs: 30000,
+    message: 'Importing past replies took too long. Please try again later.',
+  });
+  const personalityTimeout = useFetcherTimeout(personalityFetcher, {
+    timeoutMs: 60000,
+    message: 'Generating Personality took too long. Please try again later.',
+  });
+  const previewTimeout = useFetcherTimeout(previewFetcher, {
+    timeoutMs: 60000,
+    message: 'Generating the live preview took too long. Please try again later.',
+  });
+  const productTimeout = useFetcherTimeout(productFetcher, {
+    timeoutMs: 30000,
+    message: 'Loading the selected Shopify product took too long. Please try again later.',
+  });
   const connection = loaderData.connection;
   const loaderAiModels = useMemo(() => loaderData.aiModels ?? [], [loaderData.aiModels]);
   const defaultSelectedModel = loaderData.defaultAiModelId ?? loaderAiModels[0]?.id ?? 'basic';
@@ -594,6 +615,11 @@ export default function BrandVoicePage({
   const [personalityHighlight, setPersonalityHighlight] = useState(false);
   const lastToastKey = useRef('');
   const personalityHighlightTimer = useRef(null);
+  const saveResult = saveTimeout.result || saveFetcher.data;
+  const importResult = importTimeout.result || importFetcher.data;
+  const personalityResult = personalityTimeout.result || personalityFetcher.data;
+  const previewResult = previewTimeout.result || previewFetcher.data;
+  const productResult = productTimeout.result || productFetcher.data;
 
   const wordCount = useMemo(() => countWords(persona), [persona]);
   const characterCount = persona.length;
@@ -701,17 +727,17 @@ export default function BrandVoicePage({
   }, [loaderAiModels]);
 
   useEffect(() => {
-    showToast(importFetcher.data);
+    showToast(importResult);
 
     if (importFetcher.data?.ok && importFetcher.data.intent === 'import-replies') {
       if (Array.isArray(importFetcher.data.importedReplies) && importFetcher.data.importedReplies.length) {
         setExampleReplies(importFetcher.data.importedReplies);
       }
     }
-  }, [importFetcher.data, showToast]);
+  }, [importFetcher.data, importResult, showToast]);
 
   useEffect(() => {
-    showToast(personalityFetcher.data);
+    showToast(personalityResult);
     if (Array.isArray(personalityFetcher.data?.aiModels)) {
       setAiModels(personalityFetcher.data.aiModels);
     }
@@ -726,10 +752,10 @@ export default function BrandVoicePage({
         setLivePreview(personalityFetcher.data.livePreview);
       }
     }
-  }, [personalityFetcher.data, revealPersonalitySettings, showToast, updatePersona]);
+  }, [personalityFetcher.data, personalityResult, revealPersonalitySettings, showToast, updatePersona]);
 
   useEffect(() => {
-    showToast(previewFetcher.data);
+    showToast(previewResult);
     if (Array.isArray(previewFetcher.data?.aiModels)) {
       setAiModels(previewFetcher.data.aiModels);
     }
@@ -737,10 +763,10 @@ export default function BrandVoicePage({
     if (previewFetcher.data?.ok && previewFetcher.data.livePreview) {
       setLivePreview(previewFetcher.data.livePreview);
     }
-  }, [previewFetcher.data, showToast]);
+  }, [previewFetcher.data, previewResult, showToast]);
 
   useEffect(() => {
-    showToast(productFetcher.data);
+    showToast(productResult);
 
     if (productFetcher.data?.ok && productFetcher.data.product) {
       const product = productFetcher.data.product;
@@ -749,10 +775,10 @@ export default function BrandVoicePage({
       setPreviewProductType(product.productType || '');
       setPreviewProductTags(Array.isArray(product.tags) ? product.tags : []);
     }
-  }, [productFetcher.data, showToast]);
+  }, [productFetcher.data, productResult, showToast]);
 
   useEffect(() => {
-    showToast(saveFetcher.data);
+    showToast(saveResult);
     if (Array.isArray(saveFetcher.data?.aiModels)) {
       setAiModels(saveFetcher.data.aiModels);
     }
@@ -777,7 +803,7 @@ export default function BrandVoicePage({
       setPreviewRating(nextConfig.previewRating);
       setSavedConfig(nextConfig);
     }
-  }, [saveFetcher.data, defaultSelectedModel, showToast, updatePersona]);
+  }, [saveFetcher.data, defaultSelectedModel, saveResult, showToast, updatePersona]);
 
   function addAlwaysMention() {
     const nextValue = alwaysInput.trim();
@@ -944,7 +970,7 @@ export default function BrandVoicePage({
   return (
     <BlockStack gap="400">
       <SaveBar open={isDirty}>
-        <button variant="primary" disabled={saveFetcher.state !== 'idle'} onClick={handleSave}>Save</button>
+        <button variant="primary" disabled={saveTimeout.pending} onClick={handleSave}>Save</button>
         <button onClick={handleDiscard}>Discard</button>
       </SaveBar>
 
@@ -1052,8 +1078,8 @@ export default function BrandVoicePage({
                     </div>
                     <Button
                       icon={ImportIcon}
-                      disabled={connection?.status !== 'connected'}
-                      loading={importFetcher.state !== 'idle'}
+                      disabled={connection?.status !== 'connected' || importTimeout.pending}
+                      loading={importTimeout.pending}
                       onClick={handleImportReplies}
                     >
                       Import replies
@@ -1061,8 +1087,8 @@ export default function BrandVoicePage({
                     <Button
                       icon={MagicIcon}
                       variant="primary"
-                      disabled={!exampleReplies.length || !selectedModelConfigured || !canGeneratePersonality}
-                      loading={personalityFetcher.state !== 'idle'}
+                      disabled={!exampleReplies.length || !selectedModelConfigured || !canGeneratePersonality || personalityTimeout.pending}
+                      loading={personalityTimeout.pending}
                       onClick={handleGeneratePersonality}
                     >
                       Generate Personality · {creditsText(selectedCreditCosts.personality)}
@@ -1312,8 +1338,8 @@ export default function BrandVoicePage({
                 </InlineStack>
                 <Button
                   icon={RefreshIcon}
-                  disabled={!selectedModelConfigured || !canGeneratePreview}
-                  loading={previewFetcher.state !== 'idle'}
+                  disabled={!selectedModelConfigured || !canGeneratePreview || previewTimeout.pending}
+                  loading={previewTimeout.pending}
                   onClick={handleGeneratePreview}
                 >
                   {livePreview ? 'Regenerate preview' : 'Generate preview'} · {creditsText(selectedCreditCosts.preview)}
@@ -1338,7 +1364,8 @@ export default function BrandVoicePage({
                       <InlineStack gap="150" wrap={false}>
                         <Button
                           icon={SearchIcon}
-                          loading={productFetcher.state !== 'idle'}
+                          loading={productTimeout.pending}
+                          disabled={productTimeout.pending}
                           onClick={handlePreviewProductPicker}
                         >
                           {previewProductTitle ? 'Change' : 'Select'}

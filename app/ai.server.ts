@@ -140,6 +140,7 @@ const REPLY_LENGTH_INSTRUCTIONS: Record<string, { label: string; instruction: st
 
 const DEFAULT_JSON_MAX_TOKENS = 1600;
 const DEFAULT_TEXT_MAX_TOKENS = 1600;
+const DEFAULT_AI_PROVIDER_TIMEOUT_MS = 45000;
 const PERSONALITY_MAX_TOKENS = 4096;
 const PERSONALITY_DESCRIPTION_MAX_WORDS = 200;
 const PERSONALITY_DESCRIPTION_MAX_CHARS = 1400;
@@ -460,6 +461,44 @@ async function readJsonResponse(response: Response) {
     return JSON.parse(text) as unknown;
   } catch {
     return text;
+  }
+}
+
+function aiProviderTimeoutMs() {
+  const value = Number(process.env.AI_API_TIMEOUT_MS || DEFAULT_AI_PROVIDER_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_AI_PROVIDER_TIMEOUT_MS;
+}
+
+function isTimeoutError(error: unknown) {
+  return error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
+async function fetchAiProvider(
+  url: string,
+  init: RequestInit,
+  config: AiModelConfig,
+  model: string = config.model,
+) {
+  const timeoutMs = aiProviderTimeoutMs();
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    const message = isTimeoutError(error)
+      ? `${config.providerName} did not respond within ${Math.round(timeoutMs / 1000)} seconds. Please try again later.`
+      : `Could not reach ${config.providerName}. Please try again later.`;
+
+    throw new AiProviderError(message, {
+      provider: config.provider,
+      model,
+      details: {
+        timeoutMs,
+        cause: error instanceof Error ? error.message : String(error),
+      },
+    });
   }
 }
 
@@ -873,24 +912,28 @@ async function callOpenAi(
     responseFormat === "json"
       ? { format: { type: "json_object" } }
       : { format: { type: "text" }, verbosity: options.textVerbosity ?? "medium" };
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  const response = await fetchAiProvider(
+    "https://api.openai.com/v1/responses",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: config.model,
+        instructions:
+          options.system ??
+          (responseFormat === "json" ? "Return compact valid JSON only." : "Return plain text only."),
+        input: prompt,
+        max_output_tokens: options.maxTokens ?? defaultMaxTokens(responseFormat),
+        text,
+        ...(options.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
+        store: false,
+      }),
     },
-    body: JSON.stringify({
-      model: config.model,
-      instructions:
-        options.system ??
-        (responseFormat === "json" ? "Return compact valid JSON only." : "Return plain text only."),
-      input: prompt,
-      max_output_tokens: options.maxTokens ?? defaultMaxTokens(responseFormat),
-      text,
-      ...(options.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
-      store: false,
-    }),
-  });
+    config,
+  );
   const body = await readJsonResponse(response);
 
   if (!response.ok) {
@@ -933,7 +976,7 @@ async function callGemini(
     let maxOutputTokens = options.maxTokens ?? defaultMaxTokens(responseFormat);
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const response = await fetch(
+      const response = await fetchAiProvider(
         `https://generativelanguage.googleapis.com/v1beta/models/${model.model}:generateContent`,
         {
           method: "POST",
@@ -954,6 +997,8 @@ async function callGemini(
             },
           }),
         },
+        config,
+        model.model,
       );
       const body = await readJsonResponse(response);
 

@@ -35,6 +35,7 @@ import {
   ViewIcon,
   XIcon,
 } from '@shopify/polaris-icons';
+import {useFetcherTimeout} from '../hooks/useFetcherTimeout';
 
 const providers = [
   {
@@ -200,11 +201,24 @@ function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl}) {
   const [shopDomain, setShopDomain] = useState(shop);
   const [showToken, setShowToken] = useState(false);
   const pendingIntent = fetcher.formData?.get('intent');
-  const isSubmitting = fetcher.state !== 'idle' && pendingIntent === 'connect-token';
+  const timeout = useFetcherTimeout(fetcher, {
+    timeoutMs: 20000,
+    message: 'Judge.me did not respond in time. Please check the credentials and try again later.',
+  });
+  const isSubmitting = timeout.pending && pendingIntent === 'connect-token';
+
+  function submitConnection() {
+    if (!apiToken.trim() || isSubmitting) return;
+
+    const formData = new FormData();
+    formData.set('intent', 'connect-token');
+    formData.set('shopDomain', shopDomain.trim() || shop);
+    formData.set('apiToken', apiToken.trim());
+    fetcher.submit(formData, {method: 'post'});
+  }
 
   return (
-    <fetcher.Form method="post">
-      <input type="hidden" name="intent" value="connect-token" />
+    <>
       <BlockStack gap="400">
         <BlockStack gap="250">
           <Text as="p" variant="bodyMd">1. Choose provider</Text>
@@ -259,22 +273,26 @@ function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl}) {
             </Button>
           </InlineStack>
           <InlineStack gap="200">
-            <Button variant="primary" submit loading={isSubmitting} disabled={!apiToken || isSubmitting}>
+            <Button variant="primary" loading={isSubmitting} disabled={!apiToken.trim() || isSubmitting} onClick={submitConnection}>
               Test connection
             </Button>
-            <Button submit disabled={!apiToken || isSubmitting}>
+            <Button disabled={!apiToken.trim() || isSubmitting} onClick={submitConnection}>
               Save
             </Button>
           </InlineStack>
         </InlineStack>
       </BlockStack>
-    </fetcher.Form>
+    </>
   );
 }
 
 function CurrentConnectionCard({connection, fetcher}) {
   const pendingIntent = fetcher.formData?.get('intent');
-  const isRefreshing = fetcher.state !== 'idle' && pendingIntent === 'refresh';
+  const timeout = useFetcherTimeout(fetcher, {
+    timeoutMs: 20000,
+    message: 'Refreshing the Judge.me connection took too long. Please try again later.',
+  });
+  const isRefreshing = timeout.pending && pendingIntent === 'refresh';
 
   function refresh() {
     const formData = new FormData();
@@ -386,8 +404,12 @@ function AfterConnectionCard({connected, appHandle}) {
 
 function ConnectedManager({connection, fetcher, onChangeProvider}) {
   const pendingIntent = fetcher.formData?.get('intent');
-  const isRefreshing = fetcher.state !== 'idle' && pendingIntent === 'refresh';
-  const isDisconnecting = fetcher.state !== 'idle' && pendingIntent === 'disconnect';
+  const timeout = useFetcherTimeout(fetcher, {
+    timeoutMs: 20000,
+    message: 'The connection action took too long. Please try again later.',
+  });
+  const isRefreshing = timeout.pending && pendingIntent === 'refresh';
+  const isDisconnecting = timeout.pending && pendingIntent === 'disconnect';
 
   function submitIntent(intent) {
     const formData = new FormData();
@@ -673,10 +695,14 @@ function DebugPanel({connection, loaderData, result}) {
 export default function DashboardPage() {
   const loaderData = useLoaderData();
   const fetcher = useFetcher();
+  const timeout = useFetcherTimeout(fetcher, {
+    timeoutMs: 20000,
+    message: 'The Connect action is taking longer than expected. Please try again later.',
+  });
   const [showProviderSetup, setShowProviderSetup] = useState(false);
   const fetcherConnection = fetcher.data && 'connection' in fetcher.data ? fetcher.data.connection : undefined;
   const connection = fetcherConnection !== undefined ? fetcherConnection : loaderData.connection;
-  const result = fetcher.data;
+  const result = timeout.result || fetcher.data;
   const connected = connection?.status === 'connected';
 
   const pageTitle = connected

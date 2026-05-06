@@ -11,6 +11,7 @@ import {
   InlineStack,
   Text,
 } from '@shopify/polaris';
+import {useFetcherTimeout} from '../hooks/useFetcherTimeout';
 
 function formatCreditNumber(value) {
   const numeric = Math.trunc(Number(value || 0));
@@ -27,8 +28,8 @@ function LedgerAmount({amount}) {
   );
 }
 
-function PackageCard({pkg, fetcher}) {
-  const isLoading = fetcher.state !== 'idle' && fetcher.formData?.get('packageId') === pkg.id;
+function PackageCard({pkg, fetcher, pending}) {
+  const isLoading = pending && fetcher.formData?.get('packageId') === pkg.id;
   const hasWelcomeBonus = Boolean(pkg.firstPurchaseBonusAvailable && pkg.firstPurchaseBonusCredits);
 
   return (
@@ -58,7 +59,7 @@ function PackageCard({pkg, fetcher}) {
           <fetcher.Form method="post" className="rp-credit-buy-form">
             <input type="hidden" name="packageId" value={pkg.id} />
             <span className={`rp-credit-buy-button-wrap ${hasWelcomeBonus ? 'has-welcome-bonus' : ''}`}>
-              <Button submit loading={isLoading} disabled={fetcher.state !== 'idle'} variant={pkg.recommended ? 'primary' : undefined}>
+              <Button submit loading={isLoading} disabled={pending} variant={pkg.recommended ? 'primary' : undefined}>
                 Buy {formatCreditNumber(hasWelcomeBonus ? pkg.firstPurchaseTotalCredits : pkg.credits)}
               </Button>
             </span>
@@ -102,8 +103,14 @@ export default function CreditsPage() {
   const credits = loaderData.credits;
   const modelCosts = credits.modelCosts ?? {};
   const actionData = purchaseFetcher.data;
-  const message = actionData?.message ?? loaderData.message;
-  const ok = actionData?.ok ?? loaderData.ok;
+  const timeout = useFetcherTimeout(purchaseFetcher, {
+    timeoutMs: 30000,
+    message: 'Starting the Shopify billing approval took too long. Please try again later.',
+    intent: 'buy-credits',
+  });
+  const actionResult = timeout.result || actionData;
+  const message = actionResult?.message ?? loaderData.message;
+  const ok = actionResult?.ok ?? loaderData.ok;
 
   useEffect(() => {
     if (!actionData?.confirmationUrl) return;
@@ -172,7 +179,7 @@ export default function CreditsPage() {
           </InlineStack>
           <InlineGrid columns={{xs: 1, sm: 2, lg: 4}} gap="300">
             {credits.packages.map((pkg) => (
-              <PackageCard key={pkg.id} pkg={pkg} fetcher={purchaseFetcher} />
+              <PackageCard key={pkg.id} pkg={pkg} fetcher={purchaseFetcher} pending={timeout.pending} />
             ))}
           </InlineGrid>
         </BlockStack>

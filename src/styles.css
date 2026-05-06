@@ -1312,6 +1312,11 @@ select {
   border-radius: 999px;
 }
 
+.rp-detail-empty-mark {
+  align-self: center;
+  margin-inline: auto;
+}
+
 .rp-help-benefit {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

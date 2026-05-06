@@ -28,6 +28,7 @@ import {
   StoreIcon,
   WrenchIcon,
 } from '@shopify/polaris-icons';
+import {useFetcherTimeout} from '../hooks/useFetcherTimeout';
 
 const requestCards = [
   {
@@ -183,10 +184,20 @@ export default function HelpPage() {
   const [email, setEmail] = useState('');
   const [localToast, setLocalToast] = useState(null);
 
-  const contactEmail = loaderData?.contactEmail ?? 'support@example.com';
+  const contactEmail = loaderData?.contactEmail ?? 'CONTACT_EMAIL not configured';
   const activeModal = openModal ? modalContent[openModal] : null;
-  const isSubmitting = fetcher.state !== 'idle';
-  const isPrivacySubmitting = privacyFetcher.state !== 'idle';
+  const contactTimeout = useFetcherTimeout(fetcher, {
+    timeoutMs: 20000,
+    message: 'The support request took too long. Please try again later.',
+  });
+  const privacyTimeout = useFetcherTimeout(privacyFetcher, {
+    timeoutMs: 30000,
+    message: 'The privacy action took too long. Please try again later.',
+  });
+  const contactResult = contactTimeout.result || fetcher.data;
+  const privacyResult = privacyTimeout.result || privacyFetcher.data;
+  const isSubmitting = contactTimeout.pending;
+  const isPrivacySubmitting = privacyTimeout.pending;
 
   const showToast = useCallback((data) => {
     if (!data?.message) return;
@@ -214,18 +225,24 @@ export default function HelpPage() {
   }, []);
 
   useEffect(() => {
-    if (fetcher.state !== 'idle' || !fetcher.data) return;
-    showToast(fetcher.data);
-    if (fetcher.data.ok) closeContactModal();
-  }, [closeContactModal, fetcher.data, fetcher.state, showToast]);
+    const didTimeout = Boolean(contactTimeout.result);
+    if (!didTimeout && (fetcher.state !== 'idle' || !fetcher.data)) return;
+    if (!contactResult) return;
+
+    showToast(contactResult);
+    if (!didTimeout && contactResult.ok) closeContactModal();
+  }, [closeContactModal, contactResult, contactTimeout.result, fetcher.data, fetcher.state, showToast]);
 
   useEffect(() => {
-    if (privacyFetcher.state !== 'idle' || !privacyFetcher.data) return;
-    showToast(privacyFetcher.data);
-    if (privacyFetcher.data.ok && privacyFetcher.data.intent === 'privacy-data-delete') {
+    const didTimeout = Boolean(privacyTimeout.result);
+    if (!didTimeout && (privacyFetcher.state !== 'idle' || !privacyFetcher.data)) return;
+    if (!privacyResult) return;
+
+    showToast(privacyResult);
+    if (!didTimeout && privacyResult.ok && privacyResult.intent === 'privacy-data-delete') {
       setPrivacyDeleteOpen(false);
     }
-  }, [privacyFetcher.data, privacyFetcher.state, showToast]);
+  }, [privacyFetcher.data, privacyFetcher.state, privacyResult, privacyTimeout.result, showToast]);
 
   function submitContact() {
     if (!activeModal || !message.trim()) return;

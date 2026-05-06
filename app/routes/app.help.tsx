@@ -4,13 +4,11 @@ import db from "../db.server";
 import { sendContactEmail } from "../email.server";
 import HelpPage from "../../src/pages/HelpPage";
 
-const DEFAULT_CONTACT_EMAIL = "damianbe86@gmail.com";
-
 export async function loader({ request }: LoaderFunctionArgs) {
   await authenticate.admin(request);
 
   return {
-    contactEmail: process.env.CONTACT_EMAIL ?? DEFAULT_CONTACT_EMAIL,
+    contactEmail: process.env.CONTACT_EMAIL || null,
   };
 }
 

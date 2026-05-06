@@ -8,6 +8,7 @@ import db from "./db.server";
 
 const JUDGEME_API_BASE = "https://api.judge.me/api/v1";
 const TOKEN_PREFIX = "v1";
+const DEFAULT_JUDGEME_TIMEOUT_MS = 15000;
 
 type JsonObject = Record<string, unknown>;
 
@@ -129,6 +130,11 @@ function normalizeShopDomain(value: string) {
     .toLowerCase();
 }
 
+function judgeMeTimeoutMs() {
+  const value = Number(process.env.JUDGEME_API_TIMEOUT_MS || DEFAULT_JUDGEME_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_JUDGEME_TIMEOUT_MS;
+}
+
 async function parseJudgeMeResponse(response: Response) {
   const text = await response.text();
   if (!text) return null;
@@ -150,6 +156,7 @@ export async function callJudgeMeApi(
     searchParams?: Record<string, string | string[] | number | boolean | undefined>;
   },
 ) {
+  const timeoutMs = judgeMeTimeoutMs();
   const url = new URL(`${JUDGEME_API_BASE}${path}`);
   url.searchParams.set("shop_domain", normalizeShopDomain(options.shopDomain));
 
@@ -162,15 +169,37 @@ export async function callJudgeMeApi(
     }
   }
 
-  const response = await fetch(url.toString(), {
-    method: options.method ?? "GET",
-    headers: {
-      Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      "X-Api-Token": options.apiToken,
-    },
-    ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(url.toString(), {
+      method: options.method ?? "GET",
+      headers: {
+        Accept: "application/json",
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        "X-Api-Token": options.apiToken,
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+    });
+  } catch (error) {
+    const isTimeout =
+      error instanceof DOMException && error.name === "TimeoutError";
+    const message = isTimeout
+      ? `Judge.me did not respond within ${Math.round(timeoutMs / 1000)} seconds. Please try again later.`
+      : error instanceof Error
+        ? error.message
+        : "Could not reach Judge.me.";
+
+    throw new JudgeMeApiError(message, {
+      details: {
+        endpoint: path,
+        shopDomain: normalizeShopDomain(options.shopDomain),
+        timeoutMs,
+      },
+    });
+  }
+
   const body = await parseJudgeMeResponse(response);
 
   if (!response.ok) {

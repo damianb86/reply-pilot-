@@ -22,6 +22,7 @@ import {
   RefreshIcon,
   SearchIcon,
 } from '@shopify/polaris-icons';
+import {useFetcherTimeout} from '../hooks/useFetcherTimeout';
 
 function Stars({rating}) {
   return (
@@ -251,7 +252,12 @@ function LogsContent() {
   const [rangeFilter, setRangeFilter] = useState('7');
   const [sortNewest, setSortNewest] = useState(true);
   const [localToast, setLocalToast] = useState(null);
-  const isSubmitting = fetcher.state !== 'idle';
+  const timeout = useFetcherTimeout(fetcher, {
+    timeoutMs: 30000,
+    message: 'Refreshing sent replies took too long. Please try again later.',
+  });
+  const actionResult = timeout.result || fetcher.data;
+  const isSubmitting = timeout.pending;
 
   const filteredReplies = useMemo(() => {
     const now = Date.now();
@@ -311,8 +317,8 @@ function LogsContent() {
   }, [activeReply, filteredReplies]);
 
   useEffect(() => {
-    showToast(fetcher.data);
-  }, [fetcher.data, showToast]);
+    showToast(actionResult);
+  }, [actionResult, showToast]);
 
   function clearFilters() {
     setQuery('');
