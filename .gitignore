@@ -9,6 +9,9 @@ node_modules
 /public/build/
 /public/_dev
 /app/public/build
+/coverage
+/playwright-report
+/test-results
 /prisma/dev.sqlite
 /prisma/dev.sqlite-journal
 database.sqlite

@@ -2,6 +2,14 @@ import "@shopify/polaris/build/esm/styles.css";
 import "../src/styles.css";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 
+export const meta = () => [
+  { title: "Reply Pilot" },
+  {
+    name: "description",
+    content: "Reply Pilot helps Shopify merchants draft and manage product review replies.",
+  },
+];
+
 export default function App() {
   return (
     <html lang="en">
