@@ -6,9 +6,9 @@ import {
 } from "node:crypto";
 import db from "./db.server";
 
-const JUDGEME_API_BASE = "https://api.judge.me/api/v1";
+const JUDGEME_API_BASE = process.env.JUDGEME_API_BASE_URL || "https://judge.me/api/v1";
 const TOKEN_PREFIX = "v1";
-const DEFAULT_JUDGEME_TIMEOUT_MS = 15000;
+const DEFAULT_JUDGEME_TIMEOUT_MS = 10000;
 
 type JsonObject = Record<string, unknown>;
 

@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types, react/no-unescaped-entities */
 import {useMemo, useState} from 'react';
-import {useFetcher, useLoaderData} from 'react-router';
+import {useFetcher, useLoaderData, useLocation} from 'react-router';
 import {
   Badge,
   Banner,
@@ -218,7 +218,7 @@ function KeyValueRow({label, value, badgeTone}) {
   );
 }
 
-function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl}) {
+function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl, actionPath}) {
   const [apiToken, setApiToken] = useState('');
   const [shopDomain, setShopDomain] = useState(shop);
   const [showToken, setShowToken] = useState(false);
@@ -236,7 +236,7 @@ function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl}) {
     formData.set('intent', 'connect-token');
     formData.set('shopDomain', shopDomain.trim() || shop);
     formData.set('apiToken', apiToken.trim());
-    fetcher.submit(formData, {method: 'post'});
+    fetcher.submit(formData, {method: 'post', action: actionPath});
   }
 
   return (
@@ -308,7 +308,7 @@ function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl}) {
   );
 }
 
-function CurrentConnectionCard({connection, fetcher}) {
+function CurrentConnectionCard({connection, fetcher, actionPath}) {
   const pendingIntent = fetcher.formData?.get('intent');
   const timeout = useFetcherTimeout(fetcher, {
     timeoutMs: 20000,
@@ -319,7 +319,7 @@ function CurrentConnectionCard({connection, fetcher}) {
   function refresh() {
     const formData = new FormData();
     formData.set('intent', 'refresh');
-    fetcher.submit(formData, {method: 'post'});
+    fetcher.submit(formData, {method: 'post', action: actionPath});
   }
 
   return (
@@ -424,7 +424,7 @@ function AfterConnectionCard({connected, appHandle}) {
   );
 }
 
-function ConnectedManager({connection, fetcher, onChangeProvider}) {
+function ConnectedManager({connection, fetcher, actionPath, onChangeProvider}) {
   const pendingIntent = fetcher.formData?.get('intent');
   const timeout = useFetcherTimeout(fetcher, {
     timeoutMs: 20000,
@@ -436,7 +436,7 @@ function ConnectedManager({connection, fetcher, onChangeProvider}) {
   function submitIntent(intent) {
     const formData = new FormData();
     formData.set('intent', intent);
-    fetcher.submit(formData, {method: 'post'});
+    fetcher.submit(formData, {method: 'post', action: actionPath});
   }
 
   const rows = [
@@ -509,12 +509,13 @@ function ConnectedManager({connection, fetcher, onChangeProvider}) {
   );
 }
 
-function ConnectPanel({connection, fetcher, loaderData, showProviderSetup, onChangeProvider}) {
+function ConnectPanel({connection, fetcher, loaderData, actionPath, showProviderSetup, onChangeProvider}) {
   if (connection && !showProviderSetup) {
     return (
       <ConnectedManager
         connection={connection}
         fetcher={fetcher}
+        actionPath={actionPath}
         onChangeProvider={onChangeProvider}
       />
     );
@@ -537,6 +538,7 @@ function ConnectPanel({connection, fetcher, loaderData, showProviderSetup, onCha
           shop={loaderData.shop}
           apiSettingsUrl={loaderData.judgeMeApiSettingsUrl}
           apiDocsUrl={loaderData.judgeMeApiDocsUrl}
+          actionPath={actionPath}
         />
       </BlockStack>
     </Card>
@@ -716,6 +718,7 @@ function DebugPanel({connection, loaderData, result}) {
 
 export default function DashboardPage() {
   const loaderData = useLoaderData();
+  const location = useLocation();
   const fetcher = useFetcher();
   const timeout = useFetcherTimeout(fetcher, {
     timeoutMs: 30000,
@@ -726,6 +729,7 @@ export default function DashboardPage() {
   const connection = fetcherConnection !== undefined ? fetcherConnection : loaderData.connection;
   const result = timeout.result || fetcher.data;
   const connected = connection?.status === 'connected';
+  const actionPath = `${location.pathname}${location.search || ''}`;
 
   const pageTitle = connected
     ? 'Your review source is connected'
@@ -751,12 +755,13 @@ export default function DashboardPage() {
           connection={connection}
           fetcher={fetcher}
           loaderData={loaderData}
+          actionPath={actionPath}
           showProviderSetup={showProviderSetup}
           onChangeProvider={() => setShowProviderSetup((value) => !value)}
         />
 
         <BlockStack gap="300">
-          {!connected ? <CurrentConnectionCard connection={connection} fetcher={fetcher} /> : null}
+          {!connected ? <CurrentConnectionCard connection={connection} fetcher={fetcher} actionPath={actionPath} /> : null}
           <AfterConnectionCard connected={connected} appHandle={loaderData.appHandle} />
         </BlockStack>
       </InlineGrid>

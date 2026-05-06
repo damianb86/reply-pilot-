@@ -83,7 +83,7 @@ function QueueEmptyState({connected, connectUrl, onRefresh, refreshing}) {
         </Text>
       </BlockStack>
       <InlineStack gap="200" align="center">
-        <Button icon={RefreshIcon} loading={refreshing} disabled={refreshing} onClick={onRefresh}>Refresh queue</Button>
+        <Button icon={RefreshIcon} loading={refreshing} disabled={!connected || refreshing} onClick={onRefresh}>Refresh queue</Button>
         {!connected ? <Button url={connectUrl} variant="primary">Go to Connect</Button> : null}
       </InlineStack>
     </div>
@@ -455,6 +455,7 @@ function ReviewsContent() {
   }
 
   function handleRefresh() {
+    if (!pageData.connected || isSyncing) return;
     submitAction('sync', []);
   }
 
@@ -582,7 +583,7 @@ function ReviewsContent() {
             Review approvals stay table-first for speed while the AI draft remains visible in the side panel.
           </Text>
         </BlockStack>
-        <Button icon={RefreshIcon} loading={isSyncing} disabled={isSyncing} onClick={handleRefresh}>
+        <Button icon={RefreshIcon} loading={isSyncing} disabled={!pageData.connected || isSyncing} onClick={handleRefresh}>
           Refresh
         </Button>
       </InlineStack>

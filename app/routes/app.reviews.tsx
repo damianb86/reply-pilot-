@@ -71,6 +71,15 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     if (intent === "sync") {
       const data = await loadReviewsPageData(session.shop, { sync: true, admin });
+      if (!data.connected) {
+        return {
+          ok: false,
+          intent,
+          message: "Connect a review source before refreshing Queue.",
+          ...data,
+        };
+      }
+
       return { ok: true, intent, message: "Queue refreshed.", ...data };
     }
 
