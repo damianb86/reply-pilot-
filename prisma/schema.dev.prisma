@@ -70,6 +70,8 @@ model ReviewDraft {
   aiProviderName   String?
   aiProviderModel  String?
   draftGeneratedAt DateTime?
+  draftEditedAt    DateTime?
+  draftRevisionCount Int     @default(0)
   humanRequired    Boolean   @default(false)
   status           String    @default("pending")
   sentAt           DateTime?
@@ -117,6 +119,60 @@ model AiProviderDailyState {
   updatedAt           DateTime @updatedAt
 
   @@unique([provider, dayKey])
+}
+
+model AppSetting {
+  id           String   @id @default(cuid())
+  shop         String   @unique
+  settingsJson String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model CreditAccount {
+  id               String   @id @default(cuid())
+  shop             String   @unique
+  startingCredits  Int      @default(100)
+  purchasedCredits Int      @default(0)
+  spentCredits     Int      @default(0)
+  refundedCredits  Int      @default(0)
+  balance          Int      @default(100)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model CreditLedgerEntry {
+  id            String   @id @default(cuid())
+  shop          String
+  type          String
+  amount        Int
+  balanceAfter  Int
+  description   String
+  referenceType String?
+  referenceId   String?
+  metadataJson  String?
+  createdAt     DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([shop, referenceType, referenceId])
+}
+
+model CreditPurchase {
+  id                String   @id @default(cuid())
+  shop              String
+  packageId         String
+  credits           Int
+  amountCents       Int
+  currencyCode      String   @default("USD")
+  status            String   @default("pending")
+  shopifyPurchaseId String?  @unique
+  confirmationUrl   String?
+  lastError         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([shop, status])
+  @@index([shop, createdAt])
 }
 
 model Session {

@@ -1,10 +1,25 @@
 import db from "./db.server";
 import {
+  generateReviewReplyRevisionText,
   generateReviewReplyText,
   getAiModelOptions,
   getDefaultAiModelId,
+  resolveAiModelId,
 } from "./ai.server";
 import { callJudgeMeApi, decryptSecret, JudgeMeApiError } from "./judgeme.server";
+import {
+  cleanupExpiredReviewHistory,
+  isSameTimeZoneDay,
+  loadAppSettings,
+  reviewNeedsHuman,
+  type AppSettings,
+} from "./settings.server";
+import {
+  creditCostForOperation,
+  getCreditOverview,
+  refundCredits,
+  spendCredits,
+} from "./credits.server";
 import {
   findProductByTitle,
   loadShopifyProducts,
@@ -101,24 +116,282 @@ function ageLabel(date?: Date | null) {
   return `${Math.floor(days / 7)}w`;
 }
 
-function buildConfidence(reviewBody: string, rating: number) {
-  const text = reviewBody.toLowerCase();
-  const sensitive = ["refund", "never arrived", "broken", "angry", "disappointed", "nothing", "scam"];
-  const penalty = sensitive.some((word) => text.includes(word)) ? 22 : 0;
-  const base = rating >= 5 ? 94 : rating === 4 ? 88 : rating === 3 ? 76 : rating === 2 ? 62 : 42;
-  const jitter = Math.floor(Math.random() * 6) - 2;
-  return Math.max(28, Math.min(98, base + jitter - penalty));
+type ConfidenceInput = {
+  reviewBody: string;
+  rating: number;
+  draft?: string | null;
+  productTitle?: string | null;
+  productType?: string | null;
+  productTags?: string[] | null;
+};
+
+const STOP_WORDS = new Set([
+  "about",
+  "after",
+  "also",
+  "been",
+  "because",
+  "but",
+  "con",
+  "del",
+  "from",
+  "have",
+  "just",
+  "para",
+  "that",
+  "the",
+  "this",
+  "una",
+  "was",
+  "were",
+  "when",
+  "with",
+  "you",
+  "your",
+]);
+
+const SEVERE_REVIEW_TERMS = [
+  "allergic",
+  "allergy",
+  "chargeback",
+  "counterfeit",
+  "dangerous",
+  "estafa",
+  "fake",
+  "fraud",
+  "fraude",
+  "injury",
+  "lawsuit",
+  "legal",
+  "lesion",
+  "peligroso",
+  "scam",
+  "toxic",
+  "unsafe",
+];
+
+const SERVICE_REVIEW_TERMS = [
+  "broken",
+  "cancelled",
+  "damaged",
+  "dañado",
+  "defective",
+  "delivery",
+  "doesn't work",
+  "exchange",
+  "late",
+  "lost",
+  "missing",
+  "never arrived",
+  "no llego",
+  "not arrived",
+  "refund",
+  "reembolso",
+  "return",
+  "roto",
+  "shipping",
+  "stopped working",
+  "tracking",
+  "unusable",
+  "wrong item",
+];
+
+const NEGATIVE_REVIEW_TERMS = [
+  "angry",
+  "awful",
+  "bad",
+  "cheap",
+  "decepcionado",
+  "disappointed",
+  "enojado",
+  "hate",
+  "horrible",
+  "nothing",
+  "not worth",
+  "peor",
+  "poor quality",
+  "terrible",
+  "unacceptable",
+  "upset",
+  "worst",
+];
+
+const SUPPORTIVE_REPLY_TERMS = [
+  "apologies",
+  "apologize",
+  "ayuda",
+  "ayudarte",
+  "contact",
+  "email",
+  "escribenos",
+  "help",
+  "lamentamos",
+  "look into",
+  "make this right",
+  "revisar",
+  "sentimos",
+  "sorry",
+  "support",
+  "understand",
+];
+
+const ROBOTIC_REPLY_PATTERNS = [
+  "as an ai",
+  "balanced review",
+  "details like that matter",
+  "i cannot",
+  "it is helpful to hear",
+  "practical tradeoffs",
+  "real park conditions",
+  "thank you for your feedback",
+  "we appreciate you taking the time to point out both",
+  "we value your feedback",
+];
+
+const RISKY_REPLY_PROMISES = [
+  "always",
+  "discount",
+  "free",
+  "guarantee",
+  "immediately",
+  "never",
+  "refund",
+  "replace",
+  "replacement",
+];
+
+function normalizeText(value?: string | null) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
 }
 
-function needsHuman(reviewBody: string, rating: number, confidence: number) {
-  const text = reviewBody.toLowerCase();
-  return (
-    confidence < 75 ||
-    rating <= 2 ||
-    ["refund", "never arrived", "broken", "chargeback", "angry", "urgent"].some((word) =>
-      text.includes(word),
-    )
+function textWords(value?: string | null) {
+  return normalizeText(value)
+    .split(/[^\p{L}\p{N}']+/u)
+    .map((word) => word.trim())
+    .filter(Boolean);
+}
+
+function wordCount(value?: string | null) {
+  return textWords(value).length;
+}
+
+function countPhraseMatches(text: string, phrases: string[]) {
+  const normalized = normalizeText(text);
+  return phrases.filter((phrase) => normalized.includes(normalizeText(phrase))).length;
+}
+
+function clampScore(value: number) {
+  return Math.max(22, Math.min(98, Math.round(value)));
+}
+
+function uniqueNumbers(value?: string | null) {
+  return Array.from(new Set((value ?? "").match(/\b\d+(?:[.,]\d+)?\b/g) ?? []));
+}
+
+function meaningfulKeywords(...values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      values
+        .flatMap((value) => textWords(value))
+        .filter((word) => word.length >= 5 && !STOP_WORDS.has(word))
+        .slice(0, 60),
+    ),
   );
+}
+
+function keywordOverlap(draft: string, keywords: string[]) {
+  const draftWords = new Set(textWords(draft));
+  return keywords.filter((keyword) => draftWords.has(keyword)).length;
+}
+
+function buildConfidence(input: ConfidenceInput) {
+  const reviewBody = input.reviewBody || "";
+  const draft = input.draft || "";
+  const reviewWords = wordCount(reviewBody);
+  const draftWords = wordCount(draft);
+  const severeSignals = countPhraseMatches(reviewBody, SEVERE_REVIEW_TERMS);
+  const serviceSignals = countPhraseMatches(reviewBody, SERVICE_REVIEW_TERMS);
+  const negativeSignals = countPhraseMatches(reviewBody, NEGATIVE_REVIEW_TERMS);
+  const totalRiskSignals = severeSignals + serviceSignals + negativeSignals;
+  const hasDraft = Boolean(draft.trim());
+  let score = 72;
+
+  score += input.rating >= 5 ? 4 : input.rating === 4 ? 2 : input.rating === 3 ? 0 : input.rating === 2 ? -3 : -5;
+
+  if (reviewWords <= 8) {
+    score += input.rating >= 4 ? 5 : -2;
+  } else if (reviewWords <= 45) {
+    score += 4;
+  } else if (reviewWords <= 110) {
+    score += 0;
+  } else if (reviewWords <= 220) {
+    score -= 4;
+  } else {
+    score -= 7;
+  }
+
+  score -= severeSignals * 14;
+  score -= serviceSignals * 7;
+  score -= negativeSignals * 4;
+  if (totalRiskSignals >= 3) score -= 5;
+
+  if (!hasDraft) return clampScore(score - 28);
+
+  if (draftWords < 12) {
+    score -= 14;
+  } else if (draftWords <= 35) {
+    score += 5;
+  } else if (draftWords <= 95) {
+    score += 8;
+  } else if (draftWords <= 150) {
+    score += 1;
+  } else if (draftWords <= 220) {
+    score -= 6;
+  } else {
+    score -= 12;
+  }
+
+  if (reviewWords >= 80 && draftWords < 35) score -= 7;
+  if (reviewWords <= 25 && draftWords > 110) score -= 7;
+
+  const reviewKeywords = meaningfulKeywords(
+    reviewBody,
+    input.productTitle,
+    input.productType,
+    ...(input.productTags ?? []),
+  );
+  const overlap = keywordOverlap(draft, reviewKeywords);
+  if (reviewKeywords.length >= 4) {
+    score += Math.min(10, overlap * 3);
+    if (overlap === 0) score -= 9;
+  }
+
+  const supportiveSignals = countPhraseMatches(draft, SUPPORTIVE_REPLY_TERMS);
+  if (totalRiskSignals > 0) {
+    score += supportiveSignals ? Math.min(9, supportiveSignals * 3) : -10;
+  }
+  if (input.rating <= 2 && supportiveSignals === 0) score -= 8;
+
+  const roboticSignals = countPhraseMatches(draft, ROBOTIC_REPLY_PATTERNS);
+  score -= roboticSignals * 10;
+
+  const reviewNumbers = new Set([
+    ...uniqueNumbers(reviewBody),
+    ...uniqueNumbers(input.productTitle),
+    ...uniqueNumbers(input.productType),
+    ...(input.productTags ?? []).flatMap((tag) => uniqueNumbers(tag)),
+    String(input.rating),
+  ]);
+  const unsupportedNumbers = uniqueNumbers(draft).filter((number) => !reviewNumbers.has(number));
+  score -= Math.min(18, unsupportedNumbers.length * 9);
+
+  const riskyPromises = countPhraseMatches(draft, RISKY_REPLY_PROMISES);
+  if (riskyPromises && serviceSignals + severeSignals > 0) score -= Math.min(10, riskyPromises * 3);
+
+  return clampScore(score);
 }
 
 function reviewFields(rawReview: unknown) {
@@ -270,11 +543,12 @@ async function loadQueueAiConfig(shop: string) {
     where: { shop },
     select: { selectedModel: true },
   });
-  const selectedModelId = settings?.selectedModel || getDefaultAiModelId();
+  const selectedModelId = resolveAiModelId(settings?.selectedModel || getDefaultAiModelId());
   const aiModels = await getAiModelOptions();
   const selectedModel = aiModels.find((model) => model.id === selectedModelId) ?? aiModels[0] ?? null;
   const activeVariant = selectedModel?.activeVariant ?? null;
   const dailyLimitReached = selectedModel?.provider === "Google" && !activeVariant;
+  const replyCreditCost = creditCostForOperation(selectedModelId, "reply");
 
   return {
     selectedModelId,
@@ -286,25 +560,16 @@ async function loadQueueAiConfig(shop: string) {
     dayKey: selectedModel?.dayKey ?? null,
     displayName: activeVariant?.name || selectedModel?.name || "AI model",
     provider: selectedModel?.provider || activeVariant?.provider || "",
+    replyCreditCost,
   };
 }
 
-export async function getQueueData(shop: string) {
-  const [reviewRecords, pendingCount, skippedCount, sentTodayCount] = await Promise.all([
-    db.reviewDraft.findMany({
-      where: { shop, status: { in: ["pending", "skipped"] } },
-      orderBy: [{ sourceCreatedAt: "desc" }, { createdAt: "desc" }],
-    }),
-    db.reviewDraft.count({ where: { shop, status: "pending" } }),
-    db.reviewDraft.count({ where: { shop, status: "skipped" } }),
-    db.reviewDraft.count({
-      where: {
-        shop,
-        status: "sent",
-        sentAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
-      },
-    }),
-  ]);
+export async function getQueueData(shop: string, settings?: AppSettings) {
+  const appSettings = settings ?? (await loadAppSettings(shop));
+  const reviewRecords = await db.reviewDraft.findMany({
+    where: { shop, status: { in: ["pending", "skipped", "sent"] } },
+    orderBy: [{ sourceCreatedAt: "desc" }, { createdAt: "desc" }],
+  });
   const reviews = reviewRecords.map(mapDraft);
   const pendingReviews = reviews.filter((review) => review.status === "pending");
   const generatedPendingReviews = pendingReviews.filter((review) => review.draftGenerated);
@@ -313,12 +578,18 @@ export async function getQueueData(shop: string) {
   return {
     reviews,
     products,
+    settings: appSettings,
     stats: {
-      pending: pendingCount,
-      sentToday: sentTodayCount,
-      skipped: skippedCount,
+      pending: reviewRecords.filter((record) => record.status === "pending").length,
+      sentToday: reviewRecords.filter((record) =>
+        record.status === "sent" && isSameTimeZoneDay(record.sentAt, new Date(), appSettings.timezone),
+      ).length,
+      sent: reviewRecords.filter((record) => record.status === "sent").length,
+      skipped: reviewRecords.filter((record) => record.status === "skipped").length,
       ungenerated: pendingReviews.filter((review) => !review.draftGenerated).length,
-      highConfidence: generatedPendingReviews.filter((review) => review.confidence >= 85).length,
+      highConfidence: generatedPendingReviews.filter((review) =>
+        review.confidence >= appSettings.highConfidenceThreshold,
+      ).length,
       needsHuman: generatedPendingReviews.filter((review) => review.human).length,
     },
   };
@@ -328,6 +599,8 @@ export async function loadReviewsPageData(
   shop: string,
   options: { sync?: boolean; admin?: AdminGraphql } = {},
 ) {
+  const appSettings = await loadAppSettings(shop);
+  await cleanupExpiredReviewHistory(shop, appSettings);
   let connection = await db.judgeMeConnection.findUnique({ where: { shop } });
   let syncResult: Awaited<ReturnType<typeof syncJudgeMeReviews>> | null = null;
   let syncError: unknown = null;
@@ -345,6 +618,7 @@ export async function loadReviewsPageData(
     connected: Boolean(connection && connection.status === "connected"),
     connectionStatus: connection?.status ?? "not_connected",
     aiConfig: await loadQueueAiConfig(shop),
+    credits: await getCreditOverview(shop),
     syncResult,
     syncError:
       syncError instanceof Error
@@ -353,7 +627,7 @@ export async function loadReviewsPageData(
             details: syncError instanceof JudgeMeApiError ? syncError.details : undefined,
           }
         : null,
-    ...(await getQueueData(shop)),
+    ...(await getQueueData(shop, appSettings)),
   };
 }
 
@@ -365,7 +639,7 @@ async function loadBrandVoiceForDrafts(shop: string) {
     signOff: settings?.signOff || "- The team",
     alwaysMention: readStringListJson(settings?.alwaysMentionJson),
     avoidPhrases: readStringListJson(settings?.avoidPhrasesJson),
-    selectedModel: settings?.selectedModel || getDefaultAiModelId(),
+    selectedModel: resolveAiModelId(settings?.selectedModel || getDefaultAiModelId()),
     personalityStyle: settings?.personalityStyle || "balanced",
     personalityStrength: settings?.personalityStrength || "balanced",
     replyLength: settings?.replyLength || "medium",
@@ -417,7 +691,9 @@ async function generateReplyForRecord(
 
   return {
     draft: result.reply,
+    productTitle: productContext.productTitle,
     productType: productContext.productType || null,
+    productTags: productContext.productTags,
     productTagsJson: compactTags(productContext.productTags),
     aiModelId: result.model.id,
     aiModelName: result.model.name,
@@ -430,6 +706,12 @@ type DraftGenerationResult = {
   requested: number;
   generated: number;
   failed: number;
+  credits: {
+    costPerDraft: number;
+    requested: number;
+    spent: number;
+    refunded: number;
+  };
   errors: Array<{ id: string; reviewId: string; customer: string | null; message: string; details: string }>;
 };
 
@@ -437,19 +719,42 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
   const records = await db.reviewDraft.findMany({
     where: { shop, id: { in: ids }, status: "pending", draft: "" },
   });
-  const products = await loadShopifyProducts(admin).catch(() => [] as ShopifyProductSummary[]);
-  const brandVoice = await loadBrandVoiceForDrafts(shop);
+  const [products, brandVoice, appSettings] = await Promise.all([
+    loadShopifyProducts(admin).catch(() => [] as ShopifyProductSummary[]),
+    loadBrandVoiceForDrafts(shop),
+    loadAppSettings(shop),
+  ]);
   const result: DraftGenerationResult = {
     requested: records.length,
     generated: 0,
     failed: 0,
+    credits: {
+      costPerDraft: creditCostForOperation(brandVoice.selectedModel, "reply"),
+      requested: 0,
+      spent: 0,
+      refunded: 0,
+    },
     errors: [],
   };
+  result.credits.requested = result.credits.costPerDraft * records.length;
+  const charge = await spendCredits(shop, result.credits.requested, {
+    description: `Generate ${records.length} review ${records.length === 1 ? "reply" : "replies"}`,
+    referenceType: "queue_generate",
+    referenceId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    metadata: { modelId: brandVoice.selectedModel, count: records.length },
+  });
 
   for (const record of records) {
     try {
-      const confidence = buildConfidence(record.reviewBody, record.rating ?? 0);
       const generated = await generateReplyForRecord(record, products, brandVoice);
+      const confidence = buildConfidence({
+        reviewBody: record.reviewBody,
+        rating: record.rating ?? 0,
+        draft: generated.draft,
+        productTitle: generated.productTitle,
+        productType: generated.productType,
+        productTags: generated.productTags,
+      });
 
       await db.reviewDraft.update({
         where: { id: record.id },
@@ -462,8 +767,15 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
           aiProviderName: generated.aiProviderName,
           aiProviderModel: generated.aiProviderModel,
           draftGeneratedAt: new Date(),
+          draftEditedAt: null,
+          draftRevisionCount: 0,
           confidence,
-          humanRequired: needsHuman(record.reviewBody, record.rating ?? 0, confidence),
+          humanRequired: reviewNeedsHuman({
+            reviewBody: record.reviewBody,
+            rating: record.rating ?? 0,
+            confidence,
+            settings: appSettings,
+          }),
           lastError: null,
         },
       });
@@ -485,6 +797,17 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
     }
   }
 
+  result.credits.refunded = result.failed * result.credits.costPerDraft;
+  result.credits.spent = Math.max(0, charge.amount - result.credits.refunded);
+  if (result.credits.refunded) {
+    await refundCredits(shop, result.credits.refunded, {
+      description: `Refund ${result.failed} failed review ${result.failed === 1 ? "reply" : "replies"}`,
+      referenceType: "queue_generate_refund",
+      referenceId: charge.id ?? undefined,
+      metadata: { modelId: brandVoice.selectedModel, failed: result.failed },
+    });
+  }
+
   return result;
 }
 
@@ -492,20 +815,42 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
   const records = await db.reviewDraft.findMany({
     where: { shop, id: { in: ids }, status: "pending", draft: { not: "" } },
   });
-  const products = await loadShopifyProducts(admin).catch(() => [] as ShopifyProductSummary[]);
-  const brandVoice = await loadBrandVoiceForDrafts(shop);
+  const [products, brandVoice, appSettings] = await Promise.all([
+    loadShopifyProducts(admin).catch(() => [] as ShopifyProductSummary[]),
+    loadBrandVoiceForDrafts(shop),
+    loadAppSettings(shop),
+  ]);
   const result: DraftGenerationResult = {
     requested: records.length,
     generated: 0,
     failed: 0,
+    credits: {
+      costPerDraft: creditCostForOperation(brandVoice.selectedModel, "reply"),
+      requested: 0,
+      spent: 0,
+      refunded: 0,
+    },
     errors: [],
   };
+  result.credits.requested = result.credits.costPerDraft * records.length;
+  const charge = await spendCredits(shop, result.credits.requested, {
+    description: `Regenerate ${records.length} review ${records.length === 1 ? "reply" : "replies"}`,
+    referenceType: "queue_regenerate",
+    referenceId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    metadata: { modelId: brandVoice.selectedModel, count: records.length },
+  });
 
   for (const record of records) {
     try {
-      const confidence = buildConfidence(record.reviewBody, record.rating ?? 0);
-      const adjustedConfidence = nudge === "shorter" ? Math.max(60, confidence - 2) : confidence;
       const generated = await generateReplyForRecord(record, products, brandVoice, nudge);
+      const confidence = buildConfidence({
+        reviewBody: record.reviewBody,
+        rating: record.rating ?? 0,
+        draft: generated.draft,
+        productTitle: generated.productTitle,
+        productType: generated.productType,
+        productTags: generated.productTags,
+      });
 
       await db.reviewDraft.update({
         where: { id: record.id },
@@ -518,8 +863,15 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
           aiProviderName: generated.aiProviderName,
           aiProviderModel: generated.aiProviderModel,
           draftGeneratedAt: new Date(),
-          confidence: adjustedConfidence,
-          humanRequired: needsHuman(record.reviewBody, record.rating ?? 0, adjustedConfidence),
+          draftEditedAt: null,
+          draftRevisionCount: 0,
+          confidence,
+          humanRequired: reviewNeedsHuman({
+            reviewBody: record.reviewBody,
+            rating: record.rating ?? 0,
+            confidence,
+            settings: appSettings,
+          }),
           lastError: null,
         },
       });
@@ -539,6 +891,17 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
         data: { lastError: details },
       });
     }
+  }
+
+  result.credits.refunded = result.failed * result.credits.costPerDraft;
+  result.credits.spent = Math.max(0, charge.amount - result.credits.refunded);
+  if (result.credits.refunded) {
+    await refundCredits(shop, result.credits.refunded, {
+      description: `Refund ${result.failed} failed regenerated ${result.failed === 1 ? "reply" : "replies"}`,
+      referenceType: "queue_regenerate_refund",
+      referenceId: charge.id ?? undefined,
+      metadata: { modelId: brandVoice.selectedModel, failed: result.failed },
+    });
   }
 
   return result;
@@ -550,18 +913,122 @@ export async function updateDraft(shop: string, id: string, draft: string) {
   });
   if (!record) return;
 
-  const confidence = buildConfidence(record.reviewBody, record.rating ?? 0);
+  const appSettings = await loadAppSettings(shop);
+  const confidence = buildConfidence({
+    reviewBody: record.reviewBody,
+    rating: record.rating ?? 0,
+    draft,
+    productTitle: record.productTitle,
+    productType: record.productType,
+    productTags: readStringListJson(record.productTagsJson),
+  });
 
   await db.reviewDraft.updateMany({
     where: { shop, id, status: "pending" },
     data: {
       draft,
       draftGeneratedAt: new Date(),
+      draftEditedAt: new Date(),
+      draftRevisionCount: { increment: 1 },
       confidence,
-      humanRequired: needsHuman(record.reviewBody, record.rating ?? 0, confidence),
+      humanRequired: reviewNeedsHuman({
+        reviewBody: record.reviewBody,
+        rating: record.rating ?? 0,
+        confidence,
+        settings: appSettings,
+      }),
       lastError: null,
     },
   });
+}
+
+export async function reviseDraft(shop: string, id: string, instruction: string, admin?: AdminGraphql) {
+  const trimmedInstruction = instruction.trim().slice(0, 100);
+  if (!trimmedInstruction) return null;
+
+  const record = await db.reviewDraft.findFirst({
+    where: { shop, id, status: "pending", draft: { not: "" } },
+  });
+  if (!record) return null;
+
+  const [products, brandVoice, appSettings] = await Promise.all([
+    loadShopifyProducts(admin).catch(() => [] as ShopifyProductSummary[]),
+    loadBrandVoiceForDrafts(shop),
+    loadAppSettings(shop),
+  ]);
+  const productContext = productContextForRecord(record, products);
+  const cost = creditCostForOperation(brandVoice.selectedModel, "reply");
+  const charge = await spendCredits(shop, cost, {
+    description: "Revise review reply",
+    referenceType: "queue_revise",
+    referenceId: record.id,
+    metadata: { modelId: brandVoice.selectedModel },
+  });
+
+  try {
+    const result = await generateReviewReplyRevisionText({
+      modelId: brandVoice.selectedModel,
+      context: {
+        personality: brandVoice.personality,
+        greeting: brandVoice.greeting,
+        signOff: brandVoice.signOff,
+        alwaysMention: brandVoice.alwaysMention,
+        avoidPhrases: brandVoice.avoidPhrases,
+        personalityStyle: brandVoice.personalityStyle,
+        personalityStrength: brandVoice.personalityStrength,
+        replyLength: brandVoice.replyLength,
+        customerName: record.customerName,
+        reviewBody: record.reviewBody,
+        rating: record.rating,
+        productTitle: productContext.productTitle,
+        productType: productContext.productType,
+        productTags: productContext.productTags,
+        currentDraft: record.draft,
+        instruction: trimmedInstruction,
+      },
+    });
+    const confidence = buildConfidence({
+      reviewBody: record.reviewBody,
+      rating: record.rating ?? 0,
+      draft: result.reply,
+      productTitle: productContext.productTitle,
+      productType: productContext.productType,
+      productTags: productContext.productTags,
+    });
+
+    await db.reviewDraft.update({
+      where: { id: record.id },
+      data: {
+        draft: result.reply,
+        productType: productContext.productType || null,
+        productTagsJson: compactTags(productContext.productTags),
+        aiModelId: result.model.id,
+        aiModelName: result.model.name,
+        aiProviderName: result.model.provider,
+        aiProviderModel: result.model.model,
+        draftEditedAt: new Date(),
+        draftRevisionCount: { increment: 1 },
+        confidence,
+        humanRequired: reviewNeedsHuman({
+          reviewBody: record.reviewBody,
+          rating: record.rating ?? 0,
+          confidence,
+          settings: appSettings,
+        }),
+        lastError: null,
+      },
+    });
+
+    return { id: record.id, model: result.model, credits: { spent: charge.amount } };
+  } catch (error) {
+    await refundCredits(shop, cost, {
+      description: "Refund failed review reply revision",
+      referenceType: "queue_revise_refund",
+      referenceId: charge.id ?? undefined,
+      metadata: { modelId: brandVoice.selectedModel, reviewId: record.id },
+    });
+    throw error;
+  }
 }
 
 export async function skipDrafts(shop: string, ids: string[]) {
@@ -594,6 +1061,7 @@ export async function approveAndSendDrafts(shop: string, ids: string[]) {
     throw new JudgeMeApiError("Connect Judge.me before approving replies.");
   }
 
+  const appSettings = await loadAppSettings(shop);
   const records = await db.reviewDraft.findMany({
     where: { shop, id: { in: ids }, status: "pending", draft: { not: "" } },
   });
@@ -609,7 +1077,7 @@ export async function approveAndSendDrafts(shop: string, ids: string[]) {
         shopDomain: credentials.shopDomain,
         body: {
           review_id: Number.isNaN(numericReviewId) ? record.sourceReviewId : numericReviewId,
-          send_reply_email: false,
+          send_reply_email: appSettings.sendReplyEmail,
           reply: { content: record.draft },
         },
       });

@@ -4,8 +4,9 @@ import {
   generateLivePreview,
   getAiModelOptions,
   getDefaultAiModelId,
-  testAiModel,
+  resolveAiModelId,
 } from "./ai.server";
+import { getCreditOverview } from "./credits.server";
 import {
   callJudgeMeApi,
   decryptSecret,
@@ -100,7 +101,7 @@ function mapBrandVoiceSettings(
     signOff: settings?.signOff || DEFAULT_SIGN_OFF,
     alwaysMention: readStringListJson(settings?.alwaysMentionJson, DEFAULT_ALWAYS_MENTION),
     avoidPhrases: readStringListJson(settings?.avoidPhrasesJson, DEFAULT_AVOID_PHRASES),
-    selectedModel: settings?.selectedModel || getDefaultAiModelId(),
+    selectedModel: resolveAiModelId(settings?.selectedModel || getDefaultAiModelId()),
     livePreview: settings?.livePreview || "",
     previewReview: settings?.previewReview || DEFAULT_PREVIEW_REVIEW,
     previewProductId: settings?.previewProductId || "",
@@ -197,7 +198,7 @@ async function getConnectedJudgeMeCredentials(shop: string) {
 }
 
 export async function loadBrandVoicePageData(shop: string) {
-  const [connection, recentSentReplies, settings, aiModels] = await Promise.all([
+  const [connection, recentSentReplies, settings, aiModels, credits] = await Promise.all([
     getJudgeMeConnectionView(shop),
     db.reviewDraft.findMany({
       where: { shop, status: "sent" },
@@ -206,6 +207,7 @@ export async function loadBrandVoicePageData(shop: string) {
     }),
     db.brandVoiceSetting.findUnique({ where: { shop } }),
     getAiModelOptions(),
+    getCreditOverview(shop),
   ]);
   const settingsView = mapBrandVoiceSettings(settings);
 
@@ -221,6 +223,7 @@ export async function loadBrandVoicePageData(shop: string) {
       source: index === 0 ? "Latest Reply Pilot reply" : "Reply Pilot sent reply",
     })),
     aiModels,
+    credits,
     defaultAiModelId: getDefaultAiModelId(),
   };
 }
@@ -383,7 +386,7 @@ export async function saveBrandVoiceSettings(
     signOff: input.signOff?.trim() || DEFAULT_SIGN_OFF,
     alwaysMentionJson: JSON.stringify(cleanStringList(input.alwaysMention, DEFAULT_ALWAYS_MENTION)),
     avoidPhrasesJson: JSON.stringify(cleanStringList(input.avoidPhrases, DEFAULT_AVOID_PHRASES)),
-    selectedModel: input.selectedModel?.trim() || getDefaultAiModelId(),
+    selectedModel: resolveAiModelId(input.selectedModel?.trim() || getDefaultAiModelId()),
     livePreview: input.livePreview?.trim() || null,
     previewReview: input.previewReview?.trim() || DEFAULT_PREVIEW_REVIEW,
     previewProductId: input.previewProductId?.trim() || null,
@@ -442,8 +445,4 @@ export async function generateBrandVoicePreview(input: {
       replyLength: input.replyLength,
     },
   });
-}
-
-export async function testBrandVoiceAiModel(modelId?: string | null) {
-  return testAiModel(modelId);
 }

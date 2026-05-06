@@ -105,6 +105,8 @@ await prisma.$executeRawUnsafe(`
     "aiProviderName" TEXT,
     "aiProviderModel" TEXT,
     "draftGeneratedAt" DATETIME,
+    "draftEditedAt" DATETIME,
+    "draftRevisionCount" INTEGER NOT NULL DEFAULT 0,
     "humanRequired" BOOLEAN NOT NULL DEFAULT false,
     "status" TEXT NOT NULL DEFAULT 'pending',
     "sentAt" DATETIME,
@@ -133,6 +135,8 @@ await addColumnIfMissing("ReviewDraft", "aiModelName", "TEXT");
 await addColumnIfMissing("ReviewDraft", "aiProviderName", "TEXT");
 await addColumnIfMissing("ReviewDraft", "aiProviderModel", "TEXT");
 await addColumnIfMissing("ReviewDraft", "draftGeneratedAt", "DATETIME");
+await addColumnIfMissing("ReviewDraft", "draftEditedAt", "DATETIME");
+await addColumnIfMissing("ReviewDraft", "draftRevisionCount", "INTEGER NOT NULL DEFAULT 0");
 
 await prisma.$executeRawUnsafe(`
   CREATE TABLE IF NOT EXISTS "BrandVoiceSetting" (
@@ -185,6 +189,82 @@ await prisma.$executeRawUnsafe(`
 await prisma.$executeRawUnsafe(`
   CREATE UNIQUE INDEX IF NOT EXISTS "AiProviderDailyState_provider_dayKey_key"
   ON "AiProviderDailyState"("provider", "dayKey")
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE TABLE IF NOT EXISTS "AppSetting" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL UNIQUE,
+    "settingsJson" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE TABLE IF NOT EXISTS "CreditAccount" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL UNIQUE,
+    "startingCredits" INTEGER NOT NULL DEFAULT 100,
+    "purchasedCredits" INTEGER NOT NULL DEFAULT 0,
+    "spentCredits" INTEGER NOT NULL DEFAULT 0,
+    "refundedCredits" INTEGER NOT NULL DEFAULT 0,
+    "balance" INTEGER NOT NULL DEFAULT 100,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE TABLE IF NOT EXISTS "CreditLedgerEntry" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "amount" INTEGER NOT NULL,
+    "balanceAfter" INTEGER NOT NULL,
+    "description" TEXT NOT NULL,
+    "referenceType" TEXT,
+    "referenceId" TEXT,
+    "metadataJson" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE INDEX IF NOT EXISTS "CreditLedgerEntry_shop_createdAt_idx"
+  ON "CreditLedgerEntry"("shop", "createdAt")
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE INDEX IF NOT EXISTS "CreditLedgerEntry_shop_referenceType_referenceId_idx"
+  ON "CreditLedgerEntry"("shop", "referenceType", "referenceId")
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE TABLE IF NOT EXISTS "CreditPurchase" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL,
+    "packageId" TEXT NOT NULL,
+    "credits" INTEGER NOT NULL,
+    "amountCents" INTEGER NOT NULL,
+    "currencyCode" TEXT NOT NULL DEFAULT 'USD',
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "shopifyPurchaseId" TEXT UNIQUE,
+    "confirmationUrl" TEXT,
+    "lastError" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE INDEX IF NOT EXISTS "CreditPurchase_shop_status_idx"
+  ON "CreditPurchase"("shop", "status")
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE INDEX IF NOT EXISTS "CreditPurchase_shop_createdAt_idx"
+  ON "CreditPurchase"("shop", "createdAt")
 `);
 
 await prisma.$disconnect();

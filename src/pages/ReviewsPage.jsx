@@ -3,6 +3,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useFetcher, useLoaderData} from 'react-router';
 import {useAppBridge} from '@shopify/app-bridge-react';
 import {
+  Autocomplete,
   Badge,
   Banner,
   BlockStack,
@@ -13,6 +14,7 @@ import {
   IndexTable,
   InlineStack,
   Select,
+  Spinner,
   Text,
   TextField,
 } from '@shopify/polaris';
@@ -22,6 +24,7 @@ import {
   EditIcon,
   MagicIcon,
   RefreshIcon,
+  SearchIcon,
   SendIcon,
   XIcon,
 } from '@shopify/polaris-icons';
@@ -134,36 +137,96 @@ function hasDraft(review) {
   return Boolean(review?.draftGenerated ?? review?.draft?.trim());
 }
 
-function QueueLoadingState() {
-  return (
-    <BlockStack gap="400">
-      <InlineStack align="space-between" blockAlign="center" gap="300">
-        <BlockStack gap="100">
-          <div className="rp-title-row">
-            <Text as="h1" variant="heading2xl">Reply Pilot · Inbox</Text>
-            <span className="rp-title-metric is-yellow">Loading</span>
-            <span className="rp-title-metric is-green">Ready</span>
-          </div>
-          <Text as="p" variant="bodyLg" tone="subdued">
-            Loading review approvals...
-          </Text>
-        </BlockStack>
-      </InlineStack>
+function readPendingIds(formData) {
+  const value = formData?.get('ids');
+  if (typeof value !== 'string') return [];
 
-      <div className="rp-queue-shell">
-        <div className="rp-queue-empty">
-          <span className="rp-empty-mark is-blue">
-            <Icon source={ChatIcon} tone="base" />
-          </span>
-          <BlockStack gap="150" align="center">
-            <Text as="h2" variant="headingLg" alignment="center">Preparing queue</Text>
-            <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
-              Reply Pilot is loading Judge.me reviews and queue state.
-            </Text>
-          </BlockStack>
+  try {
+    const ids = JSON.parse(value);
+    return Array.isArray(ids) ? ids : [];
+  } catch {
+    return [];
+  }
+}
+
+function DraftPlaceholderIllustration() {
+  return (
+    <svg className="rp-draft-illustration" viewBox="0 0 180 132" role="img" aria-label="Draft not generated">
+      <defs>
+        <linearGradient id="draft-card" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="#EBF5FF" />
+          <stop offset="100%" stopColor="#F8E6D9" />
+        </linearGradient>
+      </defs>
+      <rect x="30" y="18" width="120" height="86" rx="14" fill="url(#draft-card)" />
+      <rect x="46" y="38" width="62" height="8" rx="4" fill="#8AA7C7" opacity="0.9" />
+      <rect x="46" y="56" width="88" height="7" rx="3.5" fill="#C2D3E5" />
+      <rect x="46" y="72" width="72" height="7" rx="3.5" fill="#C2D3E5" />
+      <circle cx="135" cy="33" r="18" fill="#FFFFFF" />
+      <path d="M135 23l2.6 6.6 7.1 1.1-5.1 4.9 1.2 7-5.8-3.3-6.2 3.3 1.3-7-5.1-4.9 7.1-1.1L135 23z" fill="#C74600" />
+      <path d="M58 103c10 8 54 9 67 0" fill="none" stroke="#8AA7C7" strokeWidth="5" strokeLinecap="round" opacity="0.55" />
+    </svg>
+  );
+}
+
+function ProductFilter({products, value, onChange}) {
+  const [inputValue, setInputValue] = useState(value === 'all' ? '' : value);
+
+  useEffect(() => {
+    setInputValue(value === 'all' ? '' : value);
+  }, [value]);
+
+  const productOptions = useMemo(() => {
+    const query = inputValue.trim().toLowerCase();
+    const matches = products
+      .filter((product) => !query || product.toLowerCase().includes(query))
+      .slice(0, 50)
+      .map((product) => ({label: product, value: product}));
+
+    return [
+      {label: 'All products', value: 'all'},
+      ...matches,
+    ];
+  }, [inputValue, products]);
+
+  const textField = (
+    <Autocomplete.TextField
+      label="Product"
+      labelHidden
+      value={inputValue}
+      prefix={<Icon source={SearchIcon} tone="subdued" />}
+      placeholder={value === 'all' ? 'Search products' : value}
+      autoComplete="off"
+      clearButton
+      onChange={(nextValue) => {
+        setInputValue(nextValue);
+        if (!nextValue.trim()) onChange('all');
+      }}
+      onClearButtonClick={() => {
+        setInputValue('');
+        onChange('all');
+      }}
+    />
+  );
+
+  return (
+    <Autocomplete
+      options={productOptions}
+      selected={[value]}
+      textField={textField}
+      listTitle="Products in reviews"
+      preferredPosition="below"
+      emptyState={(
+        <div className="rp-product-filter-empty">
+          <Text as="p" variant="bodySm" tone="subdued">No matching products in current reviews.</Text>
         </div>
-      </div>
-    </BlockStack>
+      )}
+      onSelect={(selected) => {
+        const nextValue = selected[0] ?? 'all';
+        onChange(nextValue);
+        setInputValue(nextValue === 'all' ? '' : nextValue);
+      }}
+    />
   );
 }
 
@@ -175,12 +238,16 @@ function ReviewsContent() {
   const [localToast, setLocalToast] = useState(null);
   const pageData = fetcher.data?.reviews ? fetcher.data : loaderData;
   const reviews = useMemo(() => pageData.reviews ?? [], [pageData.reviews]);
-  const stats = pageData.stats ?? {pending: 0, sentToday: 0, skipped: 0, ungenerated: 0, highConfidence: 0, needsHuman: 0};
+  const stats = pageData.stats ?? {pending: 0, sentToday: 0, sent: 0, skipped: 0, ungenerated: 0, highConfidence: 0, needsHuman: 0};
+  const queueSettings = pageData.settings ?? {};
+  const highConfidenceThreshold = queueSettings.highConfidenceThreshold ?? 85;
   const products = pageData.products ?? [];
   const aiConfig = pageData.aiConfig ?? {};
   const aiConfigured = aiConfig.configured !== false;
   const aiDisplayName = aiConfig.displayName || aiConfig.activeVariant?.name || aiConfig.selectedModel?.name || 'Brand Voice model';
   const aiProvider = aiConfig.provider || aiConfig.activeVariant?.provider || aiConfig.selectedModel?.provider || 'AI';
+  const creditBalance = Number(pageData.credits?.balance ?? 0);
+  const replyCreditCost = Number(aiConfig.replyCreditCost ?? 1);
 
   const [activeReviewId, setActiveReviewId] = useState(reviews[0]?.id ?? null);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -188,46 +255,64 @@ function ReviewsContent() {
   const [productFilter, setProductFilter] = useState('all');
   const [highConfidenceOnly, setHighConfidenceOnly] = useState(false);
   const [needsHumanOnly, setNeedsHumanOnly] = useState(false);
-  const [lastSevenDaysOnly, setLastSevenDaysOnly] = useState(true);
-  const [showSkipped, setShowSkipped] = useState(false);
-  const [sortNewest, setSortNewest] = useState(true);
+  const [dateRangeFilter, setDateRangeFilter] = useState(queueSettings.defaultQueueRange || '7-days');
+  const [showSkipped, setShowSkipped] = useState(Boolean(queueSettings.showSkippedByDefault));
+  const [showSent, setShowSent] = useState(Boolean(queueSettings.showSentByDefault));
+  const [sortNewest, setSortNewest] = useState((queueSettings.defaultQueueSort || 'newest') !== 'oldest');
   const [isEditing, setIsEditing] = useState(false);
   const [draftValue, setDraftValue] = useState('');
+  const [showDraftAdjuster, setShowDraftAdjuster] = useState(false);
+  const [draftInstruction, setDraftInstruction] = useState('');
 
   const filteredReviews = useMemo(() => {
     const now = Date.now();
-    const sevenDays = 7 * 24 * 60 * 60 * 1000;
 
     return [...reviews]
       .filter((review) => showSkipped || review.status !== 'skipped')
+      .filter((review) => showSent || review.status !== 'sent')
       .filter((review) => starFilter === 'all' || String(review.rating) === starFilter)
       .filter((review) => productFilter === 'all' || review.product === productFilter)
-      .filter((review) => !highConfidenceOnly || (hasDraft(review) && review.confidence >= 85))
+      .filter((review) => !highConfidenceOnly || (hasDraft(review) && review.confidence >= highConfidenceThreshold))
       .filter((review) => !needsHumanOnly || (hasDraft(review) && review.human))
       .filter((review) => {
-        if (!lastSevenDaysOnly) return true;
+        if (dateRangeFilter === 'all') return true;
+        const rangeDays = dateRangeFilter === '30-days' ? 30 : 7;
         const date = parseDate(review.createdAt);
-        return !date || now - date.getTime() <= sevenDays;
+        return !date || now - date.getTime() <= rangeDays * 24 * 60 * 60 * 1000;
       })
       .sort((a, b) => {
         const aTime = parseDate(a.createdAt)?.getTime() ?? 0;
         const bTime = parseDate(b.createdAt)?.getTime() ?? 0;
         return sortNewest ? bTime - aTime : aTime - bTime;
       });
-  }, [reviews, showSkipped, starFilter, productFilter, highConfidenceOnly, needsHumanOnly, lastSevenDaysOnly, sortNewest]);
+  }, [reviews, showSkipped, showSent, starFilter, productFilter, highConfidenceOnly, needsHumanOnly, dateRangeFilter, sortNewest, highConfidenceThreshold]);
 
   const activeReview = filteredReviews.find((review) => review.id === activeReviewId) ?? filteredReviews[0] ?? null;
   const visibleIds = filteredReviews.map((review) => review.id);
   const activeHasDraft = hasDraft(activeReview);
-  const highConfidenceVisible = filteredReviews.filter((review) => review.status === 'pending' && hasDraft(review) && review.confidence >= 85);
+  const highConfidenceVisible = filteredReviews.filter((review) => (
+    review.status === 'pending' && hasDraft(review) && review.confidence >= highConfidenceThreshold
+  ));
   const ungeneratedVisible = filteredReviews.filter((review) => review.status === 'pending' && !hasDraft(review));
   const selectedVisibleIds = selectedIds.filter((id) => visibleIds.includes(id));
   const selectedPendingIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'pending');
   const selectedGeneratedPendingIds = selectedPendingIds.filter((id) => hasDraft(filteredReviews.find((review) => review.id === id)));
   const selectedUngeneratedPendingIds = selectedPendingIds.filter((id) => !hasDraft(filteredReviews.find((review) => review.id === id)));
   const selectedSkippedIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'skipped');
+  const selectedSentIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'sent');
   const selectedCount = selectedVisibleIds.length;
   const isSubmitting = fetcher.state !== 'idle';
+  const pendingIntent = String(fetcher.formData?.get('intent') ?? '');
+  const pendingIds = readPendingIds(fetcher.formData);
+  const isBulkAiProcessing = isSubmitting && ['generate', 'regenerate'].includes(pendingIntent) && pendingIds.length > 1;
+  const bulkProcessingVerb = pendingIntent === 'regenerate' ? 'Regenerating' : 'Generating';
+  const creditsFor = useCallback((count) => Math.max(0, count * replyCreditCost), [replyCreditCost]);
+  const creditLabel = useCallback((count) => {
+    const cost = creditsFor(count);
+    if (!cost) return 'free';
+    return `${cost} credit${cost === 1 ? '' : 's'}`;
+  }, [creditsFor]);
+  const hasCreditsFor = useCallback((count) => creditsFor(count) <= creditBalance, [creditBalance, creditsFor]);
 
   const showToast = useCallback((data) => {
     if (!data?.message) return;
@@ -260,11 +345,18 @@ function ReviewsContent() {
   useEffect(() => {
     setDraftValue(activeReview?.draft ?? '');
     setIsEditing(false);
+    setShowDraftAdjuster(false);
+    setDraftInstruction('');
   }, [activeReview?.id, activeReview?.draft]);
 
   useEffect(() => {
     if ((fetcher.data?.ok || fetcher.data?.generation?.generated) && ['send', 'skip', 'restore', 'generate', 'regenerate'].includes(fetcher.data.intent)) {
       setSelectedIds([]);
+    }
+
+    if (fetcher.data?.ok && fetcher.data.intent === 'revise-draft') {
+      setDraftInstruction('');
+      setShowDraftAdjuster(false);
     }
   }, [fetcher.data]);
 
@@ -367,41 +459,15 @@ function ReviewsContent() {
     fetcher.submit(formData, {method: 'post'});
   }
 
-  const promotedBulkActions = [
-    {
-      content: `Generate ${selectedUngeneratedPendingIds.length || ''}`.trim(),
-      icon: MagicIcon,
-      onAction: () => submitAction('generate', selectedUngeneratedPendingIds),
-      disabled: !aiConfigured || !selectedUngeneratedPendingIds.length || isSubmitting,
-    },
-    {
-      content: `Approve & send all ${selectedGeneratedPendingIds.length || ''}`.trim(),
-      icon: SendIcon,
-      onAction: () => submitAction('send', selectedGeneratedPendingIds),
-      disabled: !selectedGeneratedPendingIds.length || isSubmitting,
-    },
-    {
-      content: 'Regenerate',
-      icon: RefreshIcon,
-      onAction: () => submitAction('regenerate', selectedGeneratedPendingIds),
-      disabled: !aiConfigured || !selectedGeneratedPendingIds.length || isSubmitting,
-    },
-  ];
+  function handleReviseDraft() {
+    if (!activeReview || activeReview.status !== 'pending' || !activeHasDraft || !draftInstruction.trim()) return;
 
-  const bulkActions = [
-    {
-      content: "Don't reply",
-      icon: XIcon,
-      onAction: () => submitAction('skip', selectedPendingIds),
-      disabled: !selectedPendingIds.length || isSubmitting,
-    },
-    {
-      content: 'Restore',
-      icon: RefreshIcon,
-      onAction: () => submitAction('restore', selectedSkippedIds),
-      disabled: !selectedSkippedIds.length || isSubmitting,
-    },
-  ];
+    const formData = new FormData();
+    formData.set('intent', 'revise-draft');
+    formData.set('id', activeReview.id);
+    formData.set('instruction', draftInstruction.trim().slice(0, 100));
+    fetcher.submit(formData, {method: 'post'});
+  }
 
   const rowMarkup = filteredReviews.map((review, index) => (
     <IndexTable.Row
@@ -428,6 +494,8 @@ function ReviewsContent() {
           <InlineStack gap="200" blockAlign="center">
             {review.status === 'skipped' ? (
               <Badge tone="attention">Skipped</Badge>
+            ) : review.status === 'sent' ? (
+              <Badge tone="success">Sent</Badge>
             ) : !hasDraft(review) ? (
               <Badge tone="info">Draft needed</Badge>
             ) : (
@@ -460,6 +528,27 @@ function ReviewsContent() {
       ) : null}
 
       <ResultBanner result={fetcher.data} syncError={pageData.syncError} />
+      {isBulkAiProcessing ? (
+        <div className="rp-processing-overlay" role="status" aria-live="assertive">
+          <div className="rp-processing-modal">
+            <span className="rp-processing-modal-mark">
+              <Spinner accessibilityLabel={`${bulkProcessingVerb} messages`} size="large" />
+            </span>
+            <BlockStack gap="150" align="center">
+              <Text as="h2" variant="headingLg" alignment="center">Please wait</Text>
+              <Text as="p" variant="bodyMd" alignment="center">
+                {bulkProcessingVerb} {pendingIds.length} messages with {aiDisplayName}.
+              </Text>
+              <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+                Reply Pilot is applying Brand Voice, product context, and review ratings. Keep this page open until it finishes.
+              </Text>
+            </BlockStack>
+            <div className="rp-processing-bar" aria-hidden="true">
+              <span />
+            </div>
+          </div>
+        </div>
+      ) : null}
       {!aiConfigured ? (
         <Banner tone="critical">
           <Text as="p" variant="bodyMd">
@@ -477,6 +566,7 @@ function ReviewsContent() {
             <span className="rp-title-metric is-yellow">{stats.pending} pending</span>
             {stats.ungenerated ? <span className="rp-title-metric">{stats.ungenerated} need draft</span> : null}
             <span className="rp-title-metric is-green">{stats.sentToday} sent today</span>
+            {showSent && stats.sent ? <span className="rp-title-metric is-green">{stats.sent} sent total</span> : null}
             {stats.skipped ? <span className="rp-title-metric">{stats.skipped} skipped</span> : null}
           </div>
           <Text as="p" variant="bodyLg" tone="subdued">
@@ -503,6 +593,8 @@ function ReviewsContent() {
             <InlineStack gap="200" blockAlign="center">
               <Badge tone={aiConfigured ? 'info' : 'critical'}>AI: {aiDisplayName}</Badge>
               <Text as="span" variant="bodySm" tone="subdued">{aiProvider} from Brand Voice</Text>
+              <Badge tone={creditBalance < replyCreditCost ? 'critical' : 'info'}>{creditBalance} credits</Badge>
+              <Text as="span" variant="bodySm" tone="subdued">{creditLabel(1)} per reply</Text>
               <Badge>{pageData.connected ? 'Judge.me connected' : 'Source missing'}</Badge>
               <Badge tone={pageData.connected ? 'success' : 'attention'}>{pageData.connected ? 'Ready' : 'Setup needed'}</Badge>
             </InlineStack>
@@ -529,31 +621,41 @@ function ReviewsContent() {
                   onChange={setStarFilter}
                 />
               </div>
-              <div className="rp-filter-select is-wide">
-                <Select
-                  label="Product"
-                  labelHidden
-                  options={[
-                    {label: 'All products', value: 'all'},
-                    ...products.map((product) => ({label: product, value: product})),
-                  ]}
+              <div className="rp-filter-select is-search">
+                <ProductFilter
+                  products={products}
                   value={productFilter}
                   onChange={setProductFilter}
                 />
               </div>
               <Button pressed={highConfidenceOnly} tone={highConfidenceOnly ? 'critical' : undefined} onClick={() => setHighConfidenceOnly((value) => !value)}>
-                High confidence
+                High conf {highConfidenceThreshold}%+
               </Button>
               <Button pressed={needsHumanOnly} icon={AlertTriangleIcon} onClick={() => setNeedsHumanOnly((value) => !value)}>
                 Needs human
               </Button>
-              <Button pressed={lastSevenDaysOnly} onClick={() => setLastSevenDaysOnly((value) => !value)}>
-                Last 7 days
-              </Button>
+              <div className="rp-filter-select">
+                <Select
+                  label="Date range"
+                  labelHidden
+                  options={[
+                    {label: 'Last 7 days', value: '7-days'},
+                    {label: 'Last 30 days', value: '30-days'},
+                    {label: 'All time', value: 'all'},
+                  ]}
+                  value={dateRangeFilter}
+                  onChange={setDateRangeFilter}
+                />
+              </div>
               <Checkbox
                 label={`Show skipped${stats.skipped ? ` (${stats.skipped})` : ''}`}
                 checked={showSkipped}
                 onChange={setShowSkipped}
+              />
+              <Checkbox
+                label={`Show sent${stats.sent ? ` (${stats.sent})` : ''}`}
+                checked={showSent}
+                onChange={setShowSent}
               />
             </InlineStack>
             <Button onClick={() => setSortNewest((value) => !value)}>
@@ -566,14 +668,14 @@ function ReviewsContent() {
           <InlineStack align="space-between" blockAlign="center" gap="300">
             <InlineStack gap="200" blockAlign="center">
               <Text as="span" variant="bodyMd" fontWeight="semibold">{selectedCount} selected</Text>
-              <Button icon={MagicIcon} disabled={!aiConfigured || !selectedUngeneratedPendingIds.length || isSubmitting} onClick={() => submitAction('generate', selectedUngeneratedPendingIds)}>
-                Generate {selectedUngeneratedPendingIds.length}
+              <Button icon={MagicIcon} disabled={!aiConfigured || !selectedUngeneratedPendingIds.length || isSubmitting || !hasCreditsFor(selectedUngeneratedPendingIds.length)} onClick={() => submitAction('generate', selectedUngeneratedPendingIds)}>
+                Generate {selectedUngeneratedPendingIds.length} · {creditLabel(selectedUngeneratedPendingIds.length)}
               </Button>
               <Button icon={SendIcon} variant="primary" disabled={!selectedGeneratedPendingIds.length || isSubmitting} onClick={() => submitAction('send', selectedGeneratedPendingIds)}>
                 Approve & send all {selectedGeneratedPendingIds.length}
               </Button>
-              <Button icon={RefreshIcon} disabled={!aiConfigured || !selectedGeneratedPendingIds.length || isSubmitting} onClick={() => submitAction('regenerate', selectedGeneratedPendingIds)}>
-                Regenerate
+              <Button icon={RefreshIcon} disabled={!aiConfigured || !selectedGeneratedPendingIds.length || isSubmitting || !hasCreditsFor(selectedGeneratedPendingIds.length)} onClick={() => submitAction('regenerate', selectedGeneratedPendingIds)}>
+                Regenerate · {creditLabel(selectedGeneratedPendingIds.length)}
               </Button>
               <Button icon={XIcon} disabled={!selectedPendingIds.length || isSubmitting} onClick={() => submitAction('skip', selectedPendingIds)}>
                 Don't reply
@@ -583,14 +685,17 @@ function ReviewsContent() {
                   Restore {selectedSkippedIds.length}
                 </Button>
               ) : null}
+              {selectedSentIds.length ? (
+                <Badge tone="success">{selectedSentIds.length} already sent</Badge>
+              ) : null}
             </InlineStack>
             <InlineStack gap="200" blockAlign="center">
               {ungeneratedVisible.length ? (
-                <Button icon={MagicIcon} disabled={!aiConfigured || isSubmitting} onClick={() => submitAction('generate', ungeneratedVisible.map((review) => review.id))}>
-                  Generate missing {ungeneratedVisible.length}
+                <Button icon={MagicIcon} disabled={!aiConfigured || isSubmitting || !hasCreditsFor(ungeneratedVisible.length)} onClick={() => submitAction('generate', ungeneratedVisible.map((review) => review.id))}>
+                  Generate missing {ungeneratedVisible.length} · {creditLabel(ungeneratedVisible.length)}
                 </Button>
               ) : null}
-              <Text as="span" variant="bodyMd" tone="critical">{highConfidenceVisible.length} high-conf - select all</Text>
+              <Text as="span" variant="bodyMd" tone="critical">{highConfidenceVisible.length} high-conf</Text>
               <Button disabled={!highConfidenceVisible.length} onClick={() => setSelectedIds(highConfidenceVisible.map((review) => review.id))}>
                 Select all {highConfidenceVisible.length}
               </Button>
@@ -607,8 +712,6 @@ function ReviewsContent() {
                 itemCount={filteredReviews.length}
                 selectedItemsCount={selectedCount === filteredReviews.length && selectedCount ? 'All' : selectedCount}
                 onSelectionChange={handleSelectionChange}
-                promotedBulkActions={promotedBulkActions}
-                bulkActions={bulkActions}
                 headings={[
                   {title: 'Customer'},
                   {title: 'Product'},
@@ -642,6 +745,7 @@ function ReviewsContent() {
                     </InlineStack>
                     <InlineStack gap="200" blockAlign="center">
                       {activeReview.status === 'skipped' ? <Badge tone="attention">Skipped</Badge> : null}
+                      {activeReview.status === 'sent' ? <Badge tone="success">Sent</Badge> : null}
                       <Badge>Judge.me</Badge>
                     </InlineStack>
                   </InlineStack>
@@ -700,16 +804,14 @@ function ReviewsContent() {
                       </BlockStack>
                     ) : !activeHasDraft ? (
                       <BlockStack gap="250" align="center">
-                        <span className="rp-empty-mark is-blue">
-                          <Icon source={MagicIcon} tone="base" />
-                        </span>
-                        <Text as="h3" variant="headingMd" alignment="center">No draft generated yet</Text>
+                        <DraftPlaceholderIllustration />
+                        <Text as="h3" variant="headingMd" alignment="center">Draft not generated yet</Text>
                         <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
-                          Generate this reply when you are ready. Existing drafts are left untouched.
+                          Generate the first message when you are ready. Reply Pilot will use Brand Voice, product context, star rating, and this review.
                         </Text>
                         {activeReview.status === 'pending' ? (
-                          <Button icon={MagicIcon} variant="primary" disabled={!aiConfigured} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
-                            Generate reply
+                          <Button icon={MagicIcon} variant="primary" disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
+                            Generate message · {creditLabel(1)}
                           </Button>
                         ) : null}
                       </BlockStack>
@@ -718,15 +820,60 @@ function ReviewsContent() {
                     )}
                   </div>
 
-                  <BlockStack gap="200">
-                    <Text as="span" variant="bodySm" tone="subdued">Nudge</Text>
-                    <InlineStack gap="200">
-                      <Button size="slim" disabled={!aiConfigured || isSubmitting || activeReview.status === 'skipped' || !activeHasDraft} onClick={() => submitSingle('regenerate', activeReview.id, {nudge: 'shorter'})}>Shorter</Button>
-                      <Button size="slim" disabled={!aiConfigured || isSubmitting || activeReview.status === 'skipped' || !activeHasDraft} onClick={() => submitSingle('regenerate', activeReview.id, {nudge: 'warmer'})}>Warmer</Button>
-                      <Button size="slim" disabled={!aiConfigured || isSubmitting || activeReview.status === 'skipped' || !activeHasDraft} onClick={() => submitSingle('regenerate', activeReview.id, {nudge: 'artisan'})}>+ artisan</Button>
-                      <Button size="slim" icon={RefreshIcon} disabled={!aiConfigured || isSubmitting || activeReview.status === 'skipped' || !activeHasDraft} onClick={() => submitSingle('regenerate', activeReview.id)}>Regenerate</Button>
-                    </InlineStack>
-                  </BlockStack>
+                  {activeReview.status === 'pending' && activeHasDraft ? (
+                    <div className="rp-draft-adjuster">
+                      <BlockStack gap="250">
+                        <InlineStack align="space-between" blockAlign="center" gap="300">
+                          <BlockStack gap="050">
+                            <Text as="h3" variant="headingMd">Adjust draft</Text>
+                            <Text as="p" variant="bodySm" tone="subdued">
+                              Edit the current draft with a short instruction. This keeps the generated reply as the starting point.
+                            </Text>
+                          </BlockStack>
+                          <Button
+                            size="slim"
+                            disabled={!aiConfigured || isSubmitting}
+                            onClick={() => setShowDraftAdjuster((value) => !value)}
+                          >
+                            {showDraftAdjuster ? 'Hide' : 'Describe change'}
+                          </Button>
+                        </InlineStack>
+                        {showDraftAdjuster ? (
+                          <BlockStack gap="200">
+                            <TextField
+                              label="Draft change"
+                              labelHidden
+                              value={draftInstruction}
+                              onChange={setDraftInstruction}
+                              autoComplete="off"
+                              maxLength={100}
+                              showCharacterCount
+                              placeholder="Example: make it much shorter, warmer, longer, or replace a phrase."
+                            />
+                            <InlineStack align="end" gap="200">
+                              <Button
+                                disabled={isSubmitting}
+                                onClick={() => {
+                                  setDraftInstruction('');
+                                  setShowDraftAdjuster(false);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                variant="primary"
+                                disabled={!aiConfigured || !draftInstruction.trim() || !hasCreditsFor(1)}
+                                loading={isSubmitting && fetcher.formData?.get('intent') === 'revise-draft'}
+                                onClick={handleReviseDraft}
+                              >
+                                Apply change · {creditLabel(1)}
+                              </Button>
+                            </InlineStack>
+                          </BlockStack>
+                        ) : null}
+                      </BlockStack>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="rp-detail-footer">
@@ -736,26 +883,34 @@ function ReviewsContent() {
                         <Button icon={RefreshIcon} variant="primary" size="large" fullWidth loading={isSubmitting && fetcher.formData?.get('intent') === 'restore'} onClick={() => submitSingle('restore', activeReview.id)}>
                           Restore to queue
                         </Button>
+                      ) : activeReview.status === 'sent' ? (
+                        <Button icon={SendIcon} size="large" fullWidth disabled>
+                          Already sent
+                        </Button>
                       ) : !activeHasDraft ? (
-                        <Button icon={MagicIcon} variant="primary" size="large" fullWidth disabled={!aiConfigured} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
-                          Generate reply
+                        <Button icon={MagicIcon} variant="primary" size="large" fullWidth disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
+                          Generate message · {creditLabel(1)}
                         </Button>
                       ) : (
                         <Button icon={SendIcon} variant="primary" size="large" fullWidth loading={isSubmitting && fetcher.formData?.get('intent') === 'send'} onClick={() => submitSingle('send', activeReview.id)}>
                           Approve & send
                         </Button>
                       )}
-                      <Button icon={EditIcon} accessibilityLabel="Edit draft" disabled={activeReview.status === 'skipped'} onClick={() => setIsEditing(true)} />
-                      <Button icon={RefreshIcon} accessibilityLabel="Regenerate draft" disabled={!aiConfigured || isSubmitting || activeReview.status === 'skipped' || !activeHasDraft} onClick={() => submitSingle('regenerate', activeReview.id)} />
-                      <Button icon={XIcon} accessibilityLabel="Do not reply" disabled={isSubmitting || activeReview.status === 'skipped'} onClick={() => submitSingle('skip', activeReview.id)} />
+                      <Button icon={EditIcon} accessibilityLabel="Edit draft" disabled={activeReview.status !== 'pending'} onClick={() => setIsEditing(true)} />
+                      <Button icon={RefreshIcon} accessibilityLabel={`Regenerate draft, ${creditLabel(1)}`} disabled={!aiConfigured || isSubmitting || activeReview.status !== 'pending' || !activeHasDraft || !hasCreditsFor(1)} onClick={() => submitSingle('regenerate', activeReview.id)} />
+                      <Button icon={XIcon} accessibilityLabel="Do not reply" disabled={isSubmitting || activeReview.status !== 'pending'} onClick={() => submitSingle('skip', activeReview.id)} />
                     </InlineStack>
                     {activeReview.status === 'skipped' ? (
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
                         Restore this message to edit, regenerate, or send it.
                       </Text>
+                    ) : activeReview.status === 'sent' ? (
+                      <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+                        This reply has already been sent and is shown for review only.
+                      </Text>
                     ) : !activeHasDraft ? (
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
-                        Generate a draft before approving this reply.
+                        Generate a message before approving this reply.
                       </Text>
                     ) : (
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
@@ -788,15 +943,5 @@ function ReviewsContent() {
 }
 
 export default function ReviewsPage() {
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
-
-  if (!isHydrated) {
-    return <QueueLoadingState />;
-  }
-
   return <ReviewsContent />;
 }

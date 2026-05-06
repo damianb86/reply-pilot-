@@ -15,6 +15,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   console.log(`Received ${topic} webhook for ${shopDomain}`);
 
   await Promise.all([
+    db.reviewDraft.deleteMany({ where: { shop: shopDomain } }),
+    db.brandVoiceSetting.deleteMany({ where: { shop: shopDomain } }),
+    db.judgeMeConnection.deleteMany({ where: { shop: shopDomain } }),
+    db.appSetting.deleteMany({ where: { shop: shopDomain } }),
+    db.creditLedgerEntry.deleteMany({ where: { shop: shopDomain } }),
+    db.creditPurchase.deleteMany({ where: { shop: shopDomain } }),
+    db.creditAccount.deleteMany({ where: { shop: shopDomain } }),
     db.contactRequest.deleteMany({ where: { shop: shopDomain } }),
     db.session.deleteMany({ where: { shop: shopDomain } }),
   ]);

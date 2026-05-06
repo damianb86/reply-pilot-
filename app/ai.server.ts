@@ -1,6 +1,7 @@
 import db from "./db.server";
+import { creditCostsForModel } from "./credits.server";
 
-type AiProvider = "openai" | "google" | "anthropic";
+type AiProvider = "openai" | "google";
 
 type AiModelConfig = {
   id: string;
@@ -9,6 +10,7 @@ type AiModelConfig = {
   name: string;
   model: string;
   envKey: string;
+  visibleInProduction?: boolean;
   bestFor: string;
   description: string;
   detail: string;
@@ -76,11 +78,18 @@ type ReviewReplyContext = {
   nudge?: string | null;
 };
 
+type ReviewReplyRevisionContext = ReviewReplyContext & {
+  currentDraft: string;
+  instruction: string;
+};
+
 type GenerateTextOptions = {
   responseFormat?: "json" | "text";
   maxTokens?: number;
   system?: string;
   temperature?: number;
+  textVerbosity?: "low" | "medium" | "high";
+  reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh";
 };
 
 const PERSONALITY_STYLE_INSTRUCTIONS: Record<string, string> = {
@@ -129,6 +138,8 @@ const GEMINI_RETRY_MAX_TOKENS = 8192;
 const DEFAULT_PREVIEW_REVIEW =
   "Obsessed with these napkins. The fabric feels substantial, the print looks even better in person, and they made our dinner table feel special.";
 
+const APP_ENV = process.env.APP_ENV || process.env.NODE_ENV || "development";
+const IS_PRODUCTION = APP_ENV === "production";
 const GEMINI_POOL_PROVIDER = "google-gemini";
 const GEMINI_DAILY_RESET_TIME_ZONE =
   process.env.AI_DAILY_RESET_TIME_ZONE || "America/Argentina/Cordoba";
@@ -185,45 +196,64 @@ const GEMINI_POOL: GeminiPoolModel[] = [
 
 const AI_MODELS: AiModelConfig[] = [
   {
-    id: "gemini-3-flash-preview",
+    id: "dev",
     provider: "google",
     providerName: "Google",
-    name: "Gemini model pool",
+    name: "Dev",
     model: GEMINI_POOL[0].model,
     envKey: "GEMINI_API_KEY",
-    bestFor: "Automatic daily fallback across Gemini and Gemma models",
+    visibleInProduction: false,
+    bestFor: "Internal testing without spending production OpenAI quota",
     description:
-      "Uses Gemini 3 Flash first, then moves through the configured Gemini/Gemma pool when a model hits daily quota.",
-    detail: "Daily quota failover · Gemini/Gemma pool · starts fresh each day",
-    strengths: ["Automatic fallback", "Daily reset", "High-throughput reply generation"],
+      "Development-only tier. It uses the Gemini/Gemma fallback stack so the team can test prompts, imports, and queue flows without exposing this option to merchants.",
+    detail: "Gemini stack",
+    strengths: ["Development only", "Daily fallback pool", "Low-risk testing"],
   },
   {
-    id: "openai-gpt-5-4-mini",
+    id: "basic",
     provider: "openai",
     providerName: "OpenAI",
-    name: "OpenAI GPT-5.4 mini",
-    model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
+    name: "Basic",
+    model: process.env.OPENAI_BASIC_MODEL || "gpt-5.4-nano",
     envKey: "OPENAI_API_KEY",
-    bestFor: "Balanced quality, structured output, and reliable reasoning",
+    bestFor: "Lowest-cost reply generation for simple, high-volume queues",
     description:
-      "Strong option when you want instruction following, structured JSON, and polished copy without using a larger model.",
-    detail: "Balanced · structured output · strong reasoning",
-    strengths: ["Reliable JSON", "Strong copy refinement", "Balanced reasoning"],
+      "Best when cost and speed matter most. It handles clear, straightforward reviews well, but is less nuanced with tricky sentiment, detailed product context, or a highly specific brand voice.",
+    detail: "gpt-5.4-nano",
+    strengths: ["Lowest cost", "Fast generation", "Good for simple reviews"],
   },
   {
-    id: "claude-haiku-4-5",
-    provider: "anthropic",
-    providerName: "Anthropic",
-    name: "Claude Haiku 4.5",
-    model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001",
-    envKey: "ANTHROPIC_API_KEY",
-    bestFor: "Natural tone, concise prose, and warm support replies",
+    id: "pro",
+    provider: "openai",
+    providerName: "OpenAI",
+    name: "Pro",
+    model: process.env.OPENAI_PRO_MODEL || "gpt-5.4-mini",
+    envKey: "OPENAI_API_KEY",
+    bestFor: "Balanced quality, cost, and brand-voice consistency",
     description:
-      "Small, fast Claude model for human-sounding copy, careful tone matching, and quick brand voice iteration.",
-    detail: "Warm prose · fast · concise",
-    strengths: ["Natural language", "Tone matching", "Support-style replies"],
+      "Recommended for most shops. It follows Brand Voice more reliably than Basic, handles mixed reviews better, and usually produces warmer, more specific replies without jumping to the highest-cost tier.",
+    detail: "gpt-5.4-mini",
+    strengths: ["Better tone matching", "More reliable instructions", "Good cost-quality balance"],
+  },
+  {
+    id: "premium",
+    provider: "openai",
+    providerName: "OpenAI",
+    name: "Premium",
+    model: process.env.OPENAI_PREMIUM_MODEL || "gpt-5.4",
+    envKey: "OPENAI_API_KEY",
+    bestFor: "Highest-quality replies for complex reviews and premium support tone",
+    description:
+      "Best quality tier. It is more careful with product details, subtle customer sentiment, negative reviews, and polished human-sounding language. It costs more, but should need fewer edits on important replies.",
+    detail: "gpt-5.4",
+    strengths: ["Most polished replies", "Best nuance", "Strongest context handling"],
   },
 ];
+
+const LEGACY_MODEL_IDS: Record<string, string> = {
+  "gemini-3-flash-preview": "dev",
+  "openai-gpt-5-4-mini": "pro",
+};
 
 export class AiProviderError extends Error {
   status?: number;
@@ -248,8 +278,21 @@ function apiKeyFor(config: AiModelConfig) {
   return process.env[config.envKey] || "";
 }
 
+function visibleAiModels() {
+  return AI_MODELS.filter((model) => model.visibleInProduction !== false || !IS_PRODUCTION);
+}
+
+export function resolveAiModelId(modelId?: string | null) {
+  const candidateId = LEGACY_MODEL_IDS[modelId || ""] || modelId || "";
+  const visibleModels = visibleAiModels();
+  return visibleModels.some((model) => model.id === candidateId)
+    ? candidateId
+    : visibleModels[0]?.id ?? AI_MODELS[0].id;
+}
+
 function modelForId(modelId?: string | null) {
-  return AI_MODELS.find((model) => model.id === modelId) ?? AI_MODELS[0];
+  const resolvedModelId = resolveAiModelId(modelId);
+  return AI_MODELS.find((model) => model.id === resolvedModelId) ?? visibleAiModels()[0] ?? AI_MODELS[0];
 }
 
 function dailyGeminiDayKey(date = new Date()) {
@@ -375,8 +418,9 @@ export async function getGeminiPoolStatus() {
 }
 
 export async function getAiModelOptions() {
+  const visibleModels = visibleAiModels();
   const geminiPoolStatus = await getGeminiPoolStatus();
-  return AI_MODELS.map((model) => ({
+  return visibleModels.map((model) => ({
     id: model.id,
     provider: model.providerName,
     name: model.name,
@@ -391,11 +435,12 @@ export async function getAiModelOptions() {
     exhaustedVariants: model.provider === "google" ? geminiPoolStatus.exhaustedModels : [],
     variants: model.provider === "google" ? geminiPoolStatus.models : [],
     dayKey: model.provider === "google" ? geminiPoolStatus.dayKey : null,
+    credits: creditCostsForModel(model.id),
   }));
 }
 
 export function getDefaultAiModelId() {
-  return AI_MODELS[0].id;
+  return visibleAiModels()[0]?.id ?? AI_MODELS[0].id;
 }
 
 async function readJsonResponse(response: Response) {
@@ -487,6 +532,31 @@ function ensureSignOff(text: string, signOff?: string) {
   return `${cleanText}\n\n${cleanSignOff}`;
 }
 
+function compactWhitespace(value?: string | null) {
+  return value?.replace(/\s+/g, " ").trim() || "";
+}
+
+function quotedRuleList(values?: string[]) {
+  const rules = values?.map(compactWhitespace).filter(Boolean).slice(0, 24) || [];
+  return rules.length ? rules.map((rule) => `"${rule}"`).join("; ") : "none";
+}
+
+function customerFirstName(value?: string | null) {
+  const parts = compactWhitespace(value).split(" ").filter(Boolean);
+  const firstName = parts[0] || "";
+  if (!firstName || firstName.toLowerCase() === "customer") return "there";
+  return firstName;
+}
+
+function replyGreeting(pattern?: string | null, customerName?: string | null) {
+  const cleanPattern = compactWhitespace(pattern) || "Hi {name} -";
+  const firstName = customerFirstName(customerName);
+  if (cleanPattern.includes("{name}")) {
+    return cleanPattern.replace(/\{name\}/g, firstName);
+  }
+  return `${cleanPattern} ${firstName}`.trim();
+}
+
 function personalityPrompt(replies: ImportedReply[], context: BrandVoiceContext = {}) {
   return [
     "Generate the Personality field for Reply Pilot, a Shopify app that drafts public replies to product reviews.",
@@ -514,23 +584,30 @@ function previewPrompt(context: BrandVoiceContext) {
   const signOff = context.signOff?.trim() || "- The team";
   const previewReview = context.previewReview?.trim() || DEFAULT_PREVIEW_REVIEW;
   const previewRating = normalizeRating(context.previewRating);
-  const alwaysMention = context.alwaysMention?.filter(Boolean).join(", ") || "none";
-  const avoidPhrases = context.avoidPhrases?.filter(Boolean).join(", ") || "none";
+  const alwaysMention = quotedRuleList(context.alwaysMention);
+  const avoidPhrases = quotedRuleList(context.avoidPhrases);
+  const greeting = replyGreeting(context.greeting, "Anya");
 
   return [
     "You are Reply Pilot. Generate one public reply to a product review using the merchant voice below.",
     "Output the reply text only. No JSON, no Markdown, no label.",
+    "Write like a thoughtful human merchant, not a review analyst.",
     "Respect the configured style and length. Do not make the reply shorter than requested.",
+    "Do not summarize the review point-by-point, mirror every clause, or sound like a template.",
+    "Mention at most two concrete review details, then respond to what matters.",
     "Use the same language as the review when it is clear; otherwise use English.",
+    "Never invent numbers, counts, percentages, statistics, policies, people, timelines, materials, guarantees, or product claims.",
+    "Always Mention items are merchant rules/facts. Use them only if directly relevant, and do not turn vague notes into invented specifics.",
+    "Avoid robotic analysis phrases like \"balanced review\", \"practical tradeoffs\", \"it is helpful to hear\", or \"details like that matter\".",
     `Style: ${personalityStyleInstruction(context.personalityStyle)}`,
     `Personality strength: ${personalityStrengthInstruction(context.personalityStrength)}`,
     `Length: ${replyLengthInstruction(context.replyLength).instruction}`,
     `The final line must be this exact sign-off: ${signOff}`,
-    `Always mention when relevant: ${alwaysMention}`,
+    `Always mention when relevant, without inventing supporting details: ${alwaysMention}`,
     `Never use these phrases or patterns: ${avoidPhrases}`,
     "",
     `Personality: ${context.personality || "Warm, concise, and specific."}`,
-    `Greeting pattern: ${context.greeting || "Hi {name} -"}`,
+    `Greeting to use if greeting the customer: ${greeting}`,
     `Sign-off pattern: ${signOff}`,
     ...productContextLines({
       productTitle: context.previewProductTitle,
@@ -538,6 +615,7 @@ function previewPrompt(context: BrandVoiceContext) {
       productTags: context.previewProductTags,
     }),
     `Review from Anya, ${previewRating} out of 5 stars: "${previewReview}"`,
+    "Before finalizing, check: no unsupported numbers, no invented facts, no duplicated name, no mechanical recap.",
     "Keep the reply natural and ready to send.",
   ].join("\n");
 }
@@ -545,27 +623,37 @@ function previewPrompt(context: BrandVoiceContext) {
 function reviewReplyPrompt(context: ReviewReplyContext) {
   const signOff = context.signOff?.trim() || "- The team";
   const rating = normalizeRating(context.rating);
-  const alwaysMention = context.alwaysMention?.filter(Boolean).join(", ") || "none";
-  const avoidPhrases = context.avoidPhrases?.filter(Boolean).join(", ") || "none";
+  const alwaysMention = quotedRuleList(context.alwaysMention);
+  const avoidPhrases = quotedRuleList(context.avoidPhrases);
   const nudge = context.nudge?.trim();
+  const greeting = replyGreeting(context.greeting, context.customerName);
+  const firstName = customerFirstName(context.customerName);
 
   return [
     "You are Reply Pilot. Generate one public merchant reply to a product review.",
     "Output the reply text only. No JSON, no Markdown, no label.",
+    "Write like a thoughtful human merchant, not a review analyst.",
     "Use the merchant voice and product context. Mention product details only when they help the reply feel specific and true.",
-    "Do not invent product materials, policies, shipping facts, guarantees, discounts, or private customer details.",
+    "Do not summarize the review point-by-point, mirror every clause, or sound like a template.",
+    "Mention at most two concrete review details, then respond to what matters.",
+    "Do not invent numbers, counts, percentages, statistics, product materials, policies, shipping facts, guarantees, discounts, people, timelines, or private customer details.",
+    "Do not add a number unless that exact number appears in the review, product context, rating, or a concrete Brand Voice rule.",
+    "Always Mention items are merchant rules/facts. Use them only if directly relevant, and do not turn vague notes into invented specifics.",
+    "If an Always Mention item is vague, test-like, or impossible to ground in the review, ignore it.",
+    "Avoid robotic analysis phrases like \"balanced review\", \"practical tradeoffs\", \"real park conditions\", \"it is helpful to hear\", or \"details like that matter\".",
     "Match the response to the star rating: 5 stars can be appreciative, 4 stars should acknowledge the minor gap, 3 stars should be balanced and practical, 1-2 stars should be apologetic and focused on next steps.",
+    "For mixed reviews, appreciate the positive detail, plainly acknowledge the concern, and avoid over-explaining or promising fixes you cannot guarantee.",
     `Style: ${personalityStyleInstruction(context.personalityStyle)}`,
     `Personality strength: ${personalityStrengthInstruction(context.personalityStrength)}`,
     `Length: ${replyLengthInstruction(context.replyLength).instruction}`,
     `The final line must be this exact sign-off: ${signOff}`,
-    `Always mention when relevant: ${alwaysMention}`,
+    `Always mention when relevant, without inventing supporting details: ${alwaysMention}`,
     `Never use these phrases or patterns: ${avoidPhrases}`,
     nudge ? `Requested adjustment: ${nudge}` : "Requested adjustment: none",
     "",
     `Personality: ${context.personality || "Warm, concise, and specific."}`,
-    `Greeting pattern: ${context.greeting || "Hi {name} -"}`,
-    `Customer name: ${context.customerName || "Customer"}`,
+    `Greeting to use if greeting the customer: ${greeting}`,
+    `Customer first name only: ${firstName}`,
     ...productContextLines({
       productTitle: context.productTitle,
       productType: context.productType,
@@ -573,7 +661,47 @@ function reviewReplyPrompt(context: ReviewReplyContext) {
     }),
     `Rating: ${rating} out of 5 stars`,
     `Review: "${context.reviewBody}"`,
+    "Before finalizing, check: no unsupported numbers, no invented facts, no duplicated name, no mechanical recap.",
     "Keep the reply ready to send.",
+  ].join("\n");
+}
+
+function reviewReplyRevisionPrompt(context: ReviewReplyRevisionContext) {
+  const signOff = context.signOff?.trim() || "- The team";
+  const rating = normalizeRating(context.rating);
+  const alwaysMention = quotedRuleList(context.alwaysMention);
+  const avoidPhrases = quotedRuleList(context.avoidPhrases);
+
+  return [
+    "You are Reply Pilot. Edit an existing public merchant reply to a product review.",
+    "Output the revised reply text only. No JSON, no Markdown, no label.",
+    "This is a revision task, not a fresh generation task.",
+    "Start from the current draft and make the smallest useful change that satisfies the merchant instruction.",
+    "Preserve facts, tone, customer context, product context, language, greeting, and sign-off unless the instruction explicitly asks to change them.",
+    "Do not add unsupported numbers, facts, policies, guarantees, people, timelines, materials, discounts, or private customer details.",
+    "Do not summarize the review again or restart the reply from scratch.",
+    "If the instruction asks for an unsafe or unsupported change, apply the closest safe wording while staying grounded in the review.",
+    `Merchant instruction, maximum 100 characters: ${context.instruction}`,
+    `Style: ${personalityStyleInstruction(context.personalityStyle)}`,
+    `Personality strength: ${personalityStrengthInstruction(context.personalityStrength)}`,
+    `Length preference: ${replyLengthInstruction(context.replyLength).instruction}`,
+    `The final line must be this exact sign-off: ${signOff}`,
+    `Always mention when relevant, without inventing supporting details: ${alwaysMention}`,
+    `Never use these phrases or patterns: ${avoidPhrases}`,
+    "",
+    `Personality: ${context.personality || "Warm, concise, and specific."}`,
+    ...productContextLines({
+      productTitle: context.productTitle,
+      productType: context.productType,
+      productTags: context.productTags,
+    }),
+    `Rating: ${rating} out of 5 stars`,
+    `Review: "${context.reviewBody}"`,
+    "",
+    "Current draft to revise:",
+    context.currentDraft,
+    "",
+    "Before finalizing, check: this is the edited current draft, not a new draft; no unsupported numbers; no invented facts; sign-off is exact.",
   ].join("\n");
 }
 
@@ -697,13 +825,6 @@ function isGeminiQuotaExhausted(status: number, body: unknown) {
   );
 }
 
-function extractAnthropicText(body: unknown) {
-  const content = readObject(body).content;
-  if (!Array.isArray(content)) return "";
-
-  return content.map((item) => readText(readObject(item).text)).filter(Boolean).join("\n");
-}
-
 async function callOpenAi(
   config: AiModelConfig,
   prompt: string,
@@ -711,6 +832,10 @@ async function callOpenAi(
 ): Promise<ProviderTextResult> {
   const apiKey = assertConfigured(config);
   const responseFormat = options.responseFormat ?? "json";
+  const text =
+    responseFormat === "json"
+      ? { format: { type: "json_object" } }
+      : { format: { type: "text" }, verbosity: options.textVerbosity ?? "medium" };
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -724,6 +849,8 @@ async function callOpenAi(
         (responseFormat === "json" ? "Return compact valid JSON only." : "Return plain text only."),
       input: prompt,
       max_output_tokens: options.maxTokens ?? defaultMaxTokens(responseFormat),
+      text,
+      ...(options.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
       store: false,
     }),
   });
@@ -859,46 +986,6 @@ async function callGemini(
   });
 }
 
-async function callAnthropic(
-  config: AiModelConfig,
-  prompt: string,
-  options: GenerateTextOptions = {},
-): Promise<ProviderTextResult> {
-  const apiKey = assertConfigured(config);
-  const responseFormat = options.responseFormat ?? "json";
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: config.model,
-      max_tokens: options.maxTokens ?? defaultMaxTokens(responseFormat),
-      system:
-        options.system ??
-        (responseFormat === "json" ? "Return compact valid JSON only." : "Return plain text only."),
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  const body = await readJsonResponse(response);
-
-  if (!response.ok) {
-    throw new AiProviderError(`Anthropic request failed with ${response.status}.`, {
-      status: response.status,
-      provider: config.provider,
-      model: config.model,
-      details: body,
-    });
-  }
-
-  return {
-    text: extractAnthropicText(body),
-    runtimeModel: runtimeModelFromConfig(config),
-  };
-}
-
 async function generateText(
   modelId: string | null | undefined,
   prompt: string,
@@ -908,9 +995,7 @@ async function generateText(
   const result =
     config.provider === "openai"
       ? await callOpenAi(config, prompt, options)
-      : config.provider === "google"
-        ? await callGemini(config, prompt, options)
-        : await callAnthropic(config, prompt, options);
+      : await callGemini(config, prompt, options);
   const text = result.text;
 
   if (!text) {
@@ -937,6 +1022,8 @@ export async function generateBrandVoicePersonalityText(input: {
       system:
         "Write a plain-text Personality field from evidence only. Never invent merchant identity or facts. Finish complete sentences.",
       temperature: 0.2,
+      textVerbosity: "medium",
+      reasoningEffort: "low",
     },
   );
   const personality = cleanPlainText(text);
@@ -963,8 +1050,11 @@ export async function generateLivePreview(input: {
   const { config, text, runtimeModel } = await generateText(input.modelId, previewPrompt(input.context), {
     responseFormat: "text",
     maxTokens: lengthConfig.maxTokens,
-    system: "Write one public product-review reply as plain text only. Respect the requested length and exact sign-off.",
-    temperature: 0.35,
+    system:
+      "Write one natural public product-review reply as plain text only. Sound human, do not invent facts or numbers, use the requested greeting and exact sign-off.",
+    temperature: 0.25,
+    textVerbosity: input.context.replyLength === "short" ? "low" : "medium",
+    reasoningEffort: "low",
   });
   const livePreview = ensureSignOff(cleanPlainText(text), input.context.signOff);
 
@@ -994,8 +1084,10 @@ export async function generateReviewReplyText(input: {
       responseFormat: "text",
       maxTokens: lengthConfig.maxTokens,
       system:
-        "Write one public product-review reply as plain text only. Use product context and rating. Respect the exact sign-off.",
-      temperature: 0.35,
+        "Write one natural public product-review reply as plain text only. Sound human, use product context and rating, never invent facts or numbers, and respect the exact sign-off.",
+      temperature: 0.25,
+      textVerbosity: input.context.replyLength === "short" ? "low" : "medium",
+      reasoningEffort: "low",
     },
   );
   const reply = ensureSignOff(cleanPlainText(text), input.context.signOff);
@@ -1014,16 +1106,36 @@ export async function generateReviewReplyText(input: {
   };
 }
 
-export async function testAiModel(modelId?: string | null) {
-  const { text, runtimeModel } = await generateText(
-    modelId,
-    'Return only JSON with this exact shape: {"ok":true,"message":"ready"}.',
+export async function generateReviewReplyRevisionText(input: {
+  modelId?: string | null;
+  context: ReviewReplyRevisionContext;
+}) {
+  const lengthConfig = replyLengthInstruction(input.context.replyLength);
+  const { config, text, runtimeModel } = await generateText(
+    input.modelId,
+    reviewReplyRevisionPrompt(input.context),
+    {
+      responseFormat: "text",
+      maxTokens: Math.max(lengthConfig.maxTokens, 1600),
+      system:
+        "Edit the provided product-review reply as plain text only. Keep the original draft as the base, follow the merchant instruction, and never invent facts or numbers.",
+      temperature: 0.2,
+      textVerbosity: input.context.replyLength === "short" ? "low" : "medium",
+      reasoningEffort: "low",
+    },
   );
-  const data = extractJsonObject(text);
+  const reply = ensureSignOff(cleanPlainText(text), input.context.signOff);
+
+  if (!reply) {
+    throw new AiProviderError(`${config.name} did not return a revised review reply.`, {
+      provider: config.provider,
+      model: config.model,
+      details: { rawText: text.slice(0, 2000) },
+    });
+  }
 
   return {
-    ok: data.ok === true,
-    message: readText(data.message) || "ready",
+    reply,
     model: runtimeModel,
   };
 }

@@ -1,36 +1,49 @@
 /* eslint-disable react/prop-types */
-import {useEffect, useRef, useState} from 'react';
-import {useFetcher} from 'react-router';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useFetcher, useLoaderData} from 'react-router';
+import {SaveBar, useAppBridge} from '@shopify/app-bridge-react';
 import {
   Badge,
-  Banner,
   BlockStack,
   Box,
   Button,
   Card,
   Checkbox,
-  Icon,
-  InlineGrid,
   InlineStack,
+  RangeSlider,
   Select,
   Text,
-  TextField,
 } from '@shopify/polaris';
-import {
-  AlertTriangleIcon,
-  CheckCircleIcon,
-  ConnectIcon,
-  HideIcon,
-  RefreshIcon,
-  ViewIcon,
-} from '@shopify/polaris-icons';
 
-const settingsNav = ['Connections', 'Auto-reply rules', 'Notifications', 'Data & privacy', 'Plan & billing'];
+const settingsNav = [
+  {id: 'general', label: 'General'},
+  {id: 'queue', label: 'Queue behavior'},
+  {id: 'privacy', label: 'Data & privacy'},
+];
 
-const confidenceOptions = [
-  {label: '85% and above', value: '85'},
-  {label: '90% and above', value: '90'},
-  {label: '95% and above', value: '95'},
+const defaultSettings = {
+  highConfidenceThreshold: 85,
+  humanReviewThreshold: 75,
+  routeSensitiveReviews: true,
+  routeLowStarReviews: true,
+  sendReplyEmail: false,
+  defaultQueueRange: '7-days',
+  defaultQueueSort: 'newest',
+  showSkippedByDefault: false,
+  showSentByDefault: false,
+  dataRetention: '12-months',
+  timezone: 'America/Argentina/Cordoba',
+};
+
+const queueRangeOptions = [
+  {label: 'Last 7 days', value: '7-days'},
+  {label: 'Last 30 days', value: '30-days'},
+  {label: 'All time', value: 'all'},
+];
+
+const queueSortOptions = [
+  {label: 'Newest first', value: 'newest'},
+  {label: 'Oldest first', value: 'oldest'},
 ];
 
 const retentionOptions = [
@@ -39,27 +52,26 @@ const retentionOptions = [
   {label: 'Forever', value: 'forever'},
 ];
 
-const timezoneOptions = [
-  {label: '(GMT-03:00) Buenos Aires', value: 'america-argentina-cordoba'},
-  {label: '(GMT-05:00) Eastern Time', value: 'eastern'},
-  {label: '(GMT+00:00) UTC', value: 'utc'},
-];
+function buildSettings(settings) {
+  return {
+    ...defaultSettings,
+    ...(settings ?? {}),
+  };
+}
 
-function SettingsSwitch({checked, label, onChange}) {
-  return (
-    <Checkbox label={label} labelHidden checked={checked} onChange={onChange} />
-  );
+function settingsSignature(settings) {
+  return JSON.stringify(buildSettings(settings));
 }
 
 function FieldRow({label, description, children}) {
   return (
     <div className="rp-field-row">
-      <InlineStack align="space-between" blockAlign="center" gap="400" wrap={false}>
+      <InlineStack align="space-between" blockAlign="center" gap="400">
         <BlockStack gap="050">
           <Text as="p" variant="bodyMd" fontWeight="semibold">{label}</Text>
           {description ? <Text as="p" variant="bodyMd" tone="subdued">{description}</Text> : null}
         </BlockStack>
-        <Box>{children}</Box>
+        <Box minWidth="220px">{children}</Box>
       </InlineStack>
     </div>
   );
@@ -82,125 +94,127 @@ function SectionCard({title, description, children, action}) {
   );
 }
 
-function JudgeMeIntegrationPanel() {
-  const fetcher = useFetcher();
-  const [showForm, setShowForm] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [showToken, setShowToken] = useState(false);
-  const [apiToken, setApiToken] = useState('');
-  const [resultVisible, setResultVisible] = useState(false);
-  const wasSubmitting = useRef(false);
-
-  const isSubmitting = fetcher.state === 'submitting';
-
-  useEffect(() => {
-    if (fetcher.state === 'submitting') wasSubmitting.current = true;
-    if (wasSubmitting.current && fetcher.state === 'idle' && fetcher.data !== undefined) {
-      wasSubmitting.current = false;
-      setResultVisible(true);
-      if (fetcher.data?.success) setShowForm(false);
-    }
-  }, [fetcher.state, fetcher.data]);
-
-  const result = resultVisible ? fetcher.data : undefined;
-
-  if (showForm) {
-    return (
-      <SectionCard
-        title="Judge.me connection"
-        description="Verify a Judge.me API token before importing reviews."
-      >
-        <fetcher.Form method="post">
-          <input type="hidden" name="intent" value="verify-judgeme" />
-          <Box padding="400">
-            <BlockStack gap="400">
-              <TextField
-                label="API token"
-                helpText="Find it in Judge.me under Settings > General."
-                type={showToken ? 'text' : 'password'}
-                name="apiToken"
-                value={apiToken}
-                onChange={setApiToken}
-                autoComplete="off"
-                placeholder="jm_live_..."
-                connectedRight={
-                  <Button
-                    icon={showToken ? HideIcon : ViewIcon}
-                    accessibilityLabel={showToken ? 'Hide token' : 'Show token'}
-                    onClick={() => setShowToken((value) => !value)}
-                  />
-                }
-              />
-              {result && !result.success ? <Banner tone="critical">{result.error}</Banner> : null}
-              {result?.success ? <Banner tone="success">Connection verified successfully.</Banner> : null}
-              <InlineStack align="end" gap="200">
-                <Button disabled={isSubmitting} onClick={() => setShowForm(false)}>Cancel</Button>
-                <Button variant="primary" submit loading={isSubmitting} disabled={isSubmitting}>
-                  Verify & save
-                </Button>
-              </InlineStack>
-            </BlockStack>
-          </Box>
-        </fetcher.Form>
-      </SectionCard>
-    );
-  }
-
+function ThresholdSlider({label, description, value, min, max, suffix, onChange}) {
   return (
-    <SectionCard
-      title="Judge.me connection"
-      description="Judge.me is the first supported source. Other integrations are queued by vote."
-      action={<Button icon={ConnectIcon} onClick={() => setShowForm(true)}>Connect</Button>}
+    <FieldRow
+      label={label}
+      description={description}
     >
-      <FieldRow label="Status" description="No production source is connected yet.">
-        <Badge tone="attention">Not connected</Badge>
-      </FieldRow>
-      <FieldRow label="Store" description="Connect your Shopify store review source.">
-        <Text as="span" variant="bodyMd" tone="subdued">Waiting for token</Text>
-      </FieldRow>
-      <FieldRow label="API key" description="Stored encrypted after verification.">
-        <InlineStack gap="200" blockAlign="center">
-          <Text as="span" variant="bodyMd" tone="subdued">
-            {showApiKey ? 'jm_live_82b7e3d1f9046c5a' : '••••••••••••••••••••••••'}
-          </Text>
-          <Button
-            icon={showApiKey ? HideIcon : ViewIcon}
-            variant="plain"
-            accessibilityLabel={showApiKey ? 'Hide API key' : 'Show API key'}
-            onClick={() => setShowApiKey((value) => !value)}
-          />
+      <BlockStack gap="150">
+        <InlineStack align="space-between" blockAlign="center">
+          <Badge tone="info">{value}{suffix}</Badge>
         </InlineStack>
-      </FieldRow>
-    </SectionCard>
+        <RangeSlider
+          label={label}
+          labelHidden
+          min={min}
+          max={max}
+          step={1}
+          value={value}
+          onChange={onChange}
+        />
+      </BlockStack>
+    </FieldRow>
   );
 }
 
 export default function SettingsPage() {
-  const [activeSection, setActiveSection] = useState(settingsNav[0]);
-  const [values, setValues] = useState({
-    autoApprove: false,
-    humanLowConfidence: true,
-    notifyCritical: true,
-    notifyDailyDigest: true,
-    confidenceThreshold: '90',
-    retention: '12-months',
-    timezone: 'america-argentina-cordoba',
-  });
+  const shopify = useAppBridge();
+  const loaderData = useLoaderData();
+  const saveFetcher = useFetcher();
+  const cleanupFetcher = useFetcher();
+  const lastToastKey = useRef('');
+  const [activeSection, setActiveSection] = useState(settingsNav[0].id);
+  const [savedSettings, setSavedSettings] = useState(() => buildSettings(loaderData.settings));
+  const [settings, setSettings] = useState(savedSettings);
+  const [localToast, setLocalToast] = useState(null);
+
+  const isDirty = useMemo(
+    () => settingsSignature(settings) !== settingsSignature(savedSettings),
+    [settings, savedSettings],
+  );
+
+  const showToast = useCallback((data) => {
+    if (!data?.message) return;
+    const key = `${data.intent || 'settings'}:${data.ok ? 'ok' : 'error'}:${data.message}`;
+    if (lastToastKey.current === key) return;
+    lastToastKey.current = key;
+
+    try {
+      shopify.toast.show(data.message, {
+        duration: data.ok ? 4000 : 8000,
+        isError: data.ok === false,
+      });
+    } catch {
+      setLocalToast({message: data.message, isError: data.ok === false});
+      window.setTimeout(() => setLocalToast(null), data.ok ? 4000 : 8000);
+    }
+  }, [shopify]);
+
+  useEffect(() => {
+    showToast(saveFetcher.data);
+    if (saveFetcher.data?.ok && saveFetcher.data.settings) {
+      const nextSettings = buildSettings(saveFetcher.data.settings);
+      setSettings(nextSettings);
+      setSavedSettings(nextSettings);
+    }
+  }, [saveFetcher.data, showToast]);
+
+  useEffect(() => {
+    showToast(cleanupFetcher.data);
+    if (cleanupFetcher.data?.settings) {
+      const nextSettings = buildSettings(cleanupFetcher.data.settings);
+      setSettings(nextSettings);
+      setSavedSettings(nextSettings);
+    }
+  }, [cleanupFetcher.data, showToast]);
 
   function set(key, value) {
-    setValues((current) => ({...current, [key]: value}));
+    setSettings((current) => ({...current, [key]: value}));
+  }
+
+  function handleSave() {
+    const formData = new FormData();
+    formData.set('intent', 'save-settings');
+    Object.entries(settings).forEach(([key, value]) => {
+      formData.set(key, String(value));
+    });
+    saveFetcher.submit(formData, {method: 'post'});
+  }
+
+  function handleDiscard() {
+    setSettings(savedSettings);
+  }
+
+  function handleCleanup() {
+    const formData = new FormData();
+    formData.set('intent', 'cleanup-retention');
+    cleanupFetcher.submit(formData, {method: 'post'});
   }
 
   return (
     <BlockStack gap="400">
+      <SaveBar open={isDirty}>
+        <button variant="primary" disabled={saveFetcher.state !== 'idle'} onClick={handleSave}>Save</button>
+        <button onClick={handleDiscard}>Discard</button>
+      </SaveBar>
+
+      {localToast ? (
+        <div className={`rp-local-toast ${localToast.isError ? 'is-error' : ''}`} role="status">
+          {localToast.message}
+        </div>
+      ) : null}
+
       <InlineStack align="space-between" blockAlign="center" gap="300">
         <BlockStack gap="100">
           <Text as="h1" variant="heading2xl">Settings</Text>
           <Text as="p" variant="bodyLg" tone="subdued">
-            Configure sources, approval behavior, notifications, and account controls.
+            Configure queue defaults, review routing, sending behavior, and data handling.
           </Text>
         </BlockStack>
-        <Button icon={RefreshIcon}>Sync settings</Button>
+        <Badge tone={isDirty ? 'attention' : 'success'}>
+          {isDirty ? 'Unsaved changes' : 'Saved'}
+        </Badge>
       </InlineStack>
 
       <div className="rp-settings-layout">
@@ -209,121 +223,133 @@ export default function SettingsPage() {
             <Text as="p" variant="bodySm" tone="subdued" fontWeight="semibold">SETTINGS</Text>
             {settingsNav.map((item) => (
               <button
-                key={item}
+                key={item.id}
                 type="button"
-                className={`rp-settings-nav-item ${activeSection === item ? 'is-active' : ''}`}
-                onClick={() => setActiveSection(item)}
+                className={`rp-settings-nav-item ${activeSection === item.id ? 'is-active' : ''}`}
+                onClick={() => setActiveSection(item.id)}
               >
-                {item}
+                {item.label}
               </button>
             ))}
           </BlockStack>
         </aside>
 
         <BlockStack gap="400">
-          {activeSection === 'Connections' ? (
-            <>
-              <JudgeMeIntegrationPanel />
-              <InlineGrid columns={{xs: 1, md: 2}} gap="400">
-                <Card>
-                  <BlockStack gap="300">
-                    <InlineStack gap="200" blockAlign="center">
-                      <Icon source={CheckCircleIcon} tone="success" />
-                      <Text as="h2" variant="headingLg">Source permissions</Text>
-                    </InlineStack>
-                    <Text as="p" variant="bodyMd" tone="subdued">
-                      Reply Pilot needs read access to import reviews and write access only when a merchant approves a reply.
-                    </Text>
-                    <InlineStack gap="200">
-                      <Badge>Read reviews</Badge>
-                      <Badge>Write approved replies</Badge>
-                    </InlineStack>
-                  </BlockStack>
-                </Card>
-
-                <Card>
-                  <BlockStack gap="300">
-                    <InlineStack gap="200" blockAlign="center">
-                      <Icon source={AlertTriangleIcon} tone="critical" />
-                      <Text as="h2" variant="headingLg">Disconnect</Text>
-                    </InlineStack>
-                    <Text as="p" variant="bodyMd" tone="subdued">
-                      Disconnecting stops imports and disables sending until a source is connected again.
-                    </Text>
-                    <Button tone="critical">Disconnect integration</Button>
-                  </BlockStack>
-                </Card>
-              </InlineGrid>
-            </>
-          ) : null}
-
-          {activeSection === 'Auto-reply rules' ? (
+          {activeSection === 'general' ? (
             <SectionCard
-              title="Auto-reply rules"
-              description="Keep approval human-led by default, with explicit thresholds for future automation."
+              title="General"
+              description="Set the defaults the Inbox uses when merchants open the queue."
             >
-              <FieldRow label="Auto-approve high-confidence replies" description="Send automatically only when confidence clears the selected threshold.">
-                <SettingsSwitch label="Auto-approve high-confidence replies" checked={values.autoApprove} onChange={(value) => set('autoApprove', value)} />
+              <FieldRow label="Default queue range" description="Initial Inbox date filter. Merchants can still change it in Queue.">
+                <Select
+                  label="Default queue range"
+                  labelHidden
+                  options={queueRangeOptions}
+                  value={settings.defaultQueueRange}
+                  onChange={(value) => set('defaultQueueRange', value)}
+                />
               </FieldRow>
-              <FieldRow label="High-confidence threshold" description="Drafts below this value stay in the manual approval queue.">
-                <Box minWidth="180px">
-                  <Select label="High-confidence threshold" labelHidden options={confidenceOptions} value={values.confidenceThreshold} onChange={(value) => set('confidenceThreshold', value)} />
-                </Box>
+              <FieldRow label="Default queue sort" description="Initial row order for reviews in Queue.">
+                <Select
+                  label="Default queue sort"
+                  labelHidden
+                  options={queueSortOptions}
+                  value={settings.defaultQueueSort}
+                  onChange={(value) => set('defaultQueueSort', value)}
+                />
               </FieldRow>
-              <FieldRow label="Route low-confidence reviews to human" description="Flag angry, refund, delivery, and low-confidence reviews before sending.">
-                <SettingsSwitch label="Route low-confidence reviews to human" checked={values.humanLowConfidence} onChange={(value) => set('humanLowConfidence', value)} />
+              <FieldRow label="Show skipped by default" description="Includes skipped reviews when Queue first loads.">
+                <Checkbox
+                  label="Show skipped by default"
+                  checked={settings.showSkippedByDefault}
+                  onChange={(value) => set('showSkippedByDefault', value)}
+                />
+              </FieldRow>
+              <FieldRow label="Show sent by default" description="Includes already-sent reviews when Queue first loads.">
+                <Checkbox
+                  label="Show sent by default"
+                  checked={settings.showSentByDefault}
+                  onChange={(value) => set('showSentByDefault', value)}
+                />
               </FieldRow>
             </SectionCard>
           ) : null}
 
-          {activeSection === 'Notifications' ? (
+          {activeSection === 'queue' ? (
             <SectionCard
-              title="Notifications"
-              description="Control when the merchant gets pulled back into the queue."
+              title="Queue behavior"
+              description="Control how Reply Pilot marks drafts for review and how Judge.me sends approved replies."
+              action={<Badge tone="info">Applies on next generation/send</Badge>}
             >
-              <FieldRow label="Critical review alerts" description="Notify when a review needs human handling.">
-                <SettingsSwitch label="Critical review alerts" checked={values.notifyCritical} onChange={(value) => set('notifyCritical', value)} />
+              <ThresholdSlider
+                label="High-confidence threshold"
+                description="Controls the Queue high-confidence filter and select-all shortcut."
+                min={70}
+                max={98}
+                suffix="%"
+                value={settings.highConfidenceThreshold}
+                onChange={(value) => set('highConfidenceThreshold', Number(value))}
+              />
+              <ThresholdSlider
+                label="Human review threshold"
+                description="Generated drafts below this confidence are marked Human."
+                min={40}
+                max={95}
+                suffix="%"
+                value={settings.humanReviewThreshold}
+                onChange={(value) => set('humanReviewThreshold', Number(value))}
+              />
+              <FieldRow label="Route sensitive reviews to human" description="Flags refund, damaged, urgent, broken, and similar reviews before sending.">
+                <Checkbox
+                  label="Route sensitive reviews to human"
+                  checked={settings.routeSensitiveReviews}
+                  onChange={(value) => set('routeSensitiveReviews', value)}
+                />
               </FieldRow>
-              <FieldRow label="Daily digest" description="Send a summary of pending, sent, and edited replies.">
-                <SettingsSwitch label="Daily digest" checked={values.notifyDailyDigest} onChange={(value) => set('notifyDailyDigest', value)} />
+              <FieldRow label="Extra caution on 1-2 star reviews" description="Marks low-star drafts Human when confidence is not clearly high or the review has sensitive content.">
+                <Checkbox
+                  label="Extra caution on 1-2 star reviews"
+                  checked={settings.routeLowStarReviews}
+                  onChange={(value) => set('routeLowStarReviews', value)}
+                />
+              </FieldRow>
+              <FieldRow label="Send Judge.me reply email" description="When enabled, Judge.me also emails the customer after an approved reply is sent.">
+                <Checkbox
+                  label="Send Judge.me reply email"
+                  checked={settings.sendReplyEmail}
+                  onChange={(value) => set('sendReplyEmail', value)}
+                />
               </FieldRow>
             </SectionCard>
           ) : null}
 
-          {activeSection === 'Data & privacy' ? (
+          {activeSection === 'privacy' ? (
             <SectionCard
               title="Data & privacy"
-              description="Set retention and timezone for review activity and audit logs."
+              description="Control how long sent and skipped review history remains available in Reply Pilot."
+              action={(
+                <Button
+                  loading={cleanupFetcher.state !== 'idle'}
+                  disabled={isDirty || settings.dataRetention === 'forever'}
+                  onClick={handleCleanup}
+                >
+                  Delete expired history now
+                </Button>
+              )}
             >
-              <FieldRow label="Data retention" description="Choose how long Reply Pilot keeps generated reply history.">
-                <Box minWidth="180px">
-                  <Select label="Data retention" labelHidden options={retentionOptions} value={values.retention} onChange={(value) => set('retention', value)} />
-                </Box>
+              <FieldRow label="Review history retention" description="Only sent and skipped history is deleted. Pending reviews stay in Queue.">
+                <Select
+                  label="Review history retention"
+                  labelHidden
+                  options={retentionOptions}
+                  value={settings.dataRetention}
+                  onChange={(value) => set('dataRetention', value)}
+                />
               </FieldRow>
-              <FieldRow label="Timezone" description="Used for sync times, sent states, and logs.">
-                <Box minWidth="260px">
-                  <Select label="Timezone" labelHidden options={timezoneOptions} value={values.timezone} onChange={(value) => set('timezone', value)} />
-                </Box>
-              </FieldRow>
-              <FieldRow label="Delete generated replies" description="Permanently delete generated replies and audit history.">
-                <Button tone="critical">Delete data</Button>
-              </FieldRow>
-            </SectionCard>
-          ) : null}
-
-          {activeSection === 'Plan & billing' ? (
-            <SectionCard
-              title="Plan & billing"
-              description="Usage is based on generated drafts and approved sends."
-            >
-              <FieldRow label="Current plan" description="Production mode, human approval required.">
-                <Badge tone="info">Pilot</Badge>
-              </FieldRow>
-              <FieldRow label="Quota" description="Reply Pilot quota is used unless a custom model key is configured.">
-                <Text as="span" variant="bodyMd">0 / 1,000 drafts</Text>
-              </FieldRow>
-              <FieldRow label="Billing">
-                <Button>Manage plan</Button>
+              <FieldRow label="Retention status" description="Expired sent/skipped items are cleaned when Queue or Sent loads, and when you run cleanup manually.">
+                <Badge tone={settings.dataRetention === 'forever' ? 'attention' : 'success'}>
+                  {settings.dataRetention === 'forever' ? 'Keeping history forever' : `Keeping ${settings.dataRetention}`}
+                </Badge>
               </FieldRow>
             </SectionCard>
           ) : null}

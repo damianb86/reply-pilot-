@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useLocation, useNavigation, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
@@ -7,17 +7,72 @@ import enTranslations from "@shopify/polaris/locales/en.json";
 
 import { authenticate } from "../shopify.server";
 import IguShell from "../components/IguShell";
+import PageLoadingState from "../../src/PageLoadingState";
+import { getCreditOverview } from "../credits.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
 
   // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  return {
+    apiKey: process.env.SHOPIFY_API_KEY || "",
+    credits: await getCreditOverview(session.shop),
+  };
 };
 
+function loadingCopyForPath(pathname: string) {
+  if (pathname.endsWith("/reviews")) {
+    return {
+      title: "Loading Queue",
+      description: "Preparing reviews, filters, AI state, and connection status...",
+    };
+  }
+
+  if (pathname.endsWith("/logs")) {
+    return {
+      title: "Loading Sent",
+      description: "Preparing sent replies, filters, metrics, and audit details...",
+    };
+  }
+
+  if (pathname.endsWith("/brand-voice")) {
+    return {
+      title: "Loading Brand Voice",
+      description: "Preparing voice settings, model choices, and live preview...",
+    };
+  }
+
+  if (pathname.endsWith("/settings")) {
+    return {
+      title: "Loading Settings",
+      description: "Preparing saved preferences and queue behavior...",
+    };
+  }
+
+  if (pathname.endsWith("/credits")) {
+    return {
+      title: "Loading Credits",
+      description: "Preparing balance, purchase packages, and recent credit activity...",
+    };
+  }
+
+  if (pathname.endsWith("/help")) {
+    return {
+      title: "Loading Help",
+      description: "Preparing guides, resources, and support options...",
+    };
+  }
+
+  return {
+    title: "Loading Connect",
+    description: "Preparing connection status and integration details...",
+  };
+}
+
 export default function App() {
-  const { apiKey } = useLoaderData<typeof loader>();
+  const { apiKey, credits } = useLoaderData<typeof loader>();
   const location = useLocation();
+  const navigation = useNavigation();
   const params = new URLSearchParams(location.search);
   const embeddedParams = new URLSearchParams();
 
@@ -31,6 +86,12 @@ export default function App() {
   const embeddedSearch = embeddedParams.toString();
   const withEmbeddedSearch = (path: string) =>
     embeddedSearch ? `${path}?${embeddedSearch}` : path;
+  const targetPath = navigation.location?.pathname ?? "";
+  const isRouteLoading =
+    navigation.state === "loading" &&
+    Boolean(targetPath) &&
+    targetPath !== location.pathname;
+  const loadingCopy = loadingCopyForPath(targetPath);
 
   return (
     <ShopifyAppProvider embedded apiKey={apiKey}>
@@ -43,8 +104,12 @@ export default function App() {
           <s-link href={withEmbeddedSearch("/app/settings")}>Settings</s-link>
           <s-link href={withEmbeddedSearch("/app/help")}>Help</s-link>
         </s-app-nav>
-        <IguShell>
-          <Outlet />
+        <IguShell credits={credits}>
+          {isRouteLoading ? (
+            <PageLoadingState title={loadingCopy.title} description={loadingCopy.description} />
+          ) : (
+            <Outlet />
+          )}
         </IguShell>
       </PolarisAppProvider>
     </ShopifyAppProvider>

@@ -5,11 +5,13 @@ import {
   generateDrafts,
   loadReviewsPageData,
   regenerateDrafts,
+  reviseDraft,
   restoreDrafts,
   skipDrafts,
   updateDraft,
 } from "../reviews.server";
 import { serializeAiError } from "../ai.server";
+import { CreditError, serializeCreditError } from "../credits.server";
 import { serializeJudgeMeError } from "../judgeme.server";
 import { authenticate } from "../shopify.server";
 
@@ -31,9 +33,12 @@ function generationMessage(
   verb: "generated" | "regenerated" = "generated",
 ) {
   const infinitive = verb === "generated" ? "generate" : "regenerate";
+  const creditText = result.credits.spent
+    ? ` ${result.credits.spent} credits spent.`
+    : "";
 
   if (result.generated && result.failed) {
-    return `${result.generated} draft${result.generated === 1 ? "" : "s"} ${verb}, ${result.failed} failed.`;
+    return `${result.generated} draft${result.generated === 1 ? "" : "s"} ${verb}, ${result.failed} failed.${creditText}`;
   }
 
   if (result.failed) {
@@ -44,7 +49,7 @@ function generationMessage(
     return `No drafts needed ${infinitive}.`;
   }
 
-  return `${result.generated} draft${result.generated === 1 ? "" : "s"} ${verb}.`;
+  return `${result.generated} draft${result.generated === 1 ? "" : "s"} ${verb}.${creditText}`;
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -113,6 +118,36 @@ export async function action({ request }: ActionFunctionArgs) {
       };
     }
 
+    if (intent === "revise-draft") {
+      const id = String(formData.get("id") ?? "");
+      const instruction = String(formData.get("instruction") ?? "").trim();
+      if (!id || !instruction) {
+        return {
+          ok: false,
+          intent,
+          message: "Describe the draft change first.",
+          ...(await loadReviewsPageData(session.shop)),
+        };
+      }
+
+      if (instruction.length > 100) {
+        return {
+          ok: false,
+          intent,
+          message: "Draft change instructions must be 100 characters or less.",
+          ...(await loadReviewsPageData(session.shop)),
+        };
+      }
+
+      const result = await reviseDraft(session.shop, id, instruction, admin);
+      return {
+        ok: Boolean(result),
+        intent,
+        message: result ? "Draft adjusted." : "Select a pending generated draft first.",
+        ...(await loadReviewsPageData(session.shop)),
+      };
+    }
+
     if (intent === "skip") {
       const ids = parseIds(formData);
       const count = await skipDrafts(session.shop, ids);
@@ -154,6 +189,8 @@ export async function action({ request }: ActionFunctionArgs) {
     const serialized =
       error instanceof Error && error.name === "AiProviderError"
         ? serializeAiError(error)
+        : error instanceof CreditError
+          ? serializeCreditError(error)
         : serializeJudgeMeError(error);
     return {
       ok: false,

@@ -11,12 +11,15 @@ import { authenticate } from "../shopify.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
+  const appEnv = process.env.APP_ENV || process.env.NODE_ENV || "development";
 
   return {
     shop: session.shop,
     connection: await getJudgeMeConnectionView(session.shop),
     judgeMeApiSettingsUrl: "https://judge.me/settings?jump_to=judge.me+api",
     judgeMeApiDocsUrl: "https://judge.me/help/en/articles/8409180-judge-me-api",
+    isDevelopment: appEnv !== "production",
+    appEnv,
   };
 }
 

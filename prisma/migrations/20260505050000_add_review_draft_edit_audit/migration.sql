@@ -1,0 +1,2 @@
+ALTER TABLE "ReviewDraft" ADD COLUMN "draftEditedAt" TIMESTAMP(3);
+ALTER TABLE "ReviewDraft" ADD COLUMN "draftRevisionCount" INTEGER NOT NULL DEFAULT 0;

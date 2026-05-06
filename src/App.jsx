@@ -132,8 +132,8 @@ export default function App() {
                     <Icon source={CheckCircleIcon} tone="success" />
                     <Text as="p" variant="bodyMd" fontWeight="semibold">Production mode</Text>
                   </InlineStack>
-                  <Text as="p" variant="bodySm" tone="subdued">38 sent today in the wireframe state.</Text>
-                  <Button icon={SendIcon} fullWidth>View sent replies</Button>
+                  <Text as="p" variant="bodySm" tone="subdued">Audit approved replies after they are sent.</Text>
+                  <Button icon={SendIcon} fullWidth onClick={() => navigateTo('/logs')}>View sent replies</Button>
                 </BlockStack>
               </SidebarCard>
             </div>

@@ -1,49 +1,55 @@
-import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import SettingsPage from "../../src/pages/SettingsPage";
+import {
+  cleanupExpiredReviewHistory,
+  loadAppSettings,
+  saveAppSettings,
+  settingsFromFormData,
+} from "../settings.server";
+import { authenticate } from "../shopify.server";
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const { session } = await authenticate.admin(request);
+  return {
+    settings: await loadAppSettings(session.shop),
+  };
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
-  const intent = formData.get("intent") as string;
+  const intent = String(formData.get("intent") ?? "");
 
-  if (intent === "verify-judgeme") {
-    const apiToken = ((formData.get("apiToken") as string) ?? "").trim();
-
-    if (!apiToken) {
-      return { success: false, error: "API token is required." };
-    }
-
-    try {
-      const url = new URL("https://judge.me/api/v1/reviews");
-      url.searchParams.set("api_token", apiToken);
-      url.searchParams.set("shop_domain", session.shop);
-      url.searchParams.set("per_page", "1");
-
-      const response = await fetch(url.toString());
-
-      if (response.ok) {
-        return { success: true, shop: session.shop };
-      } else if (response.status === 401 || response.status === 403) {
-        return {
-          success: false,
-          error: "Invalid API token. Please check your Judge.me credentials.",
-        };
-      } else {
-        return {
-          success: false,
-          error: `Connection check failed (${response.status}). Please try again.`,
-        };
-      }
-    } catch {
-      return {
-        success: false,
-        error: "Could not reach Judge.me. Check your internet connection.",
-      };
-    }
+  if (intent === "save-settings") {
+    const settings = await saveAppSettings(session.shop, settingsFromFormData(formData));
+    return {
+      ok: true,
+      intent,
+      message: "Settings saved.",
+      settings,
+    };
   }
 
-  return { success: false, error: "Unknown action." };
+  if (intent === "cleanup-retention") {
+    const settings = await loadAppSettings(session.shop);
+    const result = await cleanupExpiredReviewHistory(session.shop, settings);
+    return {
+      ok: true,
+      intent,
+      message: result.deleted
+        ? `${result.deleted} expired history item${result.deleted === 1 ? "" : "s"} deleted.`
+        : "No expired review history to delete.",
+      settings,
+      cleanup: result,
+    };
+  }
+
+  return {
+    ok: false,
+    intent,
+    message: "Unknown settings action.",
+    settings: await loadAppSettings(session.shop),
+  };
 }
 
 export default function SettingsRoute() {

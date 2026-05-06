@@ -6,9 +6,16 @@ import {
   importReplyExamplesForBrandVoice,
   loadBrandVoicePageData,
   saveBrandVoiceSettings,
-  testBrandVoiceAiModel,
 } from "../brand-voice.server";
 import { getAiModelOptions, serializeAiError } from "../ai.server";
+import {
+  CreditError,
+  creditCostForOperation,
+  getCreditOverview,
+  refundCredits,
+  serializeCreditError,
+  spendCredits,
+} from "../credits.server";
 import { serializeJudgeMeError } from "../judgeme.server";
 import { authenticate } from "../shopify.server";
 import { loadShopifyProductById } from "../shopify-products.server";
@@ -93,6 +100,35 @@ function parseStringList(value: FormDataEntryValue | null) {
   }
 }
 
+async function withCreditCharge<T>(
+  shop: string,
+  modelId: string,
+  operation: "preview" | "personality",
+  description: string,
+  callback: () => Promise<T>,
+) {
+  const amount = creditCostForOperation(modelId, operation);
+  const charge = await spendCredits(shop, amount, {
+    description,
+    referenceType: `brand_voice_${operation}`,
+    referenceId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    metadata: { modelId, operation },
+  });
+
+  try {
+    const result = await callback();
+    return { result, creditCharge: charge };
+  } catch (error) {
+    await refundCredits(shop, amount, {
+      description: `Refund for failed ${description.toLowerCase()}`,
+      referenceType: `brand_voice_${operation}_refund`,
+      referenceId: charge.id ?? undefined,
+      metadata: { modelId, operation },
+    });
+    throw error;
+  }
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
@@ -163,6 +199,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (intent === "generate-personality") {
       const replies = parseImportedReplies(formData.get("replies"));
+      const modelId = String(formData.get("modelId") ?? "");
 
       if (!replies.length) {
         return {
@@ -172,81 +209,85 @@ export async function action({ request }: ActionFunctionArgs) {
         };
       }
 
-      const result = await generateBrandVoicePersonality({
-        modelId: String(formData.get("modelId") ?? ""),
-        replies,
-        personality: String(formData.get("personality") ?? ""),
-        greeting: String(formData.get("greeting") ?? ""),
-        signOff: String(formData.get("signOff") ?? ""),
-        alwaysMention: parseStringList(formData.get("alwaysMention")),
-        avoidPhrases: parseStringList(formData.get("avoidPhrases")),
-        previewReview: String(formData.get("previewReview") ?? ""),
-        previewRating: Number(formData.get("previewRating") ?? 5),
-        previewProductTitle: String(formData.get("previewProductTitle") ?? ""),
-        previewProductType: String(formData.get("previewProductType") ?? ""),
-        previewProductTags: parseStringList(formData.get("previewProductTags")),
-        personalityStyle: String(formData.get("personalityStyle") ?? ""),
-        personalityStrength: String(formData.get("personalityStrength") ?? ""),
-        replyLength: String(formData.get("replyLength") ?? ""),
-      });
+      const { result, creditCharge } = await withCreditCharge(
+        session.shop,
+        modelId,
+        "personality",
+        "Generate Brand Voice personality",
+        () => generateBrandVoicePersonality({
+          modelId,
+          replies,
+          personality: String(formData.get("personality") ?? ""),
+          greeting: String(formData.get("greeting") ?? ""),
+          signOff: String(formData.get("signOff") ?? ""),
+          alwaysMention: parseStringList(formData.get("alwaysMention")),
+          avoidPhrases: parseStringList(formData.get("avoidPhrases")),
+          previewReview: String(formData.get("previewReview") ?? ""),
+          previewRating: Number(formData.get("previewRating") ?? 5),
+          previewProductTitle: String(formData.get("previewProductTitle") ?? ""),
+          previewProductType: String(formData.get("previewProductType") ?? ""),
+          previewProductTags: parseStringList(formData.get("previewProductTags")),
+          personalityStyle: String(formData.get("personalityStyle") ?? ""),
+          personalityStrength: String(formData.get("personalityStrength") ?? ""),
+          replyLength: String(formData.get("replyLength") ?? ""),
+        }),
+      );
 
       return {
         ok: true,
         intent,
-        message: `Personality generated with ${result.model.name}. Review it, then use Shopify Save to keep it.`,
+        message: `Personality generated with ${result.model.name}. ${creditCharge.amount} credits spent.`,
         personality: result.personality,
         livePreview: result.livePreview,
         aiModel: result.model,
         aiModels: await getAiModelOptions(),
+        credits: await getCreditOverview(session.shop),
+        creditCharge,
       };
     }
 
     if (intent === "generate-preview") {
-      const result = await generateBrandVoicePreview({
-        modelId: String(formData.get("modelId") ?? ""),
-        personality: String(formData.get("personality") ?? ""),
-        greeting: String(formData.get("greeting") ?? ""),
-        signOff: String(formData.get("signOff") ?? ""),
-        alwaysMention: parseStringList(formData.get("alwaysMention")),
-        avoidPhrases: parseStringList(formData.get("avoidPhrases")),
-        previewReview: String(formData.get("previewReview") ?? ""),
-        previewRating: Number(formData.get("previewRating") ?? 5),
-        previewProductTitle: String(formData.get("previewProductTitle") ?? ""),
-        previewProductType: String(formData.get("previewProductType") ?? ""),
-        previewProductTags: parseStringList(formData.get("previewProductTags")),
-        personalityStyle: String(formData.get("personalityStyle") ?? ""),
-        personalityStrength: String(formData.get("personalityStrength") ?? ""),
-        replyLength: String(formData.get("replyLength") ?? ""),
-      });
+      const modelId = String(formData.get("modelId") ?? "");
+      const { result, creditCharge } = await withCreditCharge(
+        session.shop,
+        modelId,
+        "preview",
+        "Generate live preview",
+        () => generateBrandVoicePreview({
+          modelId,
+          personality: String(formData.get("personality") ?? ""),
+          greeting: String(formData.get("greeting") ?? ""),
+          signOff: String(formData.get("signOff") ?? ""),
+          alwaysMention: parseStringList(formData.get("alwaysMention")),
+          avoidPhrases: parseStringList(formData.get("avoidPhrases")),
+          previewReview: String(formData.get("previewReview") ?? ""),
+          previewRating: Number(formData.get("previewRating") ?? 5),
+          previewProductTitle: String(formData.get("previewProductTitle") ?? ""),
+          previewProductType: String(formData.get("previewProductType") ?? ""),
+          previewProductTags: parseStringList(formData.get("previewProductTags")),
+          personalityStyle: String(formData.get("personalityStyle") ?? ""),
+          personalityStrength: String(formData.get("personalityStrength") ?? ""),
+          replyLength: String(formData.get("replyLength") ?? ""),
+        }),
+      );
 
       return {
         ok: true,
         intent,
-        message: `Live preview generated with ${result.model.name}.`,
+        message: `Live preview generated with ${result.model.name}. ${creditCharge.amount} credits spent.`,
         aiModels: await getAiModelOptions(),
+        credits: await getCreditOverview(session.shop),
+        creditCharge,
         ...result,
       };
     }
 
-    if (intent === "test-ai-model") {
-      const result = await testBrandVoiceAiModel(String(formData.get("modelId") ?? ""));
-      const { ok, message, ...rest } = result;
-
-      return {
-        ok,
-        intent,
-        message: ok
-          ? `${result.model.name} connected successfully.`
-          : `${result.model.name} returned an unexpected response.`,
-        providerMessage: message,
-        aiModels: await getAiModelOptions(),
-        ...rest,
-      };
-    }
   } catch (error) {
     const serialized =
       error instanceof Error && error.name === "JudgeMeApiError"
         ? serializeJudgeMeError(error)
+        : error instanceof CreditError
+          ? serializeCreditError(error)
         : serializeAiError(error);
     return {
       ok: false,

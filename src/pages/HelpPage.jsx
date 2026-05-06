@@ -1,8 +1,9 @@
 /* eslint-disable react/prop-types */
-import {useEffect, useState} from 'react';
-import {useFetcher} from 'react-router';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {useFetcher, useLoaderData} from 'react-router';
+import {useAppBridge} from '@shopify/app-bridge-react';
 import {
-  Banner,
+  Badge,
   BlockStack,
   Button,
   Card,
@@ -15,55 +16,107 @@ import {
 } from '@shopify/polaris';
 import {
   AutomationIcon,
-  BookOpenIcon,
   ChatIcon,
-  CheckCircleIcon,
-  ChevronRightIcon,
-  ClipboardChecklistIcon,
   CodeIcon,
+  CreditCardIcon,
+  DatabaseIcon,
   EmailIcon,
   LightbulbIcon,
-  PageIcon,
-  PlayCircleIcon,
-  QuestionCircleIcon,
-  StarIcon,
-  ThemeEditIcon,
-  WandIcon,
-  WorkIcon,
+  LockIcon,
+  MagicIcon,
+  SettingsIcon,
+  StoreIcon,
+  WrenchIcon,
 } from '@shopify/polaris-icons';
-import {
-  helpFeatureBullets,
-  helpHeroBenefits,
-  helpQuickLinks,
-  helpResources,
-} from '../helpData';
 
-const quickLinkIconMap = {
-  book: BookOpenIcon,
-  lightbulb: LightbulbIcon,
-  faq: QuestionCircleIcon,
-  support: EmailIcon,
-};
+const requestCards = [
+  {
+    id: 'customization',
+    icon: WrenchIcon,
+    tone: 'coral',
+    title: 'Customize Reply Pilot',
+    description: 'Adapt review approval, AI generation, routing, and internal workflows to the way your team actually works.',
+    action: 'Describe your workflow',
+  },
+  {
+    id: 'suggestion',
+    icon: LightbulbIcon,
+    tone: 'amber',
+    title: 'Suggest an improvement',
+    description: 'Send product ideas for filters, bulk actions, model controls, integrations, or approval workflows.',
+    action: 'Send suggestion',
+  },
+  {
+    id: 'support',
+    icon: ChatIcon,
+    tone: 'blue',
+    title: 'Contact support',
+    description: 'Ask about Judge.me setup, Brand Voice, credits, AI model behavior, Queue, Sent, or data handling.',
+    action: 'Contact us',
+  },
+];
 
-const resourceIconMap = {
-  video: PlayCircleIcon,
-  'book-open': BookOpenIcon,
-  changelog: PageIcon,
-  code: CodeIcon,
-};
+const customizationServices = [
+  {
+    icon: SettingsIcon,
+    title: 'Queue and approval workflows',
+    text: 'Custom review routing, team handoffs, confidence rules, skipped/sent views, and batch approval flows.',
+  },
+  {
+    icon: MagicIcon,
+    title: 'Brand Voice and AI tuning',
+    text: 'Better prompts, safer model behavior, custom presets, product-aware replies, and approval guardrails.',
+  },
+  {
+    icon: CodeIcon,
+    title: 'Shopify integrations',
+    text: 'Connect reviews, products, customer service tools, analytics, internal dashboards, or private admin flows.',
+  },
+];
 
-const benefitIconMap = {
-  Customize: ThemeEditIcon,
-  Build: WorkIcon,
-  Create: WandIcon,
-  Experts: AutomationIcon,
-};
+const dataItems = [
+  'Judge.me connection details and encrypted API token',
+  'Imported review records, product context, generated drafts, and sent/skipped status',
+  'Brand Voice settings, model tier, preview review, and AI configuration choices',
+  'Credit account, credit ledger entries, and credit purchase records',
+  'Support, customization, and feature requests sent from this page',
+  'Shopify session tokens used for admin authentication',
+];
 
-const quickLinkToneMap = {
-  book: 'blue',
-  lightbulb: 'yellow',
-  faq: 'purple',
-  support: 'green',
+const heroChecklist = [
+  'Connect Judge.me and import recent reviews',
+  'Tune Brand Voice with examples, presets, and live preview',
+  'Generate replies with the selected model tier and review them before sending',
+];
+
+const modalContent = {
+  customization: {
+    title: 'Request customization',
+    type: 'customization',
+    subjectPlaceholder: 'Custom review workflow',
+    messageLabel: 'What should we build or adapt?',
+    messagePlaceholder: 'Example: Add a review escalation flow for low-confidence replies and sync approved responses to our helpdesk.',
+    intro: 'Share the current workflow, what feels slow or risky, and what the ideal Reply Pilot flow should do.',
+    primary: 'Send request',
+  },
+  suggestion: {
+    title: 'Suggest an improvement',
+    type: 'suggestion',
+    subjectPlaceholder: 'New Queue, Brand Voice, or credits idea',
+    messageLabel: 'What should we add or improve?',
+    messagePlaceholder: 'Example: Add a filter for generated-but-not-reviewed replies and show model cost before every bulk action.',
+    intro: 'Rough ideas are useful. Tell us what would make review operations faster, safer, or easier to approve.',
+    primary: 'Send suggestion',
+  },
+  support: {
+    title: 'Contact support',
+    type: 'support',
+    subjectPlaceholder: 'Question about Reply Pilot',
+    messageLabel: 'How can we help?',
+    messagePlaceholder: 'Example: Judge.me is connected, but the Queue is not importing my newest reviews.',
+    intro: 'Send enough context for us to understand or reproduce the issue.',
+    primary: 'Send message',
+  },
 };
 
 function HelpIcon({source, tone = 'blue', size = 'md'}) {
@@ -74,212 +127,338 @@ function HelpIcon({source, tone = 'blue', size = 'md'}) {
   );
 }
 
-function HelpQuickCard({item, onAction}) {
+function RequestCard({card, onAction}) {
   return (
     <Card>
-      <BlockStack gap="300">
+      <div className="rp-help-request-card">
         <InlineStack gap="300" blockAlign="start" wrap={false}>
-          <HelpIcon source={quickLinkIconMap[item.icon]} tone={quickLinkToneMap[item.icon]} />
+          <HelpIcon source={card.icon} tone={card.tone} />
           <BlockStack gap="100">
-            <Text as="h2" variant="headingLg">{item.title}</Text>
-            <Text as="p" variant="bodyMd" tone="subdued">{item.description}</Text>
+            <Text as="h2" variant="headingLg">{card.title}</Text>
+            <Text as="p" variant="bodyMd" tone="subdued">{card.description}</Text>
           </BlockStack>
         </InlineStack>
-        <Button onClick={onAction}>{item.actionLabel}</Button>
-      </BlockStack>
+        <Button variant={card.primary ? 'primary' : undefined} onClick={onAction}>
+          {card.action}
+        </Button>
+      </div>
     </Card>
   );
 }
 
-function HelpResourceRow({item}) {
+function ServiceItem({item}) {
   return (
-    <button type="button" className="rp-help-resource">
-      <HelpIcon source={resourceIconMap[item.icon]} tone="blue" />
-      <span>
-        <Text as="span" variant="bodyMd" fontWeight="semibold">{item.title}</Text>
-        <Text as="p" variant="bodyMd" tone="subdued">{item.description}</Text>
-      </span>
-      <Icon source={ChevronRightIcon} tone="subdued" />
-    </button>
+    <div className="rp-help-service-item">
+      <HelpIcon source={item.icon} tone="green" size="sm" />
+      <BlockStack gap="050">
+        <Text as="p" variant="bodyMd" fontWeight="semibold">{item.title}</Text>
+        <Text as="p" variant="bodyMd" tone="subdued">{item.text}</Text>
+      </BlockStack>
+    </div>
   );
 }
 
+function summaryText(data) {
+  const counts = data?.counts;
+  if (!counts) return data?.message ?? '';
+
+  return [
+    data.message,
+    `${counts.reviews} reviews/drafts`,
+    `${counts.judgeMeConnections} Judge.me connection(s)`,
+    `${counts.creditLedgerEntries} credit ledger entries`,
+  ].join(' ');
+}
+
 export default function HelpPage() {
+  const loaderData = useLoaderData();
+  const shopify = useAppBridge();
   const fetcher = useFetcher();
+  const privacyFetcher = useFetcher();
+  const lastToastKey = useRef('');
   const [openModal, setOpenModal] = useState(null);
+  const [privacyDeleteOpen, setPrivacyDeleteOpen] = useState(false);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
-  const [dismissedResult, setDismissedResult] = useState(false);
+  const [localToast, setLocalToast] = useState(null);
 
+  const contactEmail = loaderData?.contactEmail ?? 'support@example.com';
+  const activeModal = openModal ? modalContent[openModal] : null;
   const isSubmitting = fetcher.state !== 'idle';
-  const result = !dismissedResult && fetcher.data?.intent === 'contact' ? fetcher.data : null;
-  const activeModal = openModal
-    ? {
-        support: {
-          title: 'Contact support',
-          type: 'support',
-          messageLabel: 'How can we help?',
-          primary: 'Send message',
-        },
-        customization: {
-          title: 'Request customization',
-          type: 'customization',
-          messageLabel: 'What should we build or adapt?',
-          primary: 'Send request',
-        },
-        suggestion: {
-          title: 'Suggest an improvement',
-          type: 'suggestion',
-          messageLabel: 'What should we add or improve?',
-          primary: 'Send suggestion',
-        },
-      }[openModal]
-    : null;
+  const isPrivacySubmitting = privacyFetcher.state !== 'idle';
 
-  function closeModal() {
+  const showToast = useCallback((data) => {
+    if (!data?.message) return;
+    const content = data.intent === 'privacy-data-request' ? summaryText(data) : data.message;
+    const key = `${data.intent || 'help'}:${data.ok ? 'ok' : 'error'}:${content}`;
+    if (lastToastKey.current === key) return;
+    lastToastKey.current = key;
+
+    try {
+      shopify.toast.show(content, {
+        duration: data.ok ? 5000 : 9000,
+        isError: data.ok === false,
+      });
+    } catch {
+      setLocalToast({message: content, isError: data.ok === false});
+      window.setTimeout(() => setLocalToast(null), data.ok ? 5000 : 9000);
+    }
+  }, [shopify]);
+
+  const closeContactModal = useCallback(() => {
     setOpenModal(null);
     setSubject('');
     setMessage('');
     setEmail('');
-  }
+  }, []);
 
   useEffect(() => {
-    if (fetcher.state === 'idle' && result?.ok) {
-      closeModal();
+    if (fetcher.state !== 'idle' || !fetcher.data) return;
+    showToast(fetcher.data);
+    if (fetcher.data.ok) closeContactModal();
+  }, [closeContactModal, fetcher.data, fetcher.state, showToast]);
+
+  useEffect(() => {
+    if (privacyFetcher.state !== 'idle' || !privacyFetcher.data) return;
+    showToast(privacyFetcher.data);
+    if (privacyFetcher.data.ok && privacyFetcher.data.intent === 'privacy-data-delete') {
+      setPrivacyDeleteOpen(false);
     }
-  }, [fetcher.state, result?.ok]);
+  }, [privacyFetcher.data, privacyFetcher.state, showToast]);
 
   function submitContact() {
     if (!activeModal || !message.trim()) return;
 
     const formData = new FormData();
+    formData.set('intent', 'contact');
     formData.set('type', activeModal.type);
     formData.set('subject', subject || activeModal.title);
     formData.set('message', message);
     formData.set('email', email);
-    setDismissedResult(false);
     fetcher.submit(formData, {method: 'post'});
+  }
+
+  function requestPrivacySummary() {
+    const formData = new FormData();
+    formData.set('intent', 'privacy-data-request');
+    privacyFetcher.submit(formData, {method: 'post'});
+  }
+
+  function deletePrivacyData() {
+    const formData = new FormData();
+    formData.set('intent', 'privacy-data-delete');
+    privacyFetcher.submit(formData, {method: 'post'});
   }
 
   return (
     <BlockStack gap="400">
+      {localToast ? (
+        <div className={`rp-local-toast ${localToast.isError ? 'is-error' : ''}`} role="status">
+          {localToast.message}
+        </div>
+      ) : null}
+
       <InlineStack align="space-between" blockAlign="center" gap="300">
         <BlockStack gap="100">
           <Text as="h1" variant="heading2xl">Help</Text>
           <Text as="p" variant="bodyLg" tone="subdued">
-            Setup guidance, support, and custom workflow requests for Reply Pilot.
+            Custom workflows, Shopify expert help, product feedback, and data controls for Reply Pilot.
           </Text>
         </BlockStack>
-        <Button icon={ChatIcon} onClick={() => setOpenModal('support')}>Contact support</Button>
       </InlineStack>
 
-      {result ? (
-        <Banner tone={result.ok ? 'success' : 'critical'} onDismiss={() => setDismissedResult(true)}>
-          {result.message}
-        </Banner>
-      ) : null}
-
-      <Card>
-        <InlineGrid columns={{xs: 1, md: 2}} gap="500" alignItems="center">
-          <BlockStack gap="400">
-            <InlineStack gap="200" blockAlign="center">
-              <HelpIcon source={CodeIcon} tone="red" />
-              <Text as="span" variant="bodySm" fontWeight="semibold" tone="critical">CUSTOM DEVELOPMENT</Text>
-            </InlineStack>
-
-            <BlockStack gap="100">
-              <Text as="h2" variant="heading2xl">Need something custom?</Text>
-              <Text as="p" variant="bodyLg" tone="subdued">
-                We can tailor Reply Pilot to your queue, build custom Shopify app flows, and connect review operations to the rest of your merchant workflow.
-              </Text>
-            </BlockStack>
-
-            <BlockStack gap="250">
-              {helpHeroBenefits.map((benefit) => (
-                <div key={benefit.title} className="rp-help-benefit">
-                  <HelpIcon source={benefitIconMap[benefit.title] ?? CheckCircleIcon} tone="green" size="sm" />
-                  <BlockStack gap="050">
-                    <Text as="p" variant="bodyMd" fontWeight="semibold">{benefit.title}</Text>
-                    <Text as="p" variant="bodyMd" tone="subdued">{benefit.description}</Text>
-                  </BlockStack>
-                </div>
-              ))}
-            </BlockStack>
-
-            <InlineStack gap="200">
-              <Button variant="primary" onClick={() => setOpenModal('customization')}>Book a consultation</Button>
-              <Button onClick={() => setOpenModal('customization')}>Request custom work</Button>
-            </InlineStack>
+      <section className="rp-help-hero">
+        <div className="rp-help-hero-copy">
+          <InlineStack gap="150">
+            <Badge tone="success">Shopify expert support</Badge>
+            <Badge tone="info">AI reply operations</Badge>
+            <Badge>Custom development</Badge>
+          </InlineStack>
+          <BlockStack gap="150">
+            <Text as="h2" variant="heading2xl">Make Reply Pilot fit the way your store works.</Text>
+            <Text as="p" variant="bodyLg" tone="subdued">
+              We can tune the app, improve your approval flow, connect review operations to Shopify, or help with broader Shopify development when your store needs something custom.
+            </Text>
           </BlockStack>
+          <InlineStack gap="200">
+            <Button variant="primary" icon={WrenchIcon} onClick={() => setOpenModal('customization')}>Custom development</Button>
+            <Button icon={LightbulbIcon} onClick={() => setOpenModal('suggestion')}>Suggest an improvement</Button>
+          </InlineStack>
+        </div>
 
-          <div className="rp-empty-state-card is-compact">
-            <BlockStack gap="300" align="center">
-              <span className="rp-empty-mark is-blue">
-                <Icon source={ClipboardChecklistIcon} tone="base" />
-              </span>
-              <Text as="h3" variant="headingLg" alignment="center">Implementation checklist</Text>
-              <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
-                Connect Judge.me, train brand voice, approve the first batch, then tune rules from Settings.
+        <div className="rp-help-hero-panel">
+          <InlineStack gap="300" blockAlign="center" wrap={false}>
+            <HelpIcon source={AutomationIcon} tone="coral" />
+            <BlockStack gap="050">
+              <Text as="h3" variant="headingLg">Common work we help with</Text>
+              <Text as="p" variant="bodyMd" tone="subdued">Practical improvements around AI replies and merchant approval.</Text>
+            </BlockStack>
+          </InlineStack>
+          <BlockStack gap="200">
+            {heroChecklist.map((item) => (
+              <div key={item} className="rp-help-check-row">
+                <span aria-hidden="true">✓</span>
+                <Text as="p" variant="bodyMd">{item}</Text>
+              </div>
+            ))}
+          </BlockStack>
+          <div className="rp-help-shopify-note">
+            <HelpIcon source={StoreIcon} tone="blue" size="sm" />
+            <BlockStack gap="050">
+              <Text as="p" variant="bodyMd" fontWeight="semibold">Need help outside reviews?</Text>
+              <Text as="p" variant="bodySm" tone="subdued">
+                You can also hire a Shopify expert for theme work, private admin tools, app integrations, and store operations.
               </Text>
             </BlockStack>
           </div>
-        </InlineGrid>
-      </Card>
+        </div>
+      </section>
 
-      <InlineGrid columns={{xs: 1, sm: 2, md: 4}} gap="300">
-        {helpQuickLinks.map((item) => (
-          <HelpQuickCard
-            key={item.title}
-            item={item}
-            onAction={() => item.icon === 'support' ? setOpenModal('support') : undefined}
+      <InlineGrid columns={{xs: 1, md: 3}} gap="300">
+        {requestCards.map((card) => (
+          <RequestCard
+            key={card.id}
+            card={card}
+            onAction={() => setOpenModal(card.id)}
           />
         ))}
       </InlineGrid>
 
       <InlineGrid columns={{xs: 1, md: 2}} gap="400">
         <Card>
-          <BlockStack gap="300">
+          <BlockStack gap="500">
             <InlineStack gap="300" blockAlign="center">
-              <HelpIcon source={BookOpenIcon} tone="blue" />
+              <HelpIcon source={StoreIcon} tone="blue" />
               <BlockStack gap="050">
-                <Text as="h2" variant="headingLg">Resources</Text>
-                <Text as="p" variant="bodyMd" tone="subdued">Documentation, tutorials, and updates.</Text>
+                <Text as="h2" variant="headingLg">What we can customize</Text>
+                <Text as="p" variant="bodyMd" tone="subdued">
+                  Keep the app simple day to day, and add the specific behavior your team needs.
+                </Text>
               </BlockStack>
             </InlineStack>
-            <BlockStack gap="0">
-              {helpResources.map((item) => (
-                <HelpResourceRow key={item.title} item={item} />
+            <BlockStack gap="300">
+              {customizationServices.map((item) => (
+                <ServiceItem key={item.title} item={item} />
               ))}
             </BlockStack>
           </BlockStack>
         </Card>
 
         <Card>
-          <BlockStack gap="300">
+          <div className="rp-help-contact-panel">
             <InlineStack gap="300" blockAlign="center">
-              <HelpIcon source={StarIcon} tone="purple" />
+              <HelpIcon source={EmailIcon} tone="green" />
               <BlockStack gap="050">
-                <Text as="h2" variant="headingLg">Request a feature</Text>
-                <Text as="p" variant="bodyMd" tone="subdued">Help shape the review workflow roadmap.</Text>
+                <Text as="h2" variant="headingLg">Direct contact</Text>
+                <Text as="p" variant="bodyMd" tone="subdued">
+                  Prefer email? Send context about your store, the review problem, and the result you want.
+                </Text>
               </BlockStack>
             </InlineStack>
-            <BlockStack gap="200">
-              {helpFeatureBullets.map((item) => (
-                <div key={item} className="rp-help-benefit">
-                  <HelpIcon source={CheckCircleIcon} tone="green" size="sm" />
-                  <Text as="p" variant="bodyMd" tone="subdued">{item}</Text>
-                </div>
-              ))}
-            </BlockStack>
-            <Button onClick={() => setOpenModal('suggestion')}>Submit a request</Button>
-          </BlockStack>
+            <div className="rp-help-email-box">{contactEmail}</div>
+            <Text as="p" variant="bodySm" tone="subdued">
+              For app support, use the support card above so the request keeps its context.
+            </Text>
+          </div>
         </Card>
       </InlineGrid>
 
+      <Card>
+        <BlockStack gap="500">
+          <InlineStack align="space-between" blockAlign="start" gap="300">
+            <InlineStack gap="300" blockAlign="center" wrap={false}>
+              <HelpIcon source={LockIcon} tone="purple" />
+              <BlockStack gap="050">
+                <Text as="h2" variant="headingLg">Data & privacy</Text>
+                <Text as="p" variant="bodyMd" tone="subdued">
+                  Review what Reply Pilot stores and request deletion from inside the app.
+                </Text>
+              </BlockStack>
+            </InlineStack>
+            <Badge tone="info">Merchant controlled</Badge>
+          </InlineStack>
+
+          <InlineGrid columns={{xs: 1, md: 2}} gap="300">
+            <div className="rp-help-data-panel">
+              <InlineStack gap="200" blockAlign="center">
+                <HelpIcon source={DatabaseIcon} tone="blue" size="sm" />
+                <Text as="h3" variant="headingMd">Stored app data</Text>
+              </InlineStack>
+              <BlockStack gap="150">
+                {dataItems.map((item) => (
+                  <div key={item} className="rp-help-data-row">
+                    <span aria-hidden="true">·</span>
+                    <Text as="p" variant="bodyMd" tone="subdued">{item}</Text>
+                  </div>
+                ))}
+              </BlockStack>
+            </div>
+
+            <div className="rp-help-data-panel is-accent">
+              <InlineStack gap="200" blockAlign="center">
+                <HelpIcon source={CreditCardIcon} tone="amber" size="sm" />
+                <Text as="h3" variant="headingMd">Privacy actions</Text>
+              </InlineStack>
+              <Text as="p" variant="bodyMd" tone="subdued">
+                Request a summary for review, or permanently delete all app data for this shop. Deletion also clears Shopify sessions.
+              </Text>
+              <InlineStack gap="200">
+                <Button
+                  loading={isPrivacySubmitting && privacyFetcher.formData?.get('intent') === 'privacy-data-request'}
+                  disabled={isPrivacySubmitting}
+                  onClick={requestPrivacySummary}
+                >
+                  Request data summary
+                </Button>
+                <Button
+                  tone="critical"
+                  variant="tertiary"
+                  disabled={isPrivacySubmitting}
+                  onClick={() => setPrivacyDeleteOpen(true)}
+                >
+                  Delete all my data
+                </Button>
+              </InlineStack>
+            </div>
+          </InlineGrid>
+        </BlockStack>
+      </Card>
+
+      <Modal
+        open={privacyDeleteOpen}
+        onClose={() => setPrivacyDeleteOpen(false)}
+        title="Delete all Reply Pilot data?"
+        primaryAction={{
+          content: 'Delete permanently',
+          destructive: true,
+          loading: isPrivacySubmitting,
+          disabled: isPrivacySubmitting,
+          onAction: deletePrivacyData,
+        }}
+        secondaryActions={[
+          {
+            content: 'Cancel',
+            disabled: isPrivacySubmitting,
+            onAction: () => setPrivacyDeleteOpen(false),
+          },
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="300">
+            <Text as="p" variant="bodyMd">
+              This permanently deletes review records, AI drafts, Brand Voice settings, Judge.me connection data, app settings, credit records, contact requests, and Shopify sessions for this shop.
+            </Text>
+            <Text as="p" variant="bodyMd" tone="subdued">
+              This action cannot be undone. You may be asked to log in again after deletion.
+            </Text>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
+
       <Modal
         open={Boolean(activeModal)}
-        onClose={closeModal}
+        onClose={closeContactModal}
         title={activeModal?.title ?? 'Contact'}
         primaryAction={{
           content: activeModal?.primary ?? 'Send',
@@ -290,25 +469,30 @@ export default function HelpPage() {
         secondaryActions={[
           {
             content: 'Cancel',
-            onAction: closeModal,
+            onAction: closeContactModal,
             disabled: isSubmitting,
           },
         ]}
       >
         <Modal.Section>
           <BlockStack gap="300">
-            <TextField
-              label="Subject"
-              value={subject}
-              onChange={setSubject}
-              autoComplete="off"
-            />
+            {activeModal?.intro ? (
+              <Text as="p" variant="bodyMd" tone="subdued">{activeModal.intro}</Text>
+            ) : null}
             <TextField
               label={activeModal?.messageLabel ?? 'Message'}
               value={message}
               onChange={setMessage}
               multiline={5}
               autoComplete="off"
+              placeholder={activeModal?.messagePlaceholder}
+            />
+            <TextField
+              label="Subject"
+              value={subject}
+              onChange={setSubject}
+              autoComplete="off"
+              placeholder={activeModal?.subjectPlaceholder}
             />
             <TextField
               label="Reply email"
@@ -316,8 +500,8 @@ export default function HelpPage() {
               onChange={setEmail}
               type="email"
               autoComplete="email"
+              placeholder="you@store.com"
             />
-            {result && !result.ok ? <Banner tone="critical">{result.message}</Banner> : null}
           </BlockStack>
         </Modal.Section>
       </Modal>

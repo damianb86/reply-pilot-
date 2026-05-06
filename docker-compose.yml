@@ -40,6 +40,10 @@ services:
       EMAIL_PORT: ${EMAIL_PORT:?Set EMAIL_PORT in the app .env}
       EMAIL_USER: ${EMAIL_USER:?Set EMAIL_USER in the app .env}
       EMAIL_PASS: ${EMAIL_PASS:?Set EMAIL_PASS in the app .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in the app .env}
+      OPENAI_BASIC_MODEL: ${OPENAI_BASIC_MODEL:-gpt-5.4-nano}
+      OPENAI_PRO_MODEL: ${OPENAI_PRO_MODEL:-gpt-5.4-mini}
+      OPENAI_PREMIUM_MODEL: ${OPENAI_PREMIUM_MODEL:-gpt-5.4}
     labels:
       caddy: ${APP_HOST:?Set APP_HOST in the app .env}
       caddy.encode: zstd gzip

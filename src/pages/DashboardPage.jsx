@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   Card,
+  Divider,
   Icon,
   InlineGrid,
   InlineStack,
@@ -15,210 +16,355 @@ import {
   TextField,
 } from '@shopify/polaris';
 import {
-  AlertTriangleIcon,
-  AppsIcon,
-  ChatIcon,
+  ArrowRightIcon,
   CheckCircleIcon,
-  ConnectIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  ClipboardIcon,
   ExternalIcon,
-  GlobeIcon,
-  ImageIcon,
-  KeyIcon,
+  HideIcon,
+  ImportIcon,
+  InfoIcon,
   MagicIcon,
-  MegaphoneIcon,
-  ProductIcon,
+  MicrophoneIcon,
   RefreshIcon,
   SendIcon,
-  SettingsIcon,
   StarIcon,
   StatusActiveIcon,
-  StoreIcon,
+  ViewIcon,
+  XIcon,
 } from '@shopify/polaris-icons';
-import {onboardingSteps, reviewSources} from '../replyPilotData';
 
-const stepIconMap = {
-  connect: ConnectIcon,
-  voice: MagicIcon,
-  approve: SendIcon,
-};
+const providers = [
+  {
+    id: 'judgeme',
+    name: 'Judge.me',
+    status: 'Available',
+    available: true,
+    logo: '/provider-logos/judgeme.webp',
+    tone: 'teal',
+    initials: 'J',
+  },
+  {
+    id: 'yotpo',
+    name: 'Yotpo',
+    status: 'Coming soon',
+    available: false,
+    logo: '/provider-logos/yotpo.svg',
+    tone: 'neutral',
+  },
+  {
+    id: 'loox',
+    name: 'Loox',
+    status: 'Coming soon',
+    available: false,
+    logo: '/provider-logos/loox.svg',
+    tone: 'black',
+    wordmark: true,
+  },
+  {
+    id: 'stamped',
+    name: 'Stamped',
+    status: 'Coming soon',
+    available: false,
+    logo: '/provider-logos/stamped.png',
+    tone: 'orange',
+    wordmark: true,
+  },
+];
 
-const sourceMeta = {
-  judgeme: {icon: StarIcon, tone: 'green'},
-  loox: {icon: ImageIcon, tone: 'blue'},
-  yotpo: {icon: MegaphoneIcon, tone: 'purple'},
-  stamped: {icon: ProductIcon, tone: 'orange'},
-  google: {icon: GlobeIcon, tone: 'green'},
-  trustpilot: {icon: CheckCircleIcon, tone: 'blue'},
-  shopify: {icon: StoreIcon, tone: 'green'},
-};
+const utcMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-function StepCard({step}) {
-  const StepIcon = stepIconMap[step.id] ?? AppsIcon;
+function formatDateTime(value) {
+  if (!value) return 'Not verified yet';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not verified yet';
 
+  let hours = date.getUTCHours();
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  const period = hours >= 12 ? 'PM' : 'AM';
+  hours %= 12;
+  if (hours === 0) hours = 12;
+
+  return `${utcMonths[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()} at ${hours}:${minutes} ${period} UTC`;
+}
+
+function formatNumber(value) {
+  if (value === null || value === undefined || value === '') return 'Not available';
+  if (typeof value === 'number') return new Intl.NumberFormat('en').format(value);
+  return String(value);
+}
+
+function tokenWithViewIcon(tokenMask) {
   return (
-    <Card>
-      <BlockStack gap="200">
-        <InlineStack gap="200" blockAlign="center" wrap={false}>
-          <span className={`rp-icon-tile ${step.id === 'connect' ? 'is-yellow' : 'is-neutral'}`}>
-            <Icon source={StepIcon} tone="base" />
-          </span>
-          <Text as="h3" variant="headingMd">{step.title}</Text>
-        </InlineStack>
-        <InlineStack gap="200" blockAlign="center">
-          <Badge tone={step.id === 'connect' ? 'attention' : undefined}>Step {step.step}</Badge>
-          <Text as="p" variant="bodyMd" tone="subdued">{step.description}</Text>
-        </InlineStack>
-      </BlockStack>
-    </Card>
+    <InlineStack gap="150" blockAlign="center" align="end">
+      <Text as="span" variant="bodyMd">{tokenMask || 'Not saved'}</Text>
+      <Icon source={ViewIcon} tone="subdued" />
+    </InlineStack>
   );
 }
 
-function SourceLogo({source, children}) {
-  const meta = sourceMeta[source.id] ?? {icon: AppsIcon, tone: 'neutral'};
+function ProviderMark({provider}) {
+  const ProviderIcon = provider.icon;
 
   return (
-    <span className={`rp-source-logo is-${meta.tone}`} aria-hidden="true">
-      <Icon source={meta.icon} tone="base" />
-      <span className="rp-source-initials">{children}</span>
+    <span className={`rp-connect-provider-mark is-${provider.tone} ${provider.wordmark ? 'is-wordmark' : ''}`}>
+      {provider.logo ? (
+        <img className="rp-connect-provider-logo" src={provider.logo} alt="" aria-hidden="true" />
+      ) : provider.initials ? (
+        <span>{provider.initials}</span>
+      ) : (
+        <Icon source={ProviderIcon} tone="base" />
+      )}
     </span>
   );
 }
 
-function UpcomingSource({source}) {
+function ProviderTile({provider, selected, statusOverride}) {
+  const status = statusOverride || provider.status;
+
   return (
-    <Card>
-      <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
-        <InlineStack gap="300" blockAlign="center" wrap={false}>
-          <SourceLogo source={source}>{source.initials}</SourceLogo>
-          <BlockStack gap="050">
-            <Text as="p" variant="bodyMd" fontWeight="semibold">{source.name}</Text>
-            <Text as="p" variant="bodySm" tone="subdued">{source.detail}</Text>
-          </BlockStack>
-        </InlineStack>
-        <Button size="slim">Vote {source.votes}</Button>
+    <div
+      className={`rp-connect-provider-tile ${selected ? 'is-selected' : ''} ${provider.available ? '' : 'is-disabled'}`}
+      role={provider.available ? 'button' : undefined}
+      tabIndex={provider.available ? 0 : undefined}
+      aria-disabled={provider.available ? undefined : true}
+      aria-pressed={selected}
+    >
+      <InlineStack gap="350" blockAlign="center" wrap={false}>
+        <ProviderMark provider={provider} />
+        <BlockStack gap="025">
+          <Text as="span" variant="bodyMd" fontWeight="semibold">{provider.name}</Text>
+          <Text as="span" variant="bodySm" tone="subdued">{status}</Text>
+        </BlockStack>
       </InlineStack>
-    </Card>
-  );
-}
-
-function KeyValue({label, value}) {
-  if (value === null || value === undefined || value === '') return null;
-
-  return (
-    <div className="rp-kv-row">
-      <Text as="span" variant="bodySm" tone="subdued">{label}</Text>
-      <Text as="span" variant="bodyMd" fontWeight="semibold">{String(value)}</Text>
+      {selected ? (
+        <span className="rp-connect-provider-check">
+          <Icon source={CheckIcon} tone="base" />
+        </span>
+      ) : null}
     </div>
   );
 }
 
-function DebugJson({title, value}) {
-  if (!value) return null;
-
+function ReviewBubble() {
   return (
-    <BlockStack gap="150">
-      <Text as="h3" variant="headingSm">{title}</Text>
-      <pre className="rp-json-preview">{JSON.stringify(value, null, 2)}</pre>
-    </BlockStack>
+    <div className="rp-connect-review-bubble" aria-hidden="true">
+      <InlineStack gap="050">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Icon key={star} source={StarIcon} tone="warning" />
+        ))}
+        <Icon source={MagicIcon} tone="magic" />
+      </InlineStack>
+      <span />
+      <span />
+    </div>
   );
 }
 
-function formatIsoDateTime(value) {
-  if (!value || typeof value !== 'string') return 'Not verified yet';
-  return `${value.slice(0, 10)} ${value.slice(11, 16)} UTC`;
-}
-
 function ResultBanner({result}) {
-  if (result?.message) {
-    return (
-      <Banner tone={result.ok ? 'success' : 'critical'}>
-        <BlockStack gap="150">
-          <Text as="p" variant="bodyMd">{result.message}</Text>
-          {!result.ok && result.error ? (
-            <pre className="rp-json-preview is-error">{JSON.stringify(result.error, null, 2)}</pre>
-          ) : null}
-        </BlockStack>
-      </Banner>
-    );
-  }
+  if (!result?.message) return null;
 
-  return null;
+  return (
+    <Banner tone={result.ok ? 'success' : 'critical'}>
+      <BlockStack gap="150">
+        <Text as="p" variant="bodyMd">{result.message}</Text>
+        {!result.ok && result.error ? (
+          <pre className="rp-json-preview is-error">{JSON.stringify(result.error, null, 2)}</pre>
+        ) : null}
+      </BlockStack>
+    </Banner>
+  );
 }
 
-function ManualTokenForm({fetcher, shop, apiSettingsUrl, apiDocsUrl}) {
+function KeyValueRow({label, value, badgeTone}) {
+  const isPrimitive = typeof value === 'string' || typeof value === 'number';
+
+  return (
+    <div className="rp-connect-kv-row">
+      <Text as="span" variant="bodySm" tone="subdued">{label}</Text>
+      {badgeTone ? (
+        <Badge tone={badgeTone}>{String(value)}</Badge>
+      ) : isPrimitive ? (
+        <Text as="span" variant="bodyMd" fontWeight="medium">{value}</Text>
+      ) : (
+        <div className="rp-connect-kv-value">{value}</div>
+      )}
+    </div>
+  );
+}
+
+function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl}) {
   const [apiToken, setApiToken] = useState('');
   const [shopDomain, setShopDomain] = useState(shop);
+  const [showToken, setShowToken] = useState(false);
   const pendingIntent = fetcher.formData?.get('intent');
   const isSubmitting = fetcher.state !== 'idle' && pendingIntent === 'connect-token';
 
   return (
     <fetcher.Form method="post">
       <input type="hidden" name="intent" value="connect-token" />
-      <BlockStack gap="300">
-        <InlineStack gap="200" blockAlign="center">
-          <span className="rp-icon-tile is-blue">
-            <Icon source={KeyIcon} tone="base" />
-          </span>
-          <BlockStack gap="050">
-            <Text as="h3" variant="headingMd">Connect with a Judge.me private token</Text>
-            <Text as="p" variant="bodySm" tone="subdued">
-              Judge.me connects merchant-by-merchant with shop_domain and api_token. Open Judge.me, copy the Private API Token, and paste it here so Reply Pilot can verify it server-side.
-            </Text>
-          </BlockStack>
-        </InlineStack>
+      <BlockStack gap="400">
+        <BlockStack gap="250">
+          <Text as="p" variant="bodyMd">1. Choose provider</Text>
+          <InlineGrid columns={{xs: 1, sm: 2, lg: 4}} gap="300">
+            {providers.map((provider) => (
+              <ProviderTile
+                key={provider.id}
+                provider={provider}
+                selected={provider.id === 'judgeme'}
+              />
+            ))}
+          </InlineGrid>
+        </BlockStack>
 
-        <InlineGrid columns={{xs: 1, md: 3}} gap="200">
-          {[
-            {title: '1. Open Judge.me', detail: 'Go to Settings > Integrations.'},
-            {title: '2. View API tokens', detail: 'Copy Shop domain and Private API Token.'},
-            {title: '3. Verify here', detail: 'Reply Pilot saves the token encrypted.'},
-          ].map((item) => (
-            <div className="rp-connect-stat" key={item.title}>
-              <Text as="span" variant="bodyMd" fontWeight="semibold">{item.title}</Text>
-              <Text as="span" variant="bodySm" tone="subdued">{item.detail}</Text>
-            </div>
-          ))}
-        </InlineGrid>
-
-        <InlineGrid columns={{xs: 1, md: 2}} gap="300">
+        <BlockStack gap="300">
+          <Text as="p" variant="bodyMd">2. Enter your Judge.me credentials</Text>
           <TextField
-            label="Shop domain"
+            label="Shop"
             name="shopDomain"
             value={shopDomain}
             onChange={setShopDomain}
             autoComplete="off"
-            helpText="Use the myshopify.com domain shown in Judge.me."
+            placeholder="qorve-dev.myshopify.com"
           />
           <TextField
-            label="Private API token"
+            label="API token"
             name="apiToken"
-            type="password"
+            type={showToken ? 'text' : 'password'}
             value={apiToken}
             onChange={setApiToken}
             autoComplete="off"
-            placeholder="Paste Judge.me private token"
+            placeholder="Paste your Private API token from Judge.me"
+            connectedRight={(
+              <Button
+                icon={showToken ? HideIcon : ViewIcon}
+                accessibilityLabel={showToken ? 'Hide API token' : 'Show API token'}
+                onClick={() => setShowToken((value) => !value)}
+              />
+            )}
+            helpText="You can find your Private API token in Judge.me: Settings > Integrations > Private API token."
           />
-        </InlineGrid>
+        </BlockStack>
 
         <InlineStack align="space-between" blockAlign="center" gap="300">
-          <InlineStack gap="200">
-            <Button url={apiSettingsUrl} target="_blank" icon={ExternalIcon}>
-              Open Judge.me API tokens
+          <InlineStack gap="300">
+            <Button variant="plain" url={apiSettingsUrl} target="_blank" icon={ExternalIcon}>
+              Where do I find my Judge.me API token?
             </Button>
-            <Button url={apiDocsUrl} target="_blank" icon={ExternalIcon}>
-              API guide
+            <Button variant="plain" url={apiDocsUrl} target="_blank" icon={ExternalIcon}>
+              Read setup guide
             </Button>
           </InlineStack>
-          <Button variant="primary" submit loading={isSubmitting} disabled={!apiToken || isSubmitting}>
-            Verify & save
-          </Button>
+          <InlineStack gap="200">
+            <Button variant="primary" submit loading={isSubmitting} disabled={!apiToken || isSubmitting}>
+              Test connection
+            </Button>
+            <Button submit disabled={!apiToken || isSubmitting}>
+              Save
+            </Button>
+          </InlineStack>
         </InlineStack>
       </BlockStack>
     </fetcher.Form>
   );
 }
 
-function ConnectionActions({connection, fetcher, apiSettingsUrl}) {
+function CurrentConnectionCard({connection, fetcher}) {
+  const pendingIntent = fetcher.formData?.get('intent');
+  const isRefreshing = fetcher.state !== 'idle' && pendingIntent === 'refresh';
+
+  function refresh() {
+    const formData = new FormData();
+    formData.set('intent', 'refresh');
+    fetcher.submit(formData, {method: 'post'});
+  }
+
+  return (
+    <Card>
+      <BlockStack gap="300">
+        <InlineStack align="space-between" blockAlign="center" gap="300">
+          <InlineStack gap="200" blockAlign="center">
+            <Icon source={StatusActiveIcon} tone="success" />
+            <Text as="h2" variant="headingMd">{connection ? 'Current connection' : 'Judge.me connection'}</Text>
+          </InlineStack>
+          <Badge tone={connection ? 'success' : 'attention'}>{connection ? 'Connected' : 'Not connected'}</Badge>
+        </InlineStack>
+        <Divider />
+
+        {connection ? (
+          <BlockStack gap="0">
+            <KeyValueRow label="Provider" value={<InlineStack gap="250" align="end" blockAlign="center"><ProviderMark provider={providers[0]} /><Text as="span" variant="bodyMd">Judge.me</Text></InlineStack>} />
+            <KeyValueRow label="Connected shop" value={connection.shopDomain} />
+            <KeyValueRow label="Auth method" value="Private API token" />
+            <KeyValueRow label="Token" value={tokenWithViewIcon(connection.tokenMask)} />
+            <KeyValueRow label="Last verified" value={formatDateTime(connection.lastVerifiedAt)} />
+            <KeyValueRow label="Imported reviews" value={`${formatNumber(connection.reviewCount)} available`} />
+          </BlockStack>
+        ) : (
+          <Text as="p" variant="bodyMd" tone="subdued">
+            Add your Judge.me shop and API token to verify the source before importing reviews.
+          </Text>
+        )}
+
+        {connection ? (
+          <InlineStack align="end">
+            <Button icon={RefreshIcon} loading={isRefreshing} disabled={isRefreshing} onClick={refresh}>
+              Refresh connection
+            </Button>
+          </InlineStack>
+        ) : null}
+      </BlockStack>
+    </Card>
+  );
+}
+
+function AfterConnectionCard({connected}) {
+  const steps = connected
+    ? [
+        {icon: ImportIcon, tone: 'green', title: 'Import reviews', text: "We'll keep your reviews synced and ready to process."},
+        {icon: MicrophoneIcon, tone: 'purple', title: 'Train brand voice', text: 'Paste 5-10 past replies so Reply Pilot learns your tone.'},
+        {icon: SendIcon, tone: 'blue', title: 'Review AI replies', text: 'Drafts will appear in the approval queue before anything is sent.'},
+      ]
+    : [
+        {icon: CheckCircleIcon, tone: 'green', title: 'Verified source', text: 'We verify your credentials and connection.'},
+        {icon: ImportIcon, tone: 'blue', title: 'Ready to import', text: 'We fetch and sync your reviews securely.'},
+        {icon: MicrophoneIcon, tone: 'purple', title: 'Human approval first', text: 'You review and approve AI replies before sending.'},
+      ];
+
+  return (
+    <Card>
+      <BlockStack gap="500">
+        <Text as="h2" variant="headingLg">{connected ? 'What happens next' : 'What happens after connection'}</Text>
+        <BlockStack gap="400">
+          {steps.map((step) => (
+            <InlineStack key={step.title} gap="300" blockAlign="start" wrap={false}>
+                <span className={`rp-connect-mini-icon is-${step.tone}`}>
+                  <Icon source={step.icon} tone="base" />
+                </span>
+                <BlockStack gap="075">
+                  <Text as="p" variant="bodyMd" fontWeight="semibold">{step.title}</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">{step.text}</Text>
+                </BlockStack>
+            </InlineStack>
+          ))}
+        </BlockStack>
+        {connected ? (
+          <>
+            <Divider />
+            <BlockStack gap="200">
+              <Button url="/app/brand-voice" icon={ExternalIcon}>Open brand voice setup</Button>
+              <Button url="/app/reviews" variant="plain" icon={ExternalIcon}>View imported reviews</Button>
+            </BlockStack>
+          </>
+        ) : null}
+      </BlockStack>
+    </Card>
+  );
+}
+
+function ConnectedManager({connection, fetcher, onChangeProvider}) {
   const pendingIntent = fetcher.formData?.get('intent');
   const isRefreshing = fetcher.state !== 'idle' && pendingIntent === 'refresh';
   const isDisconnecting = fetcher.state !== 'idle' && pendingIntent === 'disconnect';
@@ -229,304 +375,327 @@ function ConnectionActions({connection, fetcher, apiSettingsUrl}) {
     fetcher.submit(formData, {method: 'post'});
   }
 
-  if (connection) {
-    return (
-      <InlineStack gap="200" align="end">
-        <Button icon={RefreshIcon} loading={isRefreshing} disabled={isRefreshing} onClick={() => submitIntent('refresh')}>
-          Refresh
-        </Button>
-        <Button tone="critical" loading={isDisconnecting} disabled={isDisconnecting} onClick={() => submitIntent('disconnect')}>
-          Disconnect
-        </Button>
-      </InlineStack>
-    );
-  }
-
-  return (
-    <Button variant="primary" icon={ExternalIcon} url={apiSettingsUrl} target="_blank">
-      Open Judge.me
-    </Button>
-  );
-}
-
-function JudgeMeConnectionCard({judgeMe, connection, loaderData, fetcher}) {
-  const isConnected = Boolean(connection);
+  const rows = [
+    ['Provider', <InlineStack key="provider" gap="250" blockAlign="center"><ProviderMark provider={providers[0]} /><Text as="span" variant="bodyMd">Judge.me</Text></InlineStack>],
+    ['Connected shop', connection.shopDomain],
+    ['Auth method', 'Private API token'],
+    ['Token', tokenWithViewIcon(connection.tokenMask)],
+    ['Connected at', formatDateTime(connection.createdAt)],
+    ['Last verified', formatDateTime(connection.lastVerifiedAt)],
+    ['Imported reviews', `${formatNumber(connection.reviewCount)} available`],
+    ['Sync health', <Badge key="health" tone={connection.status === 'connected' ? 'success' : 'critical'}>{connection.status === 'connected' ? 'Healthy' : 'Needs attention'}</Badge>],
+  ];
 
   return (
     <Card>
       <BlockStack gap="400">
-        <InlineStack align="space-between" blockAlign="start" gap="400">
-          <InlineStack gap="300" blockAlign="center" wrap={false}>
-            <SourceLogo source={judgeMe}>{judgeMe.initials}</SourceLogo>
-            <BlockStack gap="100">
-              <InlineStack gap="200" blockAlign="center">
-                <Text as="h3" variant="headingLg">{judgeMe.name}</Text>
-                <Badge tone={isConnected ? 'success' : 'attention'}>
-                  {isConnected ? 'Connected' : judgeMe.status}
-                </Badge>
-                <Text as="span" variant="bodySm" tone="subdued">{judgeMe.merchants}</Text>
-              </InlineStack>
-              <Text as="p" variant="bodyMd" tone="subdued">{judgeMe.detail}</Text>
-            </BlockStack>
-          </InlineStack>
+        <Text as="h2" variant="headingLg">Connected source</Text>
+        <Banner tone="success">
+          Judge.me connected successfully
+        </Banner>
 
-          <ConnectionActions
-            connection={connection}
-            fetcher={fetcher}
-            apiSettingsUrl={loaderData.judgeMeApiSettingsUrl}
-          />
+        <BlockStack gap="300">
+          <BlockStack gap="0">
+            {rows.map(([label, value]) => (
+              <div key={label} className="rp-connect-summary-row">
+                <Text as="span" variant="bodyMd" tone="subdued">{label}</Text>
+                {typeof value === 'string' || typeof value === 'number' ? (
+                  <Text as="span" variant="bodyMd" fontWeight="medium">{value}</Text>
+                ) : (
+                  <div className="rp-connect-kv-value">{value}</div>
+                )}
+              </div>
+            ))}
+          </BlockStack>
+        </BlockStack>
+
+        <InlineStack gap="200">
+          <Button icon={RefreshIcon} loading={isRefreshing} disabled={isRefreshing} onClick={() => submitIntent('refresh')}>
+            Refresh connection
+          </Button>
+          <Button icon={ArrowRightIcon} onClick={onChangeProvider}>
+            Change provider
+          </Button>
+          <Button tone="critical" icon={XIcon} loading={isDisconnecting} disabled={isDisconnecting} onClick={() => submitIntent('disconnect')}>
+            Disconnect
+          </Button>
         </InlineStack>
 
-        {isConnected ? (
-          <InlineGrid columns={{xs: 1, md: 4}} gap="300">
-            <div className="rp-connect-stat">
-              <Text as="span" variant="bodySm" tone="subdued">Status</Text>
-              <InlineStack gap="150" blockAlign="center">
-                <Icon source={StatusActiveIcon} tone={connection.status === 'connected' ? 'success' : 'critical'} />
-                <Text as="span" variant="bodyMd" fontWeight="semibold">{connection.status}</Text>
-              </InlineStack>
-            </div>
-            <div className="rp-connect-stat">
-              <Text as="span" variant="bodySm" tone="subdued">Shop</Text>
-              <Text as="span" variant="bodyMd" fontWeight="semibold">{connection.shopDomain}</Text>
-            </div>
-            <div className="rp-connect-stat">
-              <Text as="span" variant="bodySm" tone="subdued">Method</Text>
-              <Text as="span" variant="bodyMd" fontWeight="semibold">Private API token</Text>
-            </div>
-            <div className="rp-connect-stat">
-              <Text as="span" variant="bodySm" tone="subdued">Token</Text>
-              <Text as="span" variant="bodyMd" fontWeight="semibold">{connection.tokenMask}</Text>
-            </div>
+        <Text as="p" variant="bodySm" tone="subdued">
+          Changing provider will reopen the provider selection and token setup flow.
+        </Text>
+
+        <Divider />
+
+        <BlockStack gap="250">
+          <Text as="h3" variant="headingMd">Available providers</Text>
+          <InlineGrid columns={{xs: 1, sm: 2, lg: 4}} gap="300">
+            {providers.map((provider) => (
+              <ProviderTile
+                key={provider.id}
+                provider={provider}
+                selected={provider.id === 'judgeme'}
+                statusOverride={provider.id === 'judgeme' ? 'Connected' : undefined}
+              />
+            ))}
           </InlineGrid>
-        ) : (
-          <ManualTokenForm
-            fetcher={fetcher}
-            shop={loaderData.shop}
-            apiSettingsUrl={loaderData.judgeMeApiSettingsUrl}
-            apiDocsUrl={loaderData.judgeMeApiDocsUrl}
-          />
-        )}
+        </BlockStack>
       </BlockStack>
     </Card>
   );
 }
 
-function JudgeMeAccountPanel({connection}) {
-  const sampleReviews = Array.isArray(connection?.sampleReviews) ? connection.sampleReviews : [];
-
-  if (!connection) return null;
+function ConnectPanel({connection, fetcher, loaderData, showProviderSetup, onChangeProvider}) {
+  if (connection && !showProviderSetup) {
+    return (
+      <ConnectedManager
+        connection={connection}
+        fetcher={fetcher}
+        onChangeProvider={onChangeProvider}
+      />
+    );
+  }
 
   return (
-    <InlineGrid columns={{xs: 1, md: 2}} gap="400">
-      <Card>
-        <BlockStack gap="350">
+    <Card>
+      <BlockStack gap="400">
+        <InlineStack align="space-between" blockAlign="center">
+          <Text as="h2" variant="headingLg">{connection ? 'Change review source' : 'Connect your review source'}</Text>
+          {connection ? <Badge tone="info">Judge.me active</Badge> : null}
+        </InlineStack>
+        {connection ? (
+          <Banner tone="info">
+            Other review providers are coming soon. You can refresh or reconnect Judge.me for now.
+          </Banner>
+        ) : null}
+        <ConnectForm
+          fetcher={fetcher}
+          shop={loaderData.shop}
+          apiSettingsUrl={loaderData.judgeMeApiSettingsUrl}
+          apiDocsUrl={loaderData.judgeMeApiDocsUrl}
+        />
+      </BlockStack>
+    </Card>
+  );
+}
+
+function buildDebugInfo({connection, loaderData, result}) {
+  const connected = Boolean(connection);
+  const reviewCount = connection?.reviewCount ?? 0;
+  const connectionStatus = connection?.status || 'not_connected';
+  const account = connection?.account && typeof connection.account === 'object' && !Array.isArray(connection.account)
+    ? connection.account
+    : null;
+  const settings = connection?.settings && typeof connection.settings === 'object' && !Array.isArray(connection.settings)
+    ? connection.settings
+    : null;
+  const sampleReviews = Array.isArray(connection?.sampleReviews) ? connection.sampleReviews : [];
+  const logs = [
+    result?.message ? ['Action response', result.message] : null,
+    connection?.lastVerifiedAt ? ['Provider verified', formatDateTime(connection.lastVerifiedAt)] : null,
+    connection?.updatedAt ? ['Database updated', formatDateTime(connection.updatedAt)] : null,
+    connection?.createdAt ? ['Record created', formatDateTime(connection.createdAt)] : null,
+    connection?.lastError ? ['Last provider error', connection.lastError] : null,
+    !connected ? ['Connection state', 'No saved Judge.me connection for this shop.'] : null,
+  ].filter(Boolean);
+
+  return {
+    details: [
+      ['Environment', loaderData.appEnv || 'development', 'warning'],
+      ['Session shop', loaderData.shop],
+      ['Connection ID', connection?.id || 'Not saved'],
+      ['Provider', connected ? 'judge_me' : 'None'],
+      ['Connection status', connectionStatus, connected ? 'success' : 'attention'],
+      ['Auth method', connection?.authMethod || 'private_token'],
+      ['Token (masked)', connection?.tokenMask || 'Not saved'],
+      ['Connected shop', connection?.shopDomain || 'Not connected'],
+      ['Scope', connection?.scope || 'Not returned by provider'],
+    ],
+    health: [
+      ['Imported review count', formatNumber(reviewCount)],
+      ['Sample reviews stored', String(sampleReviews.length)],
+      ['Account payload fields', String(account ? Object.keys(account).length : 0)],
+      ['Settings payload fields', String(settings ? Object.keys(settings).length : 0)],
+      ['Last verified', connected ? formatDateTime(connection.lastVerifiedAt) : 'Never'],
+      ['Last database update', connected ? formatDateTime(connection.updatedAt) : 'Never'],
+    ],
+    logs,
+    latestApiResponse: {
+      connection: connection
+        ? {
+            id: connection.id,
+            status: connection.status,
+            shopDomain: connection.shopDomain,
+            authMethod: connection.authMethod,
+            tokenMask: connection.tokenMask,
+            reviewCount: connection.reviewCount,
+            lastVerifiedAt: connection.lastVerifiedAt,
+            updatedAt: connection.updatedAt,
+            lastError: connection.lastError,
+          }
+        : null,
+      loadedPayloads: {
+        account,
+        settings,
+        sampleReviews: sampleReviews.slice(0, 3),
+      },
+      lastActionResult: result
+        ? {
+            intent: result.intent || null,
+            ok: Boolean(result.ok),
+            message: result.message || null,
+            error: result.error || null,
+          }
+        : null,
+      route: {
+        shop: loaderData.shop,
+        appEnv: loaderData.appEnv,
+      },
+    },
+    lastError: connection?.lastError || result?.error?.message || 'None',
+  };
+}
+
+function DebugPanel({connection, loaderData, result}) {
+  const [open, setOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const debugInfo = useMemo(
+    () => buildDebugInfo({connection, loaderData, result}),
+    [connection, loaderData, result],
+  );
+
+  async function copyDebugInfo() {
+    const text = JSON.stringify(debugInfo, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <Card padding="0">
+      <Box padding="300" background="bg-surface-warning">
+        <InlineStack align="space-between" blockAlign="center" gap="300">
           <InlineStack gap="200" blockAlign="center">
-            <span className="rp-icon-tile is-green">
-              <Icon source={StoreIcon} tone="base" />
-            </span>
-            <BlockStack gap="050">
-              <Text as="h2" variant="headingLg">Judge.me account</Text>
-              <Text as="p" variant="bodySm" tone="subdued">Live data saved from the verified connection.</Text>
-            </BlockStack>
+            <Icon source={InfoIcon} tone="warning" />
+            <Text as="h2" variant="headingMd">Development debug panel</Text>
+            <Badge tone="attention">Development only</Badge>
           </InlineStack>
-
-          <InlineGrid columns={{xs: 1, sm: 2}} gap="200">
-            <KeyValue label="Store name" value={connection.shopName} />
-            <KeyValue label="Owner" value={connection.ownerName} />
-            <KeyValue label="Email" value={connection.shopEmail} />
-            <KeyValue label="Plan" value={connection.plan} />
-            <KeyValue label="Platform" value={connection.platform} />
-            <KeyValue label="Country" value={connection.country} />
-            <KeyValue label="Timezone" value={connection.timezone} />
-            <KeyValue label="Widget" value={connection.widgetVersion} />
-            <KeyValue label="Reviews" value={connection.reviewCount ?? 'Connected'} />
-            <KeyValue label="Awesome" value={connection.awesome === null ? null : connection.awesome ? 'Yes' : 'No'} />
-          </InlineGrid>
-
-          <Text as="p" variant="bodySm" tone="subdued">
-            Last verified: {formatIsoDateTime(connection.lastVerifiedAt)}
-          </Text>
-        </BlockStack>
-      </Card>
-
-      <Card>
-        <BlockStack gap="350">
-          <InlineStack gap="200" blockAlign="center">
-            <span className="rp-icon-tile is-blue">
-              <Icon source={SettingsIcon} tone="base" />
-            </span>
-            <BlockStack gap="050">
-              <Text as="h2" variant="headingLg">Debug snapshot</Text>
-              <Text as="p" variant="bodySm" tone="subdued">Enough detail to confirm Judge.me is returning account data.</Text>
-            </BlockStack>
+          <InlineStack gap="200">
+            <Button icon={ClipboardIcon} onClick={copyDebugInfo}>{copied ? 'Copied' : 'Copy debug info'}</Button>
+            <Button icon={open ? ChevronUpIcon : ChevronDownIcon} accessibilityLabel={open ? 'Collapse debug panel' : 'Expand debug panel'} onClick={() => setOpen((value) => !value)} />
           </InlineStack>
+        </InlineStack>
+      </Box>
 
-          <DebugJson title="Settings" value={connection.settings} />
+      {open ? (
+        <InlineGrid columns={{xs: 1, md: 4}} gap="0">
+          <Box padding="300" borderBlockStartWidth="025" borderInlineEndWidth="025" borderColor="border">
+            <BlockStack gap="250">
+              <Text as="h3" variant="headingSm">Connection details</Text>
+              <BlockStack gap="150">
+                {debugInfo.details.map(([label, value, tone]) => (
+                  <KeyValueRow key={label} label={label} value={value} badgeTone={tone} />
+                ))}
+              </BlockStack>
+            </BlockStack>
+          </Box>
 
-          <BlockStack gap="200">
-            <Text as="h3" variant="headingSm">Latest reviews sample</Text>
-            {sampleReviews.length ? sampleReviews.map((review, index) => (
-              <Box key={review.id ?? index} paddingBlock="200" borderBlockStartWidth={index === 0 ? '0' : '025'} borderColor="border">
-                <BlockStack gap="100">
-                  <InlineStack align="space-between" gap="200">
-                    <Text as="span" variant="bodyMd" fontWeight="semibold">
-                      {review.reviewer?.name || review.reviewer_name || review.name || `Review ${index + 1}`}
-                    </Text>
-                    <Badge>{review.rating ? `${review.rating} stars` : 'Review'}</Badge>
+          <Box padding="300" borderBlockStartWidth="025" borderInlineEndWidth="025" borderColor="border">
+            <BlockStack gap="250">
+              <Text as="h3" variant="headingSm">Stored provider data</Text>
+              <BlockStack gap="150">
+                {debugInfo.health.map(([label, value, tone]) => (
+                  <KeyValueRow key={label} label={label} value={value} badgeTone={tone} />
+                ))}
+              </BlockStack>
+            </BlockStack>
+          </Box>
+
+          <Box padding="300" borderBlockStartWidth="025" borderInlineEndWidth="025" borderColor="border">
+            <BlockStack gap="250">
+              <InlineStack align="space-between">
+                <Text as="h3" variant="headingSm">Recent local events</Text>
+                <Badge tone="info">Current load</Badge>
+              </InlineStack>
+              <BlockStack gap="150">
+                {debugInfo.logs.map(([label, message]) => (
+                  <InlineStack key={`${label}-${message}`} gap="200" blockAlign="center" wrap={false}>
+                    <span className="rp-connect-log-dot" />
+                    <Text as="span" variant="bodySm" tone="subdued">{label}</Text>
+                    <Text as="span" variant="bodySm">{message}</Text>
                   </InlineStack>
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    {review.body || review.title || JSON.stringify(review).slice(0, 180)}
-                  </Text>
-                </BlockStack>
-              </Box>
-            )) : (
-              <Text as="p" variant="bodyMd" tone="subdued">No reviews returned in the sample response.</Text>
-            )}
-          </BlockStack>
-        </BlockStack>
-      </Card>
-    </InlineGrid>
+                ))}
+              </BlockStack>
+              <Divider />
+              <BlockStack gap="050">
+                <Text as="h3" variant="headingSm">Last error</Text>
+                <Text as="p" variant="bodySm" tone="subdued">{debugInfo.lastError}</Text>
+              </BlockStack>
+            </BlockStack>
+          </Box>
+
+          <Box padding="300" borderBlockStartWidth="025" borderColor="border">
+            <BlockStack gap="250">
+              <Text as="h3" variant="headingSm">Loaded debug payload</Text>
+              <pre className="rp-json-preview">{JSON.stringify(debugInfo.latestApiResponse, null, 2)}</pre>
+            </BlockStack>
+          </Box>
+        </InlineGrid>
+      ) : null}
+    </Card>
   );
 }
 
 export default function DashboardPage() {
   const loaderData = useLoaderData();
   const fetcher = useFetcher();
-  const judgeMe = reviewSources.find((source) => source.id === 'judgeme');
-  const comingSoon = reviewSources.filter((source) => !source.available);
+  const [showProviderSetup, setShowProviderSetup] = useState(false);
   const fetcherConnection = fetcher.data && 'connection' in fetcher.data ? fetcher.data.connection : undefined;
   const connection = fetcherConnection !== undefined ? fetcherConnection : loaderData.connection;
   const result = fetcher.data;
-  const heroBadgeTone = connection?.status === 'connected' ? 'success' : 'attention';
-  const heroBadgeText = connection?.status === 'connected' ? 'Judge.me connected' : 'Judge.me ready';
+  const connected = connection?.status === 'connected';
 
-  const nextSteps = useMemo(() => {
-    if (connection) {
-      return [
-        {label: 'Verified source', tone: 'success'},
-        {label: `${connection.reviewCount ?? 'Live'} reviews`, tone: undefined},
-        {label: 'Ready to import', tone: 'info'},
-      ];
-    }
-
-    return [
-      {label: 'Merchant-owned token', tone: 'info'},
-      {label: 'Judge.me API verified', tone: undefined},
-      {label: 'Server-side storage', tone: 'success'},
-    ];
-  }, [connection]);
+  const pageTitle = connected
+    ? 'Your review source is connected'
+    : 'Connect your review source and start saving time';
+  const pageSubtitle = connected
+    ? 'Reply Pilot is now syncing reviews and is ready for brand voice training and reply approval workflows.'
+    : 'Reply Pilot pulls your reviews, learns your brand voice, and helps you reply faster, always with human approval.';
 
   return (
-    <BlockStack gap="500">
+    <BlockStack gap="400">
       <ResultBanner result={result} />
 
-      <div className="rp-hero-panel">
-        <BlockStack gap="500">
-          <BlockStack gap="400">
-            <InlineStack align="space-between" blockAlign="center" gap="300">
-              <InlineStack gap="300" blockAlign="center" wrap={false}>
-                <span className="rp-app-icon">
-                  <Icon source={ChatIcon} tone="base" />
-                </span>
-                <BlockStack gap="050">
-                  <Text as="span" variant="headingMd">Reply Pilot</Text>
-                  <Text as="span" variant="bodySm" tone="subdued">AI review replies for Shopify</Text>
-                </BlockStack>
-              </InlineStack>
-              <Badge tone={heroBadgeTone}>{heroBadgeText}</Badge>
-            </InlineStack>
-
-            <div className="rp-page-title">
-              <BlockStack gap="200">
-                <Text as="h1" variant="heading3xl">
-                  Stop typing the same "thank you" 200 times.
-                </Text>
-                <Text as="p" variant="bodyLg" tone="subdued">
-                  Connect Judge.me, verify the account data, then import reviews into a human-approved reply queue.
-                </Text>
-              </BlockStack>
-            </div>
-          </BlockStack>
-
-          <div className="rp-step-grid">
-            {onboardingSteps.map((step) => (
-              <StepCard key={step.id} step={step} />
-            ))}
-          </div>
-
-          <BlockStack gap="300">
-            <InlineStack gap="200" blockAlign="center">
-              <Text as="h2" variant="headingLg">Available now</Text>
-              <Badge tone="success">Recommended</Badge>
-            </InlineStack>
-
-            <JudgeMeConnectionCard
-              judgeMe={judgeMe}
-              connection={connection}
-              loaderData={loaderData}
-              fetcher={fetcher}
-            />
-          </BlockStack>
+      <InlineStack align="space-between" blockAlign="start" gap="400">
+        <BlockStack gap="100">
+          <Text as="h1" variant="heading2xl">{pageTitle}</Text>
+          <Text as="p" variant="bodyMd" tone="subdued">{pageSubtitle}</Text>
         </BlockStack>
-      </div>
+        <ReviewBubble />
+      </InlineStack>
 
-      <InlineGrid columns={{xs: 1, md: 2}} gap="400">
-        <Card>
-          <BlockStack gap="300">
-            <InlineStack gap="200" blockAlign="center">
-              <span className="rp-icon-tile is-green">
-                <Icon source={CheckCircleIcon} tone="base" />
-              </span>
-              <Text as="h2" variant="headingLg">What happens after connection</Text>
-            </InlineStack>
-            <Text as="p" variant="bodyMd" tone="subdued">
-              Reply Pilot stores the credential server-side, checks Judge.me account data, and keeps the queue human-approved before anything is sent.
-            </Text>
-            <InlineStack gap="200">
-              {nextSteps.map((item) => (
-                <Badge key={item.label} tone={item.tone}>{item.label}</Badge>
-              ))}
-            </InlineStack>
-          </BlockStack>
-        </Card>
+      <InlineGrid columns={{xs: 1, lg: 'minmax(0, 1.2fr) minmax(360px, 0.8fr)'}} gap="400">
+        <ConnectPanel
+          connection={connection}
+          fetcher={fetcher}
+          loaderData={loaderData}
+          showProviderSetup={showProviderSetup}
+          onChangeProvider={() => setShowProviderSetup((value) => !value)}
+        />
 
-        <Card>
-          <BlockStack gap="300">
-            <InlineStack gap="200" blockAlign="center">
-              <span className="rp-icon-tile is-orange">
-                <Icon source={AlertTriangleIcon} tone="base" />
-              </span>
-              <Text as="h2" variant="headingLg">Connection model</Text>
-            </InlineStack>
-            <Text as="p" variant="bodyMd" tone="subdued">
-              Installing Judge.me in Shopify is required, but Shopify does not share Judge.me credentials with other apps. Judge.me documents the merchant-facing API setup as shop_domain plus a Private API Token from Settings &gt; Integrations.
-            </Text>
-            <Button url={loaderData.judgeMeApiDocsUrl} target="_blank" icon={ExternalIcon}>
-              Judge.me API documentation
-            </Button>
-          </BlockStack>
-        </Card>
+        <BlockStack gap="300">
+          {!connected ? <CurrentConnectionCard connection={connection} fetcher={fetcher} /> : null}
+          <AfterConnectionCard connected={connected} />
+        </BlockStack>
       </InlineGrid>
 
-      <JudgeMeAccountPanel connection={connection} />
-
-      <BlockStack gap="300">
-        <InlineStack align="space-between" blockAlign="center">
-          <InlineStack gap="200" blockAlign="center">
-            <span className="rp-icon-tile is-orange">
-              <Icon source={AppsIcon} tone="base" />
-            </span>
-            <Text as="h2" variant="headingLg">Coming soon</Text>
-          </InlineStack>
-          <Badge tone="attention">Vote what's next</Badge>
-        </InlineStack>
-        <div className="rp-source-grid">
-          {comingSoon.map((source) => (
-            <UpcomingSource key={source.id} source={source} />
-          ))}
-        </div>
-      </BlockStack>
+      {loaderData.isDevelopment ? (
+        <DebugPanel connection={connection} loaderData={loaderData} result={result} />
+      ) : null}
     </BlockStack>
   );
 }
