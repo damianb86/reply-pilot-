@@ -14,9 +14,18 @@ import {
 import {useFetcherTimeout} from '../hooks/useFetcherTimeout';
 
 function formatCreditNumber(value) {
-  const numeric = Math.trunc(Number(value || 0));
+  const numeric = Number(value || 0);
   const sign = numeric < 0 ? '-' : '';
-  return `${sign}${Math.abs(numeric).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+  const absolute = Math.abs(numeric);
+  const hasDecimals = !Number.isInteger(absolute);
+  return `${sign}${absolute.toLocaleString('en', {
+    minimumFractionDigits: hasDecimals ? 1 : 0,
+    maximumFractionDigits: hasDecimals ? 1 : 0,
+  })}`;
+}
+
+function creditWord(value) {
+  return Number(value) === 1 ? 'credit' : 'credits';
 }
 
 function LedgerAmount({amount}) {
@@ -84,13 +93,13 @@ function ModelSpendCard({name, costs}) {
           <Text as="p" variant="bodySm" tone="subdued">AI model tier</Text>
         </BlockStack>
         <Text as="p" variant="bodyMd">
-          The AI agent spends {costs.reply} credit{costs.reply === 1 ? '' : 's'} per review reply.
+          The AI agent spends {formatCreditNumber(costs.reply)} {creditWord(costs.reply)} per review reply.
         </Text>
         <Text as="p" variant="bodySm" tone="subdued">
           With this model, 1.000 credits answers about {replyCapacity(1000, costs.reply)} review replies.
         </Text>
         <Text as="p" variant="bodySm" tone="subdued">
-          Live previews use {costs.preview} credit{costs.preview === 1 ? '' : 's'}. Personality uses {costs.personality} credits.
+          Live previews use {formatCreditNumber(costs.preview)} {creditWord(costs.preview)}. Personality uses {formatCreditNumber(costs.personality)} credits.
         </Text>
       </BlockStack>
     </Card>
@@ -193,7 +202,7 @@ export default function CreditsPage() {
               Credits are spent when the AI agent generates replies, live previews, or Personality drafts. The cost depends on the AI model tier selected in Settings.
             </Text>
             {credits.useProductDescription ? (
-              <Badge tone="attention">Product descriptions enabled: reply costs are {credits.productDescriptionMultiplier}x</Badge>
+              <Badge tone="attention">Product descriptions enabled: reply costs are {formatCreditNumber(credits.productDescriptionMultiplier)}x</Badge>
             ) : null}
           </BlockStack>
           <InlineGrid columns={{xs: 1, md: 3}} gap="300">

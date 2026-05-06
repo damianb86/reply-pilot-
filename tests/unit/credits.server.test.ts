@@ -42,10 +42,10 @@ describe("credits.server", () => {
   it("applies the product description multiplier to reply costs", () => {
     delete process.env.PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER;
     expect(productDescriptionCreditMultiplier(false)).toBe(1);
-    expect(productDescriptionCreditMultiplier(true)).toBe(1.5);
-    expect(creditCostForReviewReply("basic", { useProductDescription: true })).toBe(2);
-    expect(creditCostForReviewReply("pro", { useProductDescription: true })).toBe(6);
-    expect(creditCostForReviewReply("premium", { useProductDescription: true })).toBe(18);
+    expect(productDescriptionCreditMultiplier(true)).toBe(1.3);
+    expect(creditCostForReviewReply("basic", { useProductDescription: true })).toBe(1.3);
+    expect(creditCostForReviewReply("pro", { useProductDescription: true })).toBe(5.2);
+    expect(creditCostForReviewReply("premium", { useProductDescription: true })).toBe(15.6);
   });
 
   it("reads the product description multiplier from the environment", () => {
@@ -53,6 +53,7 @@ describe("credits.server", () => {
 
     expect(productDescriptionCreditMultiplier(true)).toBe(2.25);
     expect(creditCostForReviewReply("pro", { useProductDescription: true })).toBe(9);
+    expect(creditCostForReviewReply("basic", { useProductDescription: true })).toBe(2.25);
   });
 
   it("serializes credit errors without losing shortfall details", () => {

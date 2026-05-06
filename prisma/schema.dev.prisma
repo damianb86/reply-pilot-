@@ -132,12 +132,12 @@ model AppSetting {
 model CreditAccount {
   id               String   @id @default(cuid())
   shop             String   @unique
-  startingCredits  Int      @default(100)
-  purchasedCredits Int      @default(0)
-  bonusCredits     Int      @default(0)
-  spentCredits     Int      @default(0)
-  refundedCredits  Int      @default(0)
-  balance          Int      @default(100)
+  startingCredits  Float    @default(100)
+  purchasedCredits Float    @default(0)
+  bonusCredits     Float    @default(0)
+  spentCredits     Float    @default(0)
+  refundedCredits  Float    @default(0)
+  balance          Float    @default(100)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -146,8 +146,8 @@ model CreditLedgerEntry {
   id            String   @id @default(cuid())
   shop          String
   type          String
-  amount        Int
-  balanceAfter  Int
+  amount        Float
+  balanceAfter  Float
   description   String
   referenceType String?
   referenceId   String?

@@ -3,7 +3,7 @@ import {Button, InlineStack} from '@shopify/polaris';
 import {useLocation, useMatches, useNavigate} from 'react-router';
 
 function formatCreditNumber(value) {
-  const numeric = Math.trunc(Number(value || 0));
+  const numeric = Math.round(Number(value || 0));
   const sign = numeric < 0 ? '-' : '';
   return `${sign}${Math.abs(numeric).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
 }

@@ -10,7 +10,7 @@ type CreditOperation = "reply" | "preview" | "personality";
 const INITIAL_FREE_CREDITS = 100;
 const FIRST_PURCHASE_BONUS_RATE = 0.35;
 const FIRST_PURCHASE_BONUS_PERCENT = Math.round(FIRST_PURCHASE_BONUS_RATE * 100);
-const DEFAULT_PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER = 1.5;
+const DEFAULT_PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER = 1.3;
 const CREDIT_MULTIPLIERS: Record<string, number> = {
   dev: 0,
   basic: 1,
@@ -98,7 +98,7 @@ export class CreditError extends Error {
     this.balance = details.balance;
     this.shortfall =
       details.required !== undefined && details.balance !== undefined
-        ? Math.max(0, details.required - details.balance)
+        ? normalizeCreditAmount(details.required - details.balance)
         : undefined;
   }
 }
@@ -115,6 +115,12 @@ export function creditMultiplierForModel(modelId?: string | null) {
 
 export function creditCostForOperation(modelId: string | null | undefined, operation: CreditOperation) {
   return OPERATION_BASE_COSTS[operation] * creditMultiplierForModel(modelId);
+}
+
+function normalizeCreditAmount(value: number) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Number(Math.max(0, numeric).toFixed(4));
 }
 
 function configuredProductDescriptionMultiplier() {
@@ -134,7 +140,7 @@ export function creditCostForReviewReply(
   modelId: string | null | undefined,
   options: { useProductDescription?: boolean | null } = {},
 ) {
-  return Math.ceil(
+  return normalizeCreditAmount(
     creditCostForOperation(modelId, "reply") * productDescriptionCreditMultiplier(options.useProductDescription),
   );
 }
@@ -158,6 +164,16 @@ function formatCurrency(amountCents: number, currencyCode: string) {
 
 function formatCreditCount(credits: number) {
   return new Intl.NumberFormat("en").format(Math.max(0, Math.round(credits)));
+}
+
+export function formatCreditAmount(credits: number) {
+  const normalized = normalizeCreditAmount(Math.abs(Number(credits) || 0));
+  const sign = Number(credits) < 0 ? "-" : "";
+  const hasDecimals = !Number.isInteger(normalized);
+  return `${sign}${new Intl.NumberFormat("en", {
+    minimumFractionDigits: hasDecimals ? 1 : 0,
+    maximumFractionDigits: hasDecimals ? 1 : 0,
+  }).format(normalized)}`;
 }
 
 function firstPurchaseBonusCredits(credits: number) {
@@ -290,7 +306,7 @@ export async function spendCredits(
     metadata?: Record<string, unknown>;
   },
 ) {
-  const credits = Math.max(0, Math.round(amount));
+  const credits = normalizeCreditAmount(amount);
   const account = await accountForShop(shop);
   if (!credits) return { id: null, amount: 0, balanceAfter: account.balance };
 
@@ -306,7 +322,7 @@ export async function spendCredits(
     if (updated.count !== 1) {
       const latest = await tx.creditAccount.findUnique({ where: { shop } });
       throw new CreditError(
-        `Not enough credits. ${credits} credits required, ${latest?.balance ?? 0} available.`,
+        `Not enough credits. ${formatCreditAmount(credits)} credits required, ${formatCreditAmount(latest?.balance ?? 0)} available.`,
         { required: credits, balance: latest?.balance ?? 0 },
       );
     }
@@ -339,7 +355,7 @@ export async function refundCredits(
     metadata?: Record<string, unknown>;
   },
 ) {
-  const credits = Math.max(0, Math.round(amount));
+  const credits = normalizeCreditAmount(amount);
   if (!credits) return getCreditOverview(shop);
   await accountForShop(shop);
 

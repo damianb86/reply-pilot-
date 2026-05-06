@@ -10,6 +10,7 @@ import { getAiModelOptions, serializeAiError } from "../ai.server";
 import {
   CreditError,
   creditCostForOperation,
+  formatCreditAmount,
   getCreditOverview,
   refundCredits,
   serializeCreditError,
@@ -283,7 +284,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return {
         ok: true,
         intent,
-        message: `Personality generated with ${result.model.name}. ${creditCharge.amount} credits spent.`,
+        message: `Personality generated with ${result.model.name}. ${formatCreditAmount(creditCharge.amount)} credits spent.`,
         personality: result.personality,
         livePreview: result.livePreview,
         aiModel: result.model,
@@ -323,7 +324,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return {
         ok: true,
         intent,
-        message: `Live preview generated with ${result.model.name}. ${creditCharge.amount} credits spent.`,
+        message: `Live preview generated with ${result.model.name}. ${formatCreditAmount(creditCharge.amount)} credits spent.`,
         aiModels: await getAiModelOptions(),
         credits: await getCreditOverview(session.shop),
         creditCharge,

@@ -56,9 +56,9 @@ const queueSortOptions = [
 ];
 
 const defaultProductDescriptionReplyCosts = {
-  basic: 2,
-  pro: 6,
-  premium: 18,
+  basic: 1.3,
+  pro: 5.2,
+  premium: 15.6,
 };
 
 const retentionOptions = [
@@ -80,8 +80,18 @@ function settingsSignature(settings) {
 
 function formatMultiplier(value) {
   const multiplier = Number(value);
-  if (!Number.isFinite(multiplier)) return '1.5';
+  if (!Number.isFinite(multiplier)) return '1.3';
   return String(Number(multiplier.toFixed(2)));
+}
+
+function formatCreditAmount(value) {
+  const credits = Number(value);
+  if (!Number.isFinite(credits)) return '0';
+  const hasDecimals = !Number.isInteger(Math.abs(credits));
+  return credits.toLocaleString('en', {
+    minimumFractionDigits: hasDecimals ? 1 : 0,
+    maximumFractionDigits: hasDecimals ? 1 : 0,
+  });
 }
 
 function FieldRow({label, description, children}) {
@@ -146,10 +156,10 @@ export default function SettingsPage() {
   const saveFetcher = useFetcher();
   const cleanupFetcher = useFetcher();
   const lastToastKey = useRef('');
-  const configuredProductDescriptionMultiplier = Number(loaderData.productDescriptionCreditMultiplier ?? 1.5);
+  const configuredProductDescriptionMultiplier = Number(loaderData.productDescriptionCreditMultiplier ?? 1.3);
   const productDescriptionMultiplier = Number.isFinite(configuredProductDescriptionMultiplier)
     ? configuredProductDescriptionMultiplier
-    : 1.5;
+    : 1.3;
   const productDescriptionReplyCosts = {
     ...defaultProductDescriptionReplyCosts,
     ...(loaderData.productDescriptionReplyCosts ?? {}),
@@ -410,7 +420,7 @@ export default function SettingsPage() {
                         Product descriptions increase reply-generation credits by {formatMultiplier(productDescriptionMultiplier)}x.
                       </Text>
                       <Text as="p" variant="bodyMd">
-                        Basic replies cost {productDescriptionReplyCosts.basic} credits, Pro replies cost {productDescriptionReplyCosts.pro} credits, and Premium replies cost {productDescriptionReplyCosts.premium} credits while this setting is enabled. Descriptions are stripped of HTML, cleaned, and shortened before they are sent to the AI.
+                        Basic replies cost {formatCreditAmount(productDescriptionReplyCosts.basic)} credits, Pro replies cost {formatCreditAmount(productDescriptionReplyCosts.pro)} credits, and Premium replies cost {formatCreditAmount(productDescriptionReplyCosts.premium)} credits while this setting is enabled. Decimal credits are tracked internally; descriptions are stripped of HTML, cleaned, and shortened before they are sent to the AI.
                       </Text>
                     </BlockStack>
                   </Banner>

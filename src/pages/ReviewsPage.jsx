@@ -347,11 +347,19 @@ function ReviewsContent() {
   const isSyncing = isSubmitting && pendingIntent === 'sync';
   const connectUrl = `/app/dashboard${location.search || ''}`;
   const creditsFor = useCallback((count) => Math.max(0, count * replyCreditCost), [replyCreditCost]);
+  const formatCreditAmount = useCallback((value) => {
+    const numeric = Number(value || 0);
+    const hasDecimals = !Number.isInteger(Math.abs(numeric));
+    return numeric.toLocaleString('en', {
+      minimumFractionDigits: hasDecimals ? 1 : 0,
+      maximumFractionDigits: hasDecimals ? 1 : 0,
+    });
+  }, []);
   const creditLabel = useCallback((count) => {
     const cost = creditsFor(count);
     if (!cost) return 'free';
-    return `${cost} credit${cost === 1 ? '' : 's'}`;
-  }, [creditsFor]);
+    return `${formatCreditAmount(cost)} credit${cost === 1 ? '' : 's'}`;
+  }, [creditsFor, formatCreditAmount]);
   const hasCreditsFor = useCallback((count) => creditsFor(count) <= creditBalance, [creditBalance, creditsFor]);
 
   const showToast = useCallback((data) => {
@@ -639,7 +647,7 @@ function ReviewsContent() {
             <InlineStack gap="200" blockAlign="center">
               <Badge tone={aiConfigured ? 'info' : 'critical'}>AI: {aiDisplayName}</Badge>
               <Text as="span" variant="bodySm" tone="subdued">{aiProvider} from Brand Voice</Text>
-              <Badge tone={creditBalance < replyCreditCost ? 'critical' : 'info'}>{creditBalance} credits</Badge>
+              <Badge tone={creditBalance < replyCreditCost ? 'critical' : 'info'}>{formatCreditAmount(creditBalance)} credits</Badge>
               <Text as="span" variant="bodySm" tone="subdued">{creditLabel(1)} per reply</Text>
               {productDescriptionMultiplier > 1 ? <Badge tone="attention">Product descriptions {productDescriptionMultiplier}x</Badge> : null}
               <Badge>{pageData.connected ? 'Judge.me connected' : 'Source missing'}</Badge>

@@ -210,17 +210,27 @@ function ExampleRow({example, onRemove}) {
 function creditsText(amount) {
   const credits = Number(amount ?? 0);
   if (!credits) return 'free';
-  return `${credits} credit${credits === 1 ? '' : 's'}`;
+  const hasDecimals = !Number.isInteger(Math.abs(credits));
+  const formatted = credits.toLocaleString('en', {
+    minimumFractionDigits: hasDecimals ? 1 : 0,
+    maximumFractionDigits: hasDecimals ? 1 : 0,
+  });
+  return `${formatted} credit${credits === 1 ? '' : 's'}`;
 }
 
 function creditsNumber(amount) {
-  return Number(amount ?? 0).toLocaleString('en');
+  const credits = Number(amount ?? 0);
+  const hasDecimals = !Number.isInteger(Math.abs(credits));
+  return credits.toLocaleString('en', {
+    minimumFractionDigits: hasDecimals ? 1 : 0,
+    maximumFractionDigits: hasDecimals ? 1 : 0,
+  });
 }
 
 function replyCostBadge(model, multiplier = 1) {
   const credits = Number(model.credits?.reply ?? 0) * Number(multiplier || 1);
   if (!credits) return 'Free';
-  return `${credits} credit${credits === 1 ? '' : 's'} / reply`;
+  return `${creditsText(credits)} / reply`;
 }
 
 function ModelCard({model, selected, onSelect, replyCreditMultiplier = 1}) {
