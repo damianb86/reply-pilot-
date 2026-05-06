@@ -16,8 +16,13 @@ import {
   spendCredits,
 } from "../credits.server";
 import { serializeJudgeMeError } from "../judgeme.server";
+import { loadAppSettings } from "../settings.server";
 import { authenticate } from "../shopify.server";
 import { loadShopifyProductById } from "../shopify-products.server";
+
+type AdminGraphql = {
+  graphql: (query: string, options?: { variables?: Record<string, unknown> }) => Promise<Response>;
+};
 
 type ParsedReply = {
   id: string;
@@ -106,6 +111,37 @@ function parseStringList(value: FormDataEntryValue | null) {
   } catch {
     return [];
   }
+}
+
+function optionalBoolean(value: FormDataEntryValue | null) {
+  if (value === "true" || value === "on" || value === "1") return true;
+  if (value === "false" || value === "off" || value === "0") return false;
+  return null;
+}
+
+async function previewProductContextFromForm(
+  admin: AdminGraphql,
+  formData: FormData,
+  useProductDescription: boolean,
+) {
+  const fallback = {
+    previewProductTitle: String(formData.get("previewProductTitle") ?? ""),
+    previewProductType: String(formData.get("previewProductType") ?? ""),
+    previewProductTags: parseStringList(formData.get("previewProductTags")),
+    previewProductDescription: "",
+  };
+  const productId = String(formData.get("previewProductId") ?? "").trim();
+  if (!useProductDescription || !productId) return fallback;
+
+  const product = await loadShopifyProductById(admin, productId);
+  if (!product) return fallback;
+
+  return {
+    previewProductTitle: product.title || fallback.previewProductTitle,
+    previewProductType: product.productType || fallback.previewProductType,
+    previewProductTags: product.tags.length ? product.tags : fallback.previewProductTags,
+    previewProductDescription: product.description || "",
+  };
 }
 
 async function withCreditCharge<T>(
@@ -217,6 +253,11 @@ export async function action({ request }: ActionFunctionArgs) {
         };
       }
 
+      const appSettings = await loadAppSettings(session.shop);
+      const useProductDescription =
+        optionalBoolean(formData.get("useProductDescription")) ?? appSettings.useProductDescription;
+      const previewProductContext = await previewProductContextFromForm(admin, formData, useProductDescription);
+
       const { result, creditCharge } = await withCreditCharge(
         session.shop,
         modelId,
@@ -232,9 +273,7 @@ export async function action({ request }: ActionFunctionArgs) {
           avoidPhrases: parseStringList(formData.get("avoidPhrases")),
           previewReview: String(formData.get("previewReview") ?? ""),
           previewRating: Number(formData.get("previewRating") ?? 5),
-          previewProductTitle: String(formData.get("previewProductTitle") ?? ""),
-          previewProductType: String(formData.get("previewProductType") ?? ""),
-          previewProductTags: parseStringList(formData.get("previewProductTags")),
+          ...previewProductContext,
           personalityStyle: String(formData.get("personalityStyle") ?? ""),
           personalityStrength: String(formData.get("personalityStrength") ?? ""),
           replyLength: String(formData.get("replyLength") ?? ""),
@@ -256,6 +295,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (intent === "generate-preview") {
       const modelId = String(formData.get("modelId") ?? "");
+      const appSettings = await loadAppSettings(session.shop);
+      const useProductDescription =
+        optionalBoolean(formData.get("useProductDescription")) ?? appSettings.useProductDescription;
+      const previewProductContext = await previewProductContextFromForm(admin, formData, useProductDescription);
       const { result, creditCharge } = await withCreditCharge(
         session.shop,
         modelId,
@@ -270,9 +313,7 @@ export async function action({ request }: ActionFunctionArgs) {
           avoidPhrases: parseStringList(formData.get("avoidPhrases")),
           previewReview: String(formData.get("previewReview") ?? ""),
           previewRating: Number(formData.get("previewRating") ?? 5),
-          previewProductTitle: String(formData.get("previewProductTitle") ?? ""),
-          previewProductType: String(formData.get("previewProductType") ?? ""),
-          previewProductTags: parseStringList(formData.get("previewProductTags")),
+          ...previewProductContext,
           personalityStyle: String(formData.get("personalityStyle") ?? ""),
           personalityStrength: String(formData.get("personalityStrength") ?? ""),
           replyLength: String(formData.get("replyLength") ?? ""),

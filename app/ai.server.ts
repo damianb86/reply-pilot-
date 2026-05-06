@@ -55,6 +55,7 @@ type BrandVoiceContext = {
   previewProductTitle?: string | null;
   previewProductType?: string | null;
   previewProductTags?: string[];
+  previewProductDescription?: string | null;
   personalityStyle?: string;
   personalityStrength?: string;
   replyLength?: string;
@@ -669,6 +670,7 @@ function previewPrompt(context: BrandVoiceContext) {
       productTitle: context.previewProductTitle,
       productType: context.previewProductType,
       productTags: context.previewProductTags,
+      productDescription: context.previewProductDescription,
     }),
     `Review from Anya, ${previewRating} out of 5 stars: "${previewReview}"`,
     "Before finalizing, check: no unsupported numbers, no invented facts, no duplicated name, no mechanical recap.",

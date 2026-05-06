@@ -302,6 +302,7 @@ export default function SettingsPage() {
               embedded
               activeSection={activeSection}
               onActiveSectionChange={setActiveSection}
+              useProductDescription={settings.useProductDescription}
               replyCreditMultiplier={settings.useProductDescription ? productDescriptionMultiplier : 1}
             />
           ) : null}

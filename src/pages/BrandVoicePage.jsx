@@ -526,6 +526,7 @@ export default function BrandVoicePage({
   embedded = false,
   activeSection: controlledActiveSection,
   onActiveSectionChange,
+  useProductDescription = false,
   replyCreditMultiplier = 1,
 } = {}) {
   const shopify = useAppBridge();
@@ -629,6 +630,18 @@ export default function BrandVoicePage({
   const selectedCreditCosts = selectedModelConfig?.credits ?? {reply: 1, preview: 1, personality: 2};
   const canGeneratePreview = Number(creditOverview.balance ?? 0) >= Number(selectedCreditCosts.preview ?? 0);
   const canGeneratePersonality = Number(creditOverview.balance ?? 0) >= Number(selectedCreditCosts.personality ?? 0);
+  const previewProductContextText = useMemo(() => {
+    if (!previewProductTitle) return 'Open Shopify product picker to search the full catalog.';
+
+    const productBasics = [previewProductType, previewProductTags.slice(0, 4).join(', ')].filter(Boolean).join(' · ');
+    if (useProductDescription) {
+      return productBasics
+        ? `${productBasics} · cleaned description included`
+        : 'Cleaned product description is included when Shopify provides it.';
+    }
+
+    return productBasics || 'Title is sent to the AI.';
+  }, [previewProductTags, previewProductTitle, previewProductType, useProductDescription]);
   const visibleReplyLengthOptions = useMemo(
     () => (showAdvancedLength || replyLength === 'very_long'
       ? replyLengthOptions
@@ -916,10 +929,12 @@ export default function BrandVoicePage({
     formData.set('personalityStrength', personalityStrength);
     formData.set('replyLength', replyLength);
     formData.set('previewReview', previewReview);
+    formData.set('previewProductId', previewProductId);
     formData.set('previewProductTitle', previewProductTitle);
     formData.set('previewProductType', previewProductType);
     formData.set('previewProductTags', JSON.stringify(previewProductTags));
     formData.set('previewRating', previewRating);
+    formData.set('useProductDescription', String(Boolean(useProductDescription)));
     formData.set('replies', JSON.stringify(exampleReplies));
     submitBrandVoice(personalityFetcher, formData);
   }
@@ -937,10 +952,12 @@ export default function BrandVoicePage({
     formData.set('personalityStrength', personalityStrength);
     formData.set('replyLength', replyLength);
     formData.set('previewReview', previewReview);
+    formData.set('previewProductId', previewProductId);
     formData.set('previewProductTitle', previewProductTitle);
     formData.set('previewProductType', previewProductType);
     formData.set('previewProductTags', JSON.stringify(previewProductTags));
     formData.set('previewRating', previewRating);
+    formData.set('useProductDescription', String(Boolean(useProductDescription)));
     submitBrandVoice(previewFetcher, formData);
   }
 
@@ -1329,6 +1346,7 @@ export default function BrandVoicePage({
                   <Text as="span" variant="bodySm" tone="subdued">
                     against your saved test review · {selectedModelConfig?.name ?? 'selected tier'}
                   </Text>
+                  {useProductDescription ? <Badge tone="attention">Product description on</Badge> : null}
                 </InlineStack>
                 <Button
                   icon={RefreshIcon}
@@ -1350,9 +1368,7 @@ export default function BrandVoicePage({
                           {previewProductTitle || 'No product selected'}
                         </Text>
                         <Text as="p" variant="bodySm" tone="subdued">
-                          {previewProductTitle
-                            ? [previewProductType, previewProductTags.slice(0, 4).join(', ')].filter(Boolean).join(' · ') || 'Title is sent to the AI.'
-                            : 'Open Shopify product picker to search the full catalog.'}
+                          {previewProductContextText}
                         </Text>
                       </BlockStack>
                       <InlineStack gap="150" wrap={false}>

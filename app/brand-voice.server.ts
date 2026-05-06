@@ -319,6 +319,7 @@ export async function generateBrandVoicePersonality(input: {
   previewProductTitle?: string;
   previewProductType?: string;
   previewProductTags?: string[];
+  previewProductDescription?: string;
   personalityStyle?: string;
   personalityStrength?: string;
   replyLength?: string;
@@ -337,6 +338,7 @@ export async function generateBrandVoicePersonality(input: {
       previewProductTitle: input.previewProductTitle,
       previewProductType: input.previewProductType,
       previewProductTags: input.previewProductTags,
+      previewProductDescription: input.previewProductDescription,
       personalityStyle: input.personalityStyle,
       personalityStrength: input.personalityStrength,
       replyLength: input.replyLength,
@@ -355,6 +357,7 @@ export async function generateBrandVoicePersonality(input: {
       previewProductTitle: input.previewProductTitle,
       previewProductType: input.previewProductType,
       previewProductTags: input.previewProductTags,
+      previewProductDescription: input.previewProductDescription,
       personalityStyle: input.personalityStyle,
       personalityStrength: input.personalityStrength,
       replyLength: input.replyLength,
@@ -432,6 +435,7 @@ export async function generateBrandVoicePreview(input: {
   previewProductTitle?: string;
   previewProductType?: string;
   previewProductTags?: string[];
+  previewProductDescription?: string;
   personalityStyle?: string;
   personalityStrength?: string;
   replyLength?: string;
@@ -449,6 +453,7 @@ export async function generateBrandVoicePreview(input: {
       previewProductTitle: input.previewProductTitle,
       previewProductType: input.previewProductType,
       previewProductTags: input.previewProductTags,
+      previewProductDescription: input.previewProductDescription,
       personalityStyle: input.personalityStyle,
       personalityStrength: input.personalityStrength,
       replyLength: input.replyLength,
