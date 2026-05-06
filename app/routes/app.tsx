@@ -24,7 +24,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 function loadingCopyForPath(pathname: string) {
   if (pathname.endsWith("/reviews")) {
     return {
-      title: "Loading Queue",
+      title: "Loading Reviews",
       description: "Preparing reviews, filters, AI state, and connection status...",
     };
   }
@@ -93,7 +93,7 @@ export default function App() {
         <NavMenu>
           <a href={withEmbeddedSearch("/app")} rel="home">Reply Pilot</a>
           <a href={withEmbeddedSearch("/app/dashboard")}>Connect</a>
-          <a href={withEmbeddedSearch("/app/reviews")}>Queue</a>
+          <a href={withEmbeddedSearch("/app/reviews")}>Reviews</a>
           <a href={withEmbeddedSearch("/app/logs")}>Sent</a>
           <a href={withEmbeddedSearch("/app/settings")}>Settings</a>
           <a href={withEmbeddedSearch("/app/help")}>Help</a>

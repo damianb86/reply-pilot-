@@ -78,12 +78,12 @@ function QueueEmptyState({connected, connectUrl, onRefresh, refreshing}) {
         <Text as="h2" variant="headingLg" alignment="center">No messages to show</Text>
         <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
           {connected
-            ? 'When Judge.me has pending reviews, Reply Pilot will import them here so you can generate drafts for approval.'
-            : 'Connect Judge.me from Connect to import reviews and start replying from this queue.'}
+            ? 'When Judge.me has reviews ready for attention, Reply Pilot will import them here so you can review existing replies and generate new drafts.'
+            : 'Connect Judge.me from Connect to import reviews and start replying from Reviews.'}
         </Text>
       </BlockStack>
       <InlineStack gap="200" align="center">
-        <Button icon={RefreshIcon} loading={refreshing} disabled={!connected || refreshing} onClick={onRefresh}>Refresh queue</Button>
+        <Button icon={RefreshIcon} loading={refreshing} disabled={!connected || refreshing} onClick={onRefresh}>Refresh reviews</Button>
         {!connected ? <Button url={connectUrl} variant="primary">Go to Connect</Button> : null}
       </InlineStack>
     </div>
@@ -136,6 +136,22 @@ function parseDate(value) {
 
 function hasDraft(review) {
   return Boolean(review?.draftGenerated ?? review?.draft?.trim());
+}
+
+function hasJudgeMeReply(review) {
+  return Boolean(review?.hasJudgeMeReply || review?.judgeMeReply?.present);
+}
+
+function formatReplyDate(value) {
+  const date = parseDate(value);
+  if (!date) return '';
+
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 function readPendingIds(formData) {
@@ -240,7 +256,7 @@ function ReviewsContent() {
   const [localToast, setLocalToast] = useState(null);
   const pageData = fetcher.data?.reviews ? fetcher.data : loaderData;
   const reviews = useMemo(() => pageData.reviews ?? [], [pageData.reviews]);
-  const stats = pageData.stats ?? {pending: 0, sentToday: 0, sent: 0, skipped: 0, ungenerated: 0, highConfidence: 0, needsHuman: 0};
+  const stats = pageData.stats ?? {pending: 0, sentToday: 0, sent: 0, skipped: 0, ungenerated: 0, judgeMeReplied: 0, highConfidence: 0, needsHuman: 0};
   const queueSettings = pageData.settings ?? {};
   const highConfidenceThreshold = queueSettings.highConfidenceThreshold ?? 85;
   const products = pageData.products ?? [];
@@ -292,20 +308,30 @@ function ReviewsContent() {
   const activeReview = filteredReviews.find((review) => review.id === activeReviewId) ?? filteredReviews[0] ?? null;
   const visibleIds = filteredReviews.map((review) => review.id);
   const activeHasDraft = hasDraft(activeReview);
+  const activeHasJudgeMeReply = hasJudgeMeReply(activeReview);
   const highConfidenceVisible = filteredReviews.filter((review) => (
     review.status === 'pending' && hasDraft(review) && review.confidence >= highConfidenceThreshold
   ));
-  const ungeneratedVisible = filteredReviews.filter((review) => review.status === 'pending' && !hasDraft(review));
+  const ungeneratedVisible = filteredReviews.filter((review) => (
+    review.status === 'pending' && !hasDraft(review) && !hasJudgeMeReply(review)
+  ));
   const selectedVisibleIds = selectedIds.filter((id) => visibleIds.includes(id));
   const selectedPendingIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'pending');
   const selectedGeneratedPendingIds = selectedPendingIds.filter((id) => hasDraft(filteredReviews.find((review) => review.id === id)));
-  const selectedUngeneratedPendingIds = selectedPendingIds.filter((id) => !hasDraft(filteredReviews.find((review) => review.id === id)));
+  const selectedUngeneratedPendingIds = selectedPendingIds.filter((id) => {
+    const review = filteredReviews.find((item) => item.id === id);
+    return !hasDraft(review) && !hasJudgeMeReply(review);
+  });
+  const selectedJudgeMeReplyIds = selectedPendingIds.filter((id) => {
+    const review = filteredReviews.find((item) => item.id === id);
+    return hasJudgeMeReply(review) && !hasDraft(review);
+  });
   const selectedSkippedIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'skipped');
   const selectedSentIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'sent');
   const selectedCount = selectedVisibleIds.length;
   const timeout = useFetcherTimeout(fetcher, {
     timeoutMs: 120000,
-    message: 'The Queue action took too long. Please try again later.',
+    message: 'The Reviews action took too long. Please try again later.',
   });
   const actionResult = timeout.result || fetcher.data;
   const isSubmitting = timeout.pending;
@@ -331,7 +357,7 @@ function ReviewsContent() {
     lastToastKey.current = key;
 
     if (!data.ok && data.error) {
-      console.error('Queue action failed', data.error);
+      console.error('Reviews action failed', data.error);
     }
 
     try {
@@ -506,11 +532,13 @@ function ReviewsContent() {
               <Badge tone="attention">Skipped</Badge>
             ) : review.status === 'sent' ? (
               <Badge tone="success">Sent</Badge>
-            ) : !hasDraft(review) ? (
+            ) : null}
+            {hasJudgeMeReply(review) ? <Badge tone="success">Judge.me replied</Badge> : null}
+            {!hasDraft(review) && !hasJudgeMeReply(review) ? (
               <Badge tone="info">Draft needed</Badge>
-            ) : (
+            ) : hasDraft(review) ? (
               <span className="rp-draft-ready">✶ draft ready</span>
-            )}
+            ) : null}
             {review.human ? <Badge tone="critical">Human</Badge> : null}
             {review.lastError ? <Badge tone="critical">AI error</Badge> : null}
           </InlineStack>
@@ -520,7 +548,9 @@ function ReviewsContent() {
         {hasDraft(review) ? (
           <ConfidenceMeter value={review.confidence} />
         ) : (
-          <Text as="span" variant="bodySm" tone="subdued">Not generated</Text>
+          <Text as="span" variant="bodySm" tone="subdued">
+            {hasJudgeMeReply(review) ? 'Judge.me reply' : 'Not generated'}
+          </Text>
         )}
       </IndexTable.Cell>
       <IndexTable.Cell>
@@ -563,8 +593,8 @@ function ReviewsContent() {
         <Banner tone="critical">
           <Text as="p" variant="bodyMd">
             {aiConfig.dailyLimitReached
-              ? `All Gemini/Gemma variants configured for Brand Voice are exhausted for ${aiConfig.dayKey || 'today'}. Queue generation will resume when the daily pool resets.`
-              : `The AI model selected in Brand Voice is missing backend configuration${aiConfig.missingEnv ? ` (${aiConfig.missingEnv})` : ''}. Queue generation is paused until it is configured.`}
+              ? `All Gemini/Gemma variants configured for Brand Voice are exhausted for ${aiConfig.dayKey || 'today'}. Reviews generation will resume when the daily pool resets.`
+              : `The AI model selected in Brand Voice is missing backend configuration${aiConfig.missingEnv ? ` (${aiConfig.missingEnv})` : ''}. Reviews generation is paused until it is configured.`}
           </Text>
         </Banner>
       ) : null}
@@ -572,15 +602,16 @@ function ReviewsContent() {
       <InlineStack align="space-between" blockAlign="center" gap="300">
         <BlockStack gap="100">
           <div className="rp-title-row">
-            <Text as="h1" variant="heading2xl">Reply Pilot · Inbox</Text>
+            <Text as="h1" variant="heading2xl">Reply Pilot · Reviews</Text>
             <span className="rp-title-metric is-yellow">{stats.pending} pending</span>
             {stats.ungenerated ? <span className="rp-title-metric">{stats.ungenerated} need draft</span> : null}
+            {stats.judgeMeReplied ? <span className="rp-title-metric is-green">{stats.judgeMeReplied} Judge.me replied</span> : null}
             <span className="rp-title-metric is-green">{stats.sentToday} sent today</span>
             {showSent && stats.sent ? <span className="rp-title-metric is-green">{stats.sent} sent total</span> : null}
             {stats.skipped ? <span className="rp-title-metric">{stats.skipped} skipped</span> : null}
           </div>
           <Text as="p" variant="bodyLg" tone="subdued">
-            Review approvals stay table-first for speed while the AI draft remains visible in the side panel.
+            Review approvals stay table-first for speed while existing Judge.me replies and AI drafts remain visible in the side panel.
           </Text>
         </BlockStack>
         <Button icon={RefreshIcon} loading={isSyncing} disabled={!pageData.connected || isSyncing} onClick={handleRefresh}>
@@ -596,7 +627,7 @@ function ReviewsContent() {
                 <span className="rp-brand-mark">
                   <Icon source={MagicIcon} tone="base" />
                 </span>
-                <span className="rp-brand-name">Queue</span>
+                <span className="rp-brand-name">Reviews</span>
               </span>
               <Badge tone="info">Shortcuts enabled</Badge>
             </InlineStack>
@@ -698,6 +729,9 @@ function ReviewsContent() {
               {selectedSentIds.length ? (
                 <Badge tone="success">{selectedSentIds.length} already sent</Badge>
               ) : null}
+              {selectedJudgeMeReplyIds.length ? (
+                <Badge tone="success">{selectedJudgeMeReplyIds.length} already replied in Judge.me</Badge>
+              ) : null}
             </InlineStack>
             <InlineStack gap="200" blockAlign="center">
               {ungeneratedVisible.length ? (
@@ -761,6 +795,7 @@ function ReviewsContent() {
                     <InlineStack gap="200" blockAlign="center">
                       {activeReview.status === 'skipped' ? <Badge tone="attention">Skipped</Badge> : null}
                       {activeReview.status === 'sent' ? <Badge tone="success">Sent</Badge> : null}
+                      {activeHasJudgeMeReply ? <Badge tone="success">Judge.me replied</Badge> : null}
                       <Badge>Judge.me</Badge>
                     </InlineStack>
                   </InlineStack>
@@ -768,6 +803,39 @@ function ReviewsContent() {
                   <div className="rp-quote">
                     <Text as="p" variant="bodyMd">"{activeReview.review}"</Text>
                   </div>
+
+                  {activeHasJudgeMeReply ? (
+                    <div className="rp-source-reply-card">
+                      <BlockStack gap="250">
+                        <InlineStack align="space-between" blockAlign="center" gap="300">
+                          <InlineStack gap="200" blockAlign="center">
+                            <Icon source={ChatIcon} tone="success" />
+                            <Text as="h3" variant="headingMd">Judge.me reply</Text>
+                          </InlineStack>
+                          <Badge tone={activeReview.judgeMeReply?.contentAvailable ? 'success' : 'attention'}>
+                            {activeReview.judgeMeReply?.contentAvailable ? 'Imported' : 'Detected'}
+                          </Badge>
+                        </InlineStack>
+                        {activeReview.judgeMeReply?.contentAvailable ? (
+                          <Text as="p" variant="bodyMd">{activeReview.judgeMeReply.content}</Text>
+                        ) : (
+                          <Text as="p" variant="bodyMd" tone="subdued">
+                            Judge.me indicates this review already has a reply, but the API response did not include the reply text. Check Judge.me before drafting a replacement.
+                          </Text>
+                        )}
+                        <InlineStack gap="200" blockAlign="center">
+                          <Text as="span" variant="bodySm" tone="subdued">
+                            {activeReview.judgeMeReply?.author || 'Judge.me'}
+                          </Text>
+                          {activeReview.judgeMeReply?.createdAt ? (
+                            <Text as="span" variant="bodySm" tone="subdued">
+                              {formatReplyDate(activeReview.judgeMeReply.createdAt)}
+                            </Text>
+                          ) : null}
+                        </InlineStack>
+                      </BlockStack>
+                    </div>
+                  ) : null}
 
                   {activeReview.lastError ? (
                     <Banner tone="critical">
@@ -820,13 +888,17 @@ function ReviewsContent() {
                     ) : !activeHasDraft ? (
                       <BlockStack gap="250" align="center">
                         <DraftPlaceholderIllustration />
-                        <Text as="h3" variant="headingMd" alignment="center">Draft not generated yet</Text>
+                        <Text as="h3" variant="headingMd" alignment="center">
+                          {activeHasJudgeMeReply ? 'Replacement draft not generated' : 'Draft not generated yet'}
+                        </Text>
                         <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
-                          Generate the first message when you are ready. Reply Pilot will use Brand Voice, product context, star rating, and this review.
+                          {activeHasJudgeMeReply
+                            ? 'This review already has a Judge.me reply. Generate a replacement only if you want to review and send a new response.'
+                            : 'Generate the first message when you are ready. Reply Pilot will use Brand Voice, product context, star rating, and this review.'}
                         </Text>
                         {activeReview.status === 'pending' ? (
                           <Button icon={MagicIcon} variant="primary" disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
-                            Generate message · {creditLabel(1)}
+                            {activeHasJudgeMeReply ? 'Generate replacement' : 'Generate message'} · {creditLabel(1)}
                           </Button>
                         ) : null}
                       </BlockStack>
@@ -896,7 +968,7 @@ function ReviewsContent() {
                     <InlineStack gap="200" wrap={false}>
                       {activeReview.status === 'skipped' ? (
                         <Button icon={RefreshIcon} variant="primary" size="large" fullWidth loading={isSubmitting && fetcher.formData?.get('intent') === 'restore'} onClick={() => submitSingle('restore', activeReview.id)}>
-                          Restore to queue
+                          Restore to reviews
                         </Button>
                       ) : activeReview.status === 'sent' ? (
                         <Button icon={SendIcon} size="large" fullWidth disabled>
@@ -904,11 +976,11 @@ function ReviewsContent() {
                         </Button>
                       ) : !activeHasDraft ? (
                         <Button icon={MagicIcon} variant="primary" size="large" fullWidth disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
-                          Generate message · {creditLabel(1)}
+                          {activeHasJudgeMeReply ? 'Generate replacement' : 'Generate message'} · {creditLabel(1)}
                         </Button>
                       ) : (
                         <Button icon={SendIcon} variant="primary" size="large" fullWidth loading={isSubmitting && fetcher.formData?.get('intent') === 'send'} onClick={() => submitSingle('send', activeReview.id)}>
-                          Approve & send
+                          {activeHasJudgeMeReply ? 'Approve replacement' : 'Approve & send'}
                         </Button>
                       )}
                       <Button icon={EditIcon} accessibilityLabel="Edit draft" disabled={activeReview.status !== 'pending'} onClick={() => setIsEditing(true)} />
@@ -925,7 +997,9 @@ function ReviewsContent() {
                       </Text>
                     ) : !activeHasDraft ? (
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
-                        Generate a message before approving this reply.
+                        {activeHasJudgeMeReply
+                          ? 'This review is excluded from bulk generation because it already has a Judge.me reply.'
+                          : 'Generate a message before approving this reply.'}
                       </Text>
                     ) : (
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">

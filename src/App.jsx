@@ -20,7 +20,7 @@ import SettingsPage from './pages/SettingsPage';
 
 const navigationItems = [
   {key: 'dashboard', label: 'Connect', icon: 'home', path: '/dashboard'},
-  {key: 'reviews', label: 'Queue', icon: 'reviews', path: '/reviews'},
+  {key: 'reviews', label: 'Reviews', icon: 'reviews', path: '/reviews'},
   {key: 'logs', label: 'Sent', icon: 'logs', path: '/logs'},
   {key: 'settings', label: 'Settings', icon: 'settings', path: '/settings'},
   {key: 'help', label: 'Help', icon: 'help', path: '/help'},

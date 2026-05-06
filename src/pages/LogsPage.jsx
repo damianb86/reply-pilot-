@@ -133,7 +133,7 @@ function EmptySentState({hasFilters, onClear, onOpenQueue}) {
   return (
     <div className="rp-empty-state-card is-compact">
       <BlockStack gap="300" align="center">
-        <span className="rp-empty-mark is-blue">
+        <span className="rp-empty-mark is-blue is-centered">
           <Icon source={ConfettiIcon} tone="base" />
         </span>
         <BlockStack gap="100" align="center">
@@ -157,7 +157,7 @@ function DetailPanel({reply}) {
     return (
       <Card>
         <BlockStack gap="250" align="center">
-          <span className="rp-empty-mark">
+          <span className="rp-empty-mark is-centered">
             <Icon source={ChartVerticalIcon} tone="base" />
           </span>
           <Text as="h2" variant="headingMd" alignment="center">Nothing selected</Text>

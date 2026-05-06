@@ -727,6 +727,13 @@ select {
   border-left: 3px solid var(--rp-border);
 }
 
+.rp-source-reply-card {
+  padding: 16px;
+  border: 1px solid #b7e4c7;
+  border-radius: 8px;
+  background: #f3fcf6;
+}
+
 .rp-draft-box {
   min-height: 240px;
   padding: 18px;
@@ -1312,8 +1319,10 @@ select {
   border-radius: 999px;
 }
 
+.rp-empty-mark.is-centered,
 .rp-detail-empty-mark {
   align-self: center;
+  justify-self: center;
   margin-inline: auto;
 }
 

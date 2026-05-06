@@ -75,12 +75,12 @@ export async function action({ request }: ActionFunctionArgs) {
         return {
           ok: false,
           intent,
-          message: "Connect a review source before refreshing Queue.",
+          message: "Connect a review source before refreshing Reviews.",
           ...data,
         };
       }
 
-      return { ok: true, intent, message: "Queue refreshed.", ...data };
+      return { ok: true, intent, message: "Reviews refreshed.", ...data };
     }
 
     if (intent === "regenerate") {
@@ -219,7 +219,7 @@ export async function action({ request }: ActionFunctionArgs) {
   return {
     ok: false,
     intent,
-    message: "Unknown Queue action.",
+    message: "Unknown Reviews action.",
     ...(await loadReviewsPageData(session.shop)),
   };
 }

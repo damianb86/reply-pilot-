@@ -62,6 +62,15 @@ function readStringListJson(value?: string | null) {
   }
 }
 
+function safeJsonParse(value?: string | null) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 function compactTags(tags?: string[] | null) {
   const cleanTags = tags?.map((tag) => tag.trim()).filter(Boolean).slice(0, 20) ?? [];
   return cleanTags.length ? JSON.stringify(cleanTags) : null;
@@ -419,6 +428,151 @@ function reviewFields(rawReview: unknown) {
   };
 }
 
+type JudgeMeSourceReply = {
+  present: boolean;
+  content: string;
+  createdAt: string | null;
+  author: string;
+  visibility: string;
+  contentAvailable: boolean;
+};
+
+function readReplyContent(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  const object = readObject(value);
+  const direct =
+    readString(object.content) ||
+    readString(object.body) ||
+    readString(object.text) ||
+    readString(object.message) ||
+    readString(object.comment);
+
+  if (direct) return direct.trim();
+
+  if (object.reply && object.reply !== value) return readReplyContent(object.reply);
+  if (object.public_reply && object.public_reply !== value) return readReplyContent(object.public_reply);
+  if (object.response && object.response !== value) return readReplyContent(object.response);
+
+  return "";
+}
+
+function readReplyDate(value: unknown): string | null {
+  const object = readObject(value);
+  const date =
+    readString(object.created_at) ||
+    readString(object.updated_at) ||
+    readString(object.replied_at) ||
+    readString(object.reply_date) ||
+    readString(object.date);
+
+  return date || null;
+}
+
+function readReplyAuthor(value: unknown): string {
+  const object = readObject(value);
+  const author = readObject(object.author);
+  return (
+    readString(object.author_name) ||
+    readString(object.name) ||
+    readString(author.name) ||
+    readString(author.email) ||
+    "Judge.me"
+  );
+}
+
+function sourceReplyFromCandidate(value: unknown, visibility: string): JudgeMeSourceReply | null {
+  if (value === undefined || value === null || value === false) return null;
+
+  const content = readReplyContent(value);
+  if (!content && typeof value !== "object") return null;
+  if (!content && !readReplyDate(value) && !hasReplyMetadata(readObject(value))) return null;
+
+  return {
+    present: true,
+    content,
+    createdAt: readReplyDate(value),
+    author: readReplyAuthor(value),
+    visibility,
+    contentAvailable: Boolean(content),
+  };
+}
+
+function hasReplyMetadata(review: Record<string, unknown>) {
+  const booleanFields = [
+    review.has_reply,
+    review.has_replies,
+    review.has_public_reply,
+    review.replied,
+    review.replied_by_shop,
+    review.with_replies,
+  ];
+  if (booleanFields.some((value) => value === true || value === "true")) return true;
+
+  const countFields = [
+    review.replies_count,
+    review.reply_count,
+    review.public_replies_count,
+    review.comments_count,
+  ];
+  if (countFields.some((value) => readNumber(value, 0) > 0)) return true;
+
+  return Boolean(readString(review.reply_date) || readString(review.replied_at));
+}
+
+function extractJudgeMeSourceReply(rawReview: unknown): JudgeMeSourceReply | null {
+  const review = readObject(rawReview);
+  const directCandidates: Array<[unknown, string]> = [
+    [review.reply, "public"],
+    [review.public_reply, "public"],
+    [review.shop_reply, "public"],
+    [review.merchant_reply, "public"],
+    [review.store_reply, "public"],
+    [review.response, "public"],
+    [review.answer, "public"],
+  ];
+
+  const arrayCandidates: Array<[unknown, string]> = [
+    [review.replies, "public"],
+    [review.public_replies, "public"],
+    [review.comments, "public"],
+    [review.answers, "public"],
+  ];
+
+  const foundReplies = [
+    ...directCandidates
+      .map(([value, visibility]) => sourceReplyFromCandidate(value, visibility))
+      .filter((reply): reply is JudgeMeSourceReply => Boolean(reply)),
+    ...arrayCandidates.flatMap(([value, visibility]) => (
+      Array.isArray(value)
+        ? value
+            .map((item) => sourceReplyFromCandidate(item, visibility))
+            .filter((reply): reply is JudgeMeSourceReply => Boolean(reply))
+        : []
+    )),
+  ];
+
+  const withContent = foundReplies.filter((reply) => reply.contentAvailable);
+  const sortedReplies = (withContent.length ? withContent : foundReplies).sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  });
+  if (sortedReplies[0]) return sortedReplies[0];
+
+  if (hasReplyMetadata(review)) {
+    return {
+      present: true,
+      content: "",
+      createdAt: readReplyDate(review),
+      author: "Judge.me",
+      visibility: "public",
+      contentAvailable: false,
+    };
+  }
+
+  return null;
+}
+
 async function getConnectedJudgeMeCredentials(shop: string) {
   const connection = await db.judgeMeConnection.findUnique({ where: { shop } });
   if (!connection || connection.status !== "connected") return null;
@@ -507,6 +661,9 @@ export async function syncJudgeMeReviews(shop: string, admin?: AdminGraphql) {
 }
 
 function mapDraft(record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number]) {
+  const sourceReview = safeJsonParse(record.sourceReviewJson);
+  const judgeMeReply = extractJudgeMeSourceReply(sourceReview);
+
   return {
     id: record.id,
     source: record.source,
@@ -533,6 +690,8 @@ function mapDraft(record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[nu
           model: record.aiProviderModel || "",
         }
       : null,
+    judgeMeReply,
+    hasJudgeMeReply: Boolean(judgeMeReply?.present),
     lastError: record.lastError || "",
     status: record.status,
   };
@@ -573,6 +732,7 @@ export async function getQueueData(shop: string, settings?: AppSettings) {
   const reviews = reviewRecords.map(mapDraft);
   const pendingReviews = reviews.filter((review) => review.status === "pending");
   const generatedPendingReviews = pendingReviews.filter((review) => review.draftGenerated);
+  const judgeMeRepliedReviews = pendingReviews.filter((review) => review.hasJudgeMeReply);
   const products = Array.from(new Set(reviews.map((review) => review.product))).sort();
 
   return {
@@ -586,7 +746,8 @@ export async function getQueueData(shop: string, settings?: AppSettings) {
       ).length,
       sent: reviewRecords.filter((record) => record.status === "sent").length,
       skipped: reviewRecords.filter((record) => record.status === "skipped").length,
-      ungenerated: pendingReviews.filter((review) => !review.draftGenerated).length,
+      judgeMeReplied: judgeMeRepliedReviews.length,
+      ungenerated: pendingReviews.filter((review) => !review.draftGenerated && !review.hasJudgeMeReply).length,
       highConfidence: generatedPendingReviews.filter((review) =>
         review.confidence >= appSettings.highConfidenceThreshold,
       ).length,

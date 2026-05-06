@@ -241,14 +241,6 @@ function ModelCard({model, selected, onSelect}) {
               <Text as="span" variant="headingLg">{model.name}</Text>
               <Badge tone="info">{replyCostBadge(model)}</Badge>
             </InlineStack>
-            <InlineStack gap="150" blockAlign="center">
-              <Text as="span" variant="bodySm" tone="subdued">
-                {model.provider} · {model.detail}
-              </Text>
-              <Badge tone={model.configured ? 'success' : 'attention'}>
-                {model.configured ? 'Configured' : `Missing ${model.missingEnv}`}
-              </Badge>
-            </InlineStack>
           </BlockStack>
         </div>
 
@@ -275,7 +267,6 @@ function ModelCard({model, selected, onSelect}) {
           {model.activeVariant ? (
             <InlineStack gap="150" blockAlign="center">
               <Badge tone="info">Current dev fallback</Badge>
-              <Text as="span" variant="bodySm">{model.activeVariant.name}</Text>
             </InlineStack>
           ) : null}
 
