@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import SettingsPage from "../../src/pages/SettingsPage";
+import { loadBrandVoicePageData } from "../brand-voice.server";
 import {
   cleanupExpiredReviewHistory,
   loadAppSettings,
@@ -10,9 +11,11 @@ import { authenticate } from "../shopify.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
-  return {
-    settings: await loadAppSettings(session.shop),
-  };
+  const [settings, brandVoice] = await Promise.all([
+    loadAppSettings(session.shop),
+    loadBrandVoicePageData(session.shop),
+  ]);
+  return { settings, brandVoice };
 }
 
 export async function action({ request }: ActionFunctionArgs) {

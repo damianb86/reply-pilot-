@@ -2,7 +2,6 @@
 import {useEffect, useState} from 'react';
 import {Badge, BlockStack, Button, Icon, InlineStack, Page, Text} from '@shopify/polaris';
 import {
-  AutomationIcon,
   ChartVerticalIcon,
   ChatIcon,
   CheckCircleIcon,
@@ -13,7 +12,6 @@ import {
   SettingsIcon,
   SendIcon,
 } from '@shopify/polaris-icons';
-import BrandVoicePage from './pages/BrandVoicePage';
 import DashboardPage from './pages/DashboardPage';
 import HelpPage from './pages/HelpPage';
 import LogsPage from './pages/LogsPage';
@@ -23,7 +21,6 @@ import SettingsPage from './pages/SettingsPage';
 const navigationItems = [
   {key: 'dashboard', label: 'Connect', icon: 'home', path: '/dashboard'},
   {key: 'reviews', label: 'Queue', icon: 'reviews', path: '/reviews'},
-  {key: 'brand-voice', label: 'Brand voice', icon: 'voice', path: '/brand-voice'},
   {key: 'logs', label: 'Sent', icon: 'logs', path: '/logs'},
   {key: 'settings', label: 'Settings', icon: 'settings', path: '/settings'},
   {key: 'help', label: 'Help', icon: 'help', path: '/help'},
@@ -32,7 +29,6 @@ const navigationItems = [
 const iconMap = {
   home: HomeIcon,
   reviews: ChatIcon,
-  voice: AutomationIcon,
   analytics: ChartVerticalIcon,
   logs: PageIcon,
   settings: SettingsIcon,
@@ -42,7 +38,7 @@ const iconMap = {
 function routeKeyFromPath(pathname) {
   if (pathname === '/dashboard') return 'dashboard';
   if (pathname === '/reviews') return 'reviews';
-  if (pathname === '/brand-voice') return 'brand-voice';
+  if (pathname === '/brand-voice') return 'settings';
   if (pathname === '/logs') return 'logs';
   if (pathname === '/settings') return 'settings';
   if (pathname === '/help') return 'help';
@@ -144,7 +140,6 @@ export default function App() {
           <Page fullWidth>
             {currentPage === 'dashboard' ? <DashboardPage /> : null}
             {currentPage === 'reviews' ? <ReviewsPage /> : null}
-            {currentPage === 'brand-voice' ? <BrandVoicePage /> : null}
             {currentPage === 'logs' ? <LogsPage /> : null}
             {currentPage === 'settings' ? <SettingsPage /> : null}
             {currentPage === 'help' ? <HelpPage /> : null}

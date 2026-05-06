@@ -1,5 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import BrandVoicePage from "../../src/pages/BrandVoicePage";
+import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import {
   generateBrandVoicePersonality,
   generateBrandVoicePreview,
@@ -30,8 +29,17 @@ type ParsedReply = {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { session } = await authenticate.admin(request);
-  return loadBrandVoicePageData(session.shop);
+  await authenticate.admin(request);
+  const url = new URL(request.url);
+  const settingsUrl = new URL("/app/settings", url.origin);
+  settingsUrl.searchParams.set("section", "personality-builder");
+
+  for (const key of ["embedded", "host", "shop"]) {
+    const value = url.searchParams.get(key);
+    if (value) settingsUrl.searchParams.set(key, value);
+  }
+
+  return redirect(`${settingsUrl.pathname}${settingsUrl.search}`);
 }
 
 function parseImportedReplies(value: FormDataEntryValue | null) {
@@ -307,5 +315,5 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function BrandVoiceRoute() {
-  return <BrandVoicePage />;
+  return null;
 }

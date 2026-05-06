@@ -35,17 +35,10 @@ function loadingCopyForPath(pathname: string) {
     };
   }
 
-  if (pathname.endsWith("/brand-voice")) {
-    return {
-      title: "Loading Brand Voice",
-      description: "Preparing voice settings, model choices, and live preview...",
-    };
-  }
-
   if (pathname.endsWith("/settings")) {
     return {
       title: "Loading Settings",
-      description: "Preparing saved preferences and queue behavior...",
+      description: "Preparing saved preferences, queue behavior, and Brand Voice...",
     };
   }
 
@@ -99,7 +92,6 @@ export default function App() {
         <s-app-nav>
           <s-link href={withEmbeddedSearch("/app/dashboard")}>Connect</s-link>
           <s-link href={withEmbeddedSearch("/app/reviews")}>Queue</s-link>
-          <s-link href={withEmbeddedSearch("/app/brand-voice")}>Brand voice</s-link>
           <s-link href={withEmbeddedSearch("/app/logs")}>Sent</s-link>
           <s-link href={withEmbeddedSearch("/app/settings")}>Settings</s-link>
           <s-link href={withEmbeddedSearch("/app/help")}>Help</s-link>

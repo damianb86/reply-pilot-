@@ -361,7 +361,7 @@ function AfterConnectionCard({connected, appHandle}) {
             <Divider />
             <BlockStack gap="200">
               <Button
-                url={shopifyAdminAppPath(appHandle, 'app/brand-voice')}
+                url={shopifyAdminAppPath(appHandle, 'app/settings?section=personality-builder')}
                 target="_top"
                 icon={ExternalIcon}
               >

@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {useFetcher, useLoaderData} from 'react-router';
+import {useFetcher, useLoaderData, useLocation} from 'react-router';
 import {SaveBar, useAppBridge} from '@shopify/app-bridge-react';
 import {
   Badge,
@@ -14,11 +14,17 @@ import {
   Select,
   Text,
 } from '@shopify/polaris';
+import BrandVoicePage, {brandVoiceSettingsSections} from './BrandVoicePage';
 
-const settingsNav = [
+const generalSettingsNav = [
   {id: 'general', label: 'General'},
   {id: 'queue', label: 'Queue behavior'},
   {id: 'privacy', label: 'Data & privacy'},
+];
+const brandVoiceSectionIds = new Set(brandVoiceSettingsSections.map((section) => section.id));
+const settingsNavGroups = [
+  {title: 'GENERAL SETTINGS', items: generalSettingsNav},
+  {title: 'BRAND VOICE', items: brandVoiceSettingsSections},
 ];
 
 const defaultSettings = {
@@ -121,10 +127,16 @@ function ThresholdSlider({label, description, value, min, max, suffix, onChange}
 export default function SettingsPage() {
   const shopify = useAppBridge();
   const loaderData = useLoaderData();
+  const location = useLocation();
   const saveFetcher = useFetcher();
   const cleanupFetcher = useFetcher();
   const lastToastKey = useRef('');
-  const [activeSection, setActiveSection] = useState(settingsNav[0].id);
+  const [activeSection, setActiveSection] = useState(() => {
+    const requestedSection = new URLSearchParams(location.search).get('section');
+    return requestedSection && [...brandVoiceSectionIds, ...generalSettingsNav.map((item) => item.id)].includes(requestedSection)
+      ? requestedSection
+      : generalSettingsNav[0].id;
+  });
   const [savedSettings, setSavedSettings] = useState(() => buildSettings(loaderData.settings));
   const [settings, setSettings] = useState(savedSettings);
   const [localToast, setLocalToast] = useState(null);
@@ -133,6 +145,15 @@ export default function SettingsPage() {
     () => settingsSignature(settings) !== settingsSignature(savedSettings),
     [settings, savedSettings],
   );
+  const isBrandVoiceSection = brandVoiceSectionIds.has(activeSection);
+  const brandVoiceActionPath = useMemo(() => `/app/brand-voice${location.search || ''}`, [location.search]);
+
+  useEffect(() => {
+    const requestedSection = new URLSearchParams(location.search).get('section');
+    if (requestedSection && (brandVoiceSectionIds.has(requestedSection) || generalSettingsNav.some((item) => item.id === requestedSection))) {
+      setActiveSection(requestedSection);
+    }
+  }, [location.search]);
 
   const showToast = useCallback((data) => {
     if (!data?.message) return;
@@ -209,32 +230,48 @@ export default function SettingsPage() {
         <BlockStack gap="100">
           <Text as="h1" variant="heading2xl">Settings</Text>
           <Text as="p" variant="bodyLg" tone="subdued">
-            Configure queue defaults, review routing, sending behavior, and data handling.
+            Configure app defaults and tune the Brand Voice Reply Pilot uses for AI replies.
           </Text>
         </BlockStack>
-        <Badge tone={isDirty ? 'attention' : 'success'}>
-          {isDirty ? 'Unsaved changes' : 'Saved'}
-        </Badge>
+        {!isBrandVoiceSection ? (
+          <Badge tone={isDirty ? 'attention' : 'success'}>
+            {isDirty ? 'Unsaved changes' : 'Saved'}
+          </Badge>
+        ) : null}
       </InlineStack>
 
       <div className="rp-settings-layout">
         <aside className="rp-settings-nav" aria-label="Settings sections">
-          <BlockStack gap="150">
-            <Text as="p" variant="bodySm" tone="subdued" fontWeight="semibold">SETTINGS</Text>
-            {settingsNav.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`rp-settings-nav-item ${activeSection === item.id ? 'is-active' : ''}`}
-                onClick={() => setActiveSection(item.id)}
-              >
-                {item.label}
-              </button>
+          <BlockStack gap="400">
+            {settingsNavGroups.map((group) => (
+              <BlockStack key={group.title} gap="150">
+                <Text as="p" variant="bodySm" tone="subdued" fontWeight="semibold">{group.title}</Text>
+                {group.items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`rp-settings-nav-item ${activeSection === item.id ? 'is-active' : ''}`}
+                    onClick={() => setActiveSection(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </BlockStack>
             ))}
           </BlockStack>
         </aside>
 
         <BlockStack gap="400">
+          {isBrandVoiceSection ? (
+            <BrandVoicePage
+              data={loaderData.brandVoice}
+              actionPath={brandVoiceActionPath}
+              embedded
+              activeSection={activeSection}
+              onActiveSectionChange={setActiveSection}
+            />
+          ) : null}
+
           {activeSection === 'general' ? (
             <SectionCard
               title="General"

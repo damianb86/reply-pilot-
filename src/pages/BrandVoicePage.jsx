@@ -38,7 +38,7 @@ import {
   defaultBrandVoice,
 } from '../brandVoiceData';
 
-const settingsSections = [
+export const brandVoiceSettingsSections = [
   {id: 'personality-builder', label: 'Personality builder'},
   {id: 'personality-settings', label: 'Personality settings'},
   {id: 'ai-model', label: 'AI model'},
@@ -528,9 +528,16 @@ function configSignature(config) {
   });
 }
 
-export default function BrandVoicePage() {
+export default function BrandVoicePage({
+  data,
+  actionPath,
+  embedded = false,
+  activeSection: controlledActiveSection,
+  onActiveSectionChange,
+} = {}) {
   const shopify = useAppBridge();
-  const loaderData = useLoaderData();
+  const routeLoaderData = useLoaderData();
+  const loaderData = data ?? routeLoaderData.brandVoice ?? routeLoaderData;
   const saveFetcher = useFetcher();
   const importFetcher = useFetcher();
   const personalityFetcher = useFetcher();
@@ -571,7 +578,15 @@ export default function BrandVoicePage() {
   const [previewProductType, setPreviewProductType] = useState(initialConfig.previewProductType);
   const [previewProductTags, setPreviewProductTags] = useState(initialConfig.previewProductTags);
   const [previewRating, setPreviewRating] = useState(initialConfig.previewRating);
-  const [activeSection, setActiveSection] = useState('personality-builder');
+  const [internalActiveSection, setInternalActiveSection] = useState('personality-builder');
+  const activeSection = controlledActiveSection ?? internalActiveSection;
+  const setActiveSection = useCallback((section) => {
+    if (onActiveSectionChange) {
+      onActiveSectionChange(section);
+      return;
+    }
+    setInternalActiveSection(section);
+  }, [onActiveSectionChange]);
   const [savedConfig, setSavedConfig] = useState(initialConfig);
   const [localToast, setLocalToast] = useState(null);
   const [showPersonalityPresets, setShowPersonalityPresets] = useState(false);
@@ -675,7 +690,7 @@ export default function BrandVoicePage() {
     personalityHighlightTimer.current = window.setTimeout(() => {
       setPersonalityHighlight(false);
     }, 2600);
-  }, []);
+  }, [setActiveSection]);
 
   useEffect(() => () => {
     window.clearTimeout(personalityHighlightTimer.current);
@@ -778,6 +793,10 @@ export default function BrandVoicePage() {
     setAvoidInput('');
   }
 
+  const submitBrandVoice = useCallback((fetcher, formData) => {
+    fetcher.submit(formData, actionPath ? {method: 'post', action: actionPath} : {method: 'post'});
+  }, [actionPath]);
+
   function applyConfig(config) {
     updatePersona(config.persona);
     setGreeting(config.greeting);
@@ -801,7 +820,7 @@ export default function BrandVoicePage() {
     const formData = new FormData();
     formData.set('intent', 'load-preview-product');
     formData.set('productId', productId);
-    productFetcher.submit(formData, {method: 'post'});
+    submitBrandVoice(productFetcher, formData);
   }
 
   async function handlePreviewProductPicker() {
@@ -852,7 +871,7 @@ export default function BrandVoicePage() {
     formData.set('previewProductType', previewProductType);
     formData.set('previewProductTags', JSON.stringify(previewProductTags));
     formData.set('previewRating', previewRating);
-    saveFetcher.submit(formData, {method: 'post'});
+    submitBrandVoice(saveFetcher, formData);
   }
 
   function handleDiscard() {
@@ -863,7 +882,7 @@ export default function BrandVoicePage() {
     const formData = new FormData();
     formData.set('intent', 'import-replies');
     formData.set('limit', importLimit);
-    importFetcher.submit(formData, {method: 'post'});
+    submitBrandVoice(importFetcher, formData);
   }
 
   function handleGeneratePersonality() {
@@ -884,7 +903,7 @@ export default function BrandVoicePage() {
     formData.set('previewProductTags', JSON.stringify(previewProductTags));
     formData.set('previewRating', previewRating);
     formData.set('replies', JSON.stringify(exampleReplies));
-    personalityFetcher.submit(formData, {method: 'post'});
+    submitBrandVoice(personalityFetcher, formData);
   }
 
   function handleGeneratePreview() {
@@ -904,7 +923,7 @@ export default function BrandVoicePage() {
     formData.set('previewProductType', previewProductType);
     formData.set('previewProductTags', JSON.stringify(previewProductTags));
     formData.set('previewRating', previewRating);
-    previewFetcher.submit(formData, {method: 'post'});
+    submitBrandVoice(previewFetcher, formData);
   }
 
   function removeExampleReply(id) {
@@ -935,6 +954,7 @@ export default function BrandVoicePage() {
         </div>
       ) : null}
 
+      {!embedded ? (
       <InlineStack align="space-between" blockAlign="center" gap="300">
         <BlockStack gap="100">
           <Text as="h1" variant="heading2xl">Your brand voice</Text>
@@ -943,12 +963,14 @@ export default function BrandVoicePage() {
           </Text>
         </BlockStack>
       </InlineStack>
+      ) : null}
 
-      <div className="rp-settings-layout">
+      <div className={embedded ? 'rp-brand-voice-embedded' : 'rp-settings-layout'}>
+        {!embedded ? (
         <aside className="rp-settings-nav" aria-label="Brand voice sections">
           <BlockStack gap="150">
             <Text as="p" variant="bodySm" tone="subdued" fontWeight="semibold">BRAND VOICE</Text>
-            {settingsSections.map((section) => (
+            {brandVoiceSettingsSections.map((section) => (
               <button
                 key={section.id}
                 type="button"
@@ -960,6 +982,7 @@ export default function BrandVoicePage() {
             ))}
           </BlockStack>
         </aside>
+        ) : null}
 
         <BlockStack gap="400">
           {activeSection === 'personality-builder' ? (

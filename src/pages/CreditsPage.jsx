@@ -57,9 +57,11 @@ function PackageCard({pkg, fetcher}) {
           </InlineStack>
           <fetcher.Form method="post" className="rp-credit-buy-form">
             <input type="hidden" name="packageId" value={pkg.id} />
-            <Button submit loading={isLoading} disabled={fetcher.state !== 'idle'} variant={pkg.recommended ? 'primary' : undefined}>
-              Buy {formatCreditNumber(pkg.credits)}
-            </Button>
+            <span className={`rp-credit-buy-button-wrap ${hasWelcomeBonus ? 'has-welcome-bonus' : ''}`}>
+              <Button submit loading={isLoading} disabled={fetcher.state !== 'idle'} variant={pkg.recommended ? 'primary' : undefined}>
+                Buy {formatCreditNumber(hasWelcomeBonus ? pkg.firstPurchaseTotalCredits : pkg.credits)}
+              </Button>
+            </span>
           </fetcher.Form>
         </InlineStack>
       </BlockStack>
@@ -75,11 +77,16 @@ function replyCapacity(credits, replyCost) {
 function ModelSpendCard({name, costs}) {
   return (
     <Card>
-      <BlockStack gap="100">
-        <Text as="p" variant="headingMd">{name}</Text>
-        <Text as="p" variant="bodyMd">{costs.reply} credit{costs.reply === 1 ? '' : 's'} per reply or preview</Text>
+      <BlockStack gap="150">
+        <BlockStack gap="050">
+          <Text as="p" variant="headingMd">{name}</Text>
+          <Text as="p" variant="bodySm" tone="subdued">AI model tier</Text>
+        </BlockStack>
+        <Text as="p" variant="bodyMd">
+          The AI agent spends {costs.reply} credit{costs.reply === 1 ? '' : 's'} per reply or preview.
+        </Text>
         <Text as="p" variant="bodySm" tone="subdued">
-          1.000 credits answers about {replyCapacity(1000, costs.reply)} review replies.
+          With this model, 1.000 credits answers about {replyCapacity(1000, costs.reply)} review replies.
         </Text>
         <Text as="p" variant="bodySm" tone="subdued">
           {costs.personality} credits to generate Personality from past replies.
@@ -173,7 +180,12 @@ export default function CreditsPage() {
 
       <section className="rp-field-card">
         <BlockStack gap="300">
-          <Text as="h2" variant="headingLg">How credits are spent</Text>
+          <BlockStack gap="050">
+            <Text as="h2" variant="headingLg">AI model credit usage</Text>
+            <Text as="p" variant="bodyMd" tone="subdued">
+              Credits are spent when the AI agent generates replies, live previews, or Personality drafts. The cost depends on the AI model tier selected in Settings.
+            </Text>
+          </BlockStack>
           <InlineGrid columns={{xs: 1, md: 3}} gap="300">
             <ModelSpendCard name="Basic" costs={modelCosts.basic ?? {reply: 1, personality: 2}} />
             <ModelSpendCard name="Pro" costs={modelCosts.pro ?? {reply: 4, personality: 8}} />
