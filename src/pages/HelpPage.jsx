@@ -263,7 +263,7 @@ export default function HelpPage() {
         <BlockStack gap="100">
           <Text as="h1" variant="heading2xl">Help</Text>
           <Text as="p" variant="bodyLg" tone="subdued">
-            Custom workflows, Shopify expert help, product feedback, and data controls for Reply Pilot.
+            Custom workflows, implementation support, product feedback, and data controls for Reply Pilot.
           </Text>
         </BlockStack>
       </InlineStack>
@@ -271,14 +271,14 @@ export default function HelpPage() {
       <section className="rp-help-hero">
         <div className="rp-help-hero-copy">
           <InlineStack gap="150">
-            <Badge tone="success">Shopify expert support</Badge>
+            <Badge tone="success">Implementation support</Badge>
             <Badge tone="info">AI reply operations</Badge>
             <Badge>Custom development</Badge>
           </InlineStack>
           <BlockStack gap="150">
             <Text as="h2" variant="heading2xl">Make Reply Pilot fit the way your store works.</Text>
             <Text as="p" variant="bodyLg" tone="subdued">
-              We can tune the app, improve your approval flow, connect review operations to Shopify, or help with broader Shopify development when your store needs something custom.
+              Our team can tune the app, improve your approval flow, connect review operations to Shopify, or help with broader Shopify development when your store needs something custom.
             </Text>
           </BlockStack>
           <InlineStack gap="200">
@@ -308,7 +308,7 @@ export default function HelpPage() {
             <BlockStack gap="050">
               <Text as="p" variant="bodyMd" fontWeight="semibold">Need help outside reviews?</Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                You can also hire a Shopify expert for theme work, private admin tools, app integrations, and store operations.
+                Our implementation team can help with theme work, private admin tools, app integrations, and store operations.
               </Text>
             </BlockStack>
           </div>

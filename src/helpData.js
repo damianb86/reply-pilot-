@@ -12,8 +12,8 @@ export const helpHeroBenefits = [
     description: 'Custom features for themes or admin',
   },
   {
-    title: 'Experts',
-    description: 'Guidance and support from Shopify experts',
+    title: 'Support',
+    description: 'Guidance from the Reply Pilot implementation team',
   },
 ];
 

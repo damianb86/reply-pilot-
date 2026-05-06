@@ -1,8 +1,6 @@
 /* eslint-disable react/no-unescaped-entities */
 import type { LoaderFunctionArgs } from "react-router";
-import { Form, redirect, useLoaderData } from "react-router";
-
-import { login } from "../../shopify.server";
+import { redirect } from "react-router";
 
 import styles from "./styles.module.css";
 
@@ -22,12 +20,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return redirect(search ? `/app?${search}` : "/app");
   }
 
-  return { showForm: Boolean(login) };
+  return null;
 };
 
 export default function Index() {
-  const { showForm } = useLoaderData<typeof loader>();
-
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
@@ -38,25 +34,10 @@ export default function Index() {
             AI drafts for Judge.me reviews, trained on the merchant's brand
             voice and approved from a Shopify-native queue.
           </p>
-
-          {showForm && (
-            <Form className={styles.form} method="post" action="/auth/login">
-              <label className={styles.label}>
-                <span>Shop domain</span>
-                <input
-                  className={styles.input}
-                  type="text"
-                  name="shop"
-                  inputMode="url"
-                  autoComplete="organization"
-                  placeholder="your-store.myshopify.com"
-                />
-              </label>
-              <button className={styles.button} type="submit">
-                Log in
-              </button>
-            </Form>
-          )}
+          <p className={styles.lede}>
+            Open Reply Pilot from Shopify Admin or from the Shopify App Store to
+            continue securely.
+          </p>
         </div>
 
         <div className={styles.panel} aria-label="Reply Pilot capabilities">

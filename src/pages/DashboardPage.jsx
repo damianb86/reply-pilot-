@@ -222,12 +222,13 @@ function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl}) {
         <BlockStack gap="300">
           <Text as="p" variant="bodyMd">2. Enter your Judge.me credentials</Text>
           <TextField
-            label="Shop"
+            label="Judge.me shop identifier"
             name="shopDomain"
             value={shopDomain}
             onChange={setShopDomain}
             autoComplete="off"
-            placeholder="qorve-dev.myshopify.com"
+            placeholder="your Judge.me shop identifier"
+            helpText="Use the shop identifier shown in your Judge.me private API settings."
           />
           <TextField
             label="API token"
