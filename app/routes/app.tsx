@@ -2,6 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Outlet, useLoaderData, useLocation, useNavigation, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
+import { NavMenu } from "@shopify/app-bridge-react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
 
@@ -89,13 +90,14 @@ export default function App() {
   return (
     <ShopifyAppProvider embedded apiKey={apiKey}>
       <PolarisAppProvider i18n={enTranslations}>
-        <s-app-nav>
-          <s-link href={withEmbeddedSearch("/app/dashboard")}>Connect</s-link>
-          <s-link href={withEmbeddedSearch("/app/reviews")}>Queue</s-link>
-          <s-link href={withEmbeddedSearch("/app/logs")}>Sent</s-link>
-          <s-link href={withEmbeddedSearch("/app/settings")}>Settings</s-link>
-          <s-link href={withEmbeddedSearch("/app/help")}>Help</s-link>
-        </s-app-nav>
+        <NavMenu>
+          <a href={withEmbeddedSearch("/app")} rel="home">Reply Pilot</a>
+          <a href={withEmbeddedSearch("/app/dashboard")}>Connect</a>
+          <a href={withEmbeddedSearch("/app/reviews")}>Queue</a>
+          <a href={withEmbeddedSearch("/app/logs")}>Sent</a>
+          <a href={withEmbeddedSearch("/app/settings")}>Settings</a>
+          <a href={withEmbeddedSearch("/app/help")}>Help</a>
+        </NavMenu>
         <IguShell credits={credits}>
           {isRouteLoading ? (
             <PageLoadingState title={loadingCopy.title} description={loadingCopy.description} />
