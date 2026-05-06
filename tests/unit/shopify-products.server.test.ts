@@ -3,6 +3,7 @@ import {
   findProductByTitle,
   loadShopifyProductByHandle,
   loadShopifyProductById,
+  loadShopifyProductByTitle,
   loadShopifyProducts,
 } from "../../app/shopify-products.server";
 import { graphql } from "../fixtures/reply-pilot";
@@ -83,6 +84,36 @@ describe("shopify-products.server", () => {
     expect(product).toMatchObject({
       handle: "linen-napkins",
       description: "Durable linen napkins Daily meals & hosting",
+    });
+  });
+
+  it("loads one product by title when summaries do not include it", async () => {
+    const admin = adminWithJson({
+      data: {
+        products: {
+          edges: [
+            {
+              node: {
+                id: "gid://shopify/Product/2",
+                title: "The Multi-managed Snowboard",
+                handle: "multi-managed-snowboard",
+                description: "<p>Directional park board with a durable topsheet.</p>",
+                productType: "Snowboard",
+                tags: ["park", "freestyle"],
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const product = await loadShopifyProductByTitle(admin, "The Multi-managed Snowboard");
+
+    expect(product).toMatchObject({
+      title: "The Multi-managed Snowboard",
+      productType: "Snowboard",
+      tags: ["park", "freestyle"],
+      description: "Directional park board with a durable topsheet.",
     });
   });
 });

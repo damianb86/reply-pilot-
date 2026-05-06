@@ -60,6 +60,23 @@ const PRODUCT_BY_HANDLE_QUERY = `#graphql
   }
 `;
 
+const PRODUCT_BY_TITLE_QUERY = `#graphql
+  query ReplyPilotProductByTitle($query: String!) {
+    products(first: 1, query: $query) {
+      edges {
+        node {
+          id
+          title
+          handle
+          description
+          productType
+          tags
+        }
+      }
+    }
+  }
+`;
+
 function readObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -78,6 +95,10 @@ function readTags(value: unknown) {
 
 function normalizeTitle(value: string) {
   return value.trim().toLowerCase();
+}
+
+function queryStringLiteral(value: string) {
+  return value.trim().replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function decodeHtmlEntities(value: string) {
@@ -185,9 +206,30 @@ export async function loadShopifyProductByHandle(
   const cleanHandle = handle.trim();
   if (!cleanHandle) return null;
 
-  const escapedHandle = cleanHandle.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
   const response = await admin.graphql(PRODUCT_BY_HANDLE_QUERY, {
-    variables: { query: `handle:"${escapedHandle}"` },
+    variables: { query: `handle:"${queryStringLiteral(cleanHandle)}"` },
+  });
+  const body = (await response.json()) as unknown;
+  const errors = readObject(body).errors;
+  if (Array.isArray(errors) && errors.length) {
+    throw new Error(`Shopify product query failed: ${JSON.stringify(errors).slice(0, 1200)}`);
+  }
+
+  const edges = readObject(readObject(readObject(body).data).products).edges;
+  if (!Array.isArray(edges) || !edges[0]) return null;
+
+  return productFromNode(readObject(edges[0]).node);
+}
+
+export async function loadShopifyProductByTitle(
+  admin: AdminGraphql,
+  title: string,
+): Promise<ShopifyProductSummary | null> {
+  const cleanTitle = title.trim();
+  if (!cleanTitle) return null;
+
+  const response = await admin.graphql(PRODUCT_BY_TITLE_QUERY, {
+    variables: { query: `title:"${queryStringLiteral(cleanTitle)}"` },
   });
   const body = (await response.json()) as unknown;
   const errors = readObject(body).errors;

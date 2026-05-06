@@ -25,6 +25,7 @@ import {
   findProductByTitle,
   loadShopifyProductByHandle,
   loadShopifyProductById,
+  loadShopifyProductByTitle,
   loadShopifyProducts,
   type ShopifyProductSummary,
 } from "./shopify-products.server";
@@ -39,6 +40,21 @@ function readObject(value: unknown): Record<string, unknown> {
 
 function readString(value: unknown) {
   return typeof value === "string" ? value : "";
+}
+
+function readScalarString(value: unknown) {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "bigint") return value.toString();
+  return "";
+}
+
+function firstScalarString(...values: unknown[]) {
+  for (const value of values) {
+    const result = readScalarString(value);
+    if (result) return result;
+  }
+  return "";
 }
 
 function readNumber(value: unknown, fallback = 0) {
@@ -419,9 +435,51 @@ function buildConfidence(input: ConfidenceInput) {
   return clampScore(score);
 }
 
+function productLookupFromReview(rawReview: unknown) {
+  const review = readObject(rawReview);
+  const product = readObject(review.product);
+  const productData = readObject(review.product_data);
+  const shopifyProduct = readObject(review.shopify_product);
+
+  return {
+    externalId: firstScalarString(
+      review.product_external_id,
+      review.product_id,
+      review.shopify_product_id,
+      product.external_id,
+      product.product_external_id,
+      product.shopify_product_id,
+      product.id,
+      productData.external_id,
+      productData.product_external_id,
+      productData.shopify_product_id,
+      productData.id,
+      shopifyProduct.id,
+      shopifyProduct.admin_graphql_api_id,
+    ),
+    handle: firstScalarString(
+      review.product_handle,
+      product.handle,
+      product.product_handle,
+      productData.handle,
+      productData.product_handle,
+      shopifyProduct.handle,
+    ),
+    title: firstScalarString(
+      review.product_title,
+      product.title,
+      product.name,
+      productData.title,
+      productData.name,
+      shopifyProduct.title,
+    ),
+  };
+}
+
 function reviewFields(rawReview: unknown) {
   const review = readObject(rawReview);
   const reviewer = readObject(review.reviewer);
+  const productLookup = productLookupFromReview(rawReview);
   const id = String(review.id ?? "");
   const customer =
     readString(reviewer.name) ||
@@ -437,9 +495,9 @@ function reviewFields(rawReview: unknown) {
     id,
     customer,
     initials: initialsFromName(customer),
-    productTitle: readString(review.product_title) || "Store review",
-    productExternalId: readString(review.product_external_id),
-    productHandle: readString(review.product_handle),
+    productTitle: productLookup.title || "Store review",
+    productExternalId: productLookup.externalId,
+    productHandle: productLookup.handle,
     reviewBody: body,
     rating,
     sourceCreatedAt: Number.isNaN(createdAt.getTime()) ? new Date() : createdAt,
@@ -1037,11 +1095,11 @@ async function loadBrandVoiceForDrafts(shop: string) {
 }
 
 function sourceProductLookup(record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number]) {
-  const sourceReview = readObject(safeJsonParse(record.sourceReviewJson));
-  const externalId = sourceReview.product_external_id;
+  const lookup = productLookupFromReview(safeJsonParse(record.sourceReviewJson));
   return {
-    externalId: typeof externalId === "number" ? String(externalId) : readString(externalId),
-    handle: readString(sourceReview.product_handle),
+    externalId: lookup.externalId,
+    handle: lookup.handle,
+    title: lookup.title || record.productTitle || "",
   };
 }
 
@@ -1053,28 +1111,71 @@ function shopifyProductGid(value: string) {
   return "";
 }
 
+type ProductDetailCache = Map<string, Promise<ShopifyProductSummary | null>>;
+
+function productCacheKey(kind: string, value: string) {
+  const cleanValue = value.trim().toLowerCase();
+  return cleanValue ? `${kind}:${cleanValue}` : "";
+}
+
+function cachedProductLookup(
+  cache: ProductDetailCache | undefined,
+  key: string,
+  loader: () => Promise<ShopifyProductSummary | null>,
+) {
+  if (!cache || !key) return loader();
+  const existing = cache.get(key);
+  if (existing) return existing;
+
+  const result = loader();
+  cache.set(key, result);
+  return result;
+}
+
 async function loadDetailedProductForRecord(
   record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number],
   products: ShopifyProductSummary[],
   admin?: AdminGraphql,
+  cache?: ProductDetailCache,
 ) {
   if (!admin) return null;
 
   const lookup = sourceProductLookup(record);
   const externalGid = shopifyProductGid(lookup.externalId);
   if (externalGid) {
-    const product = await loadShopifyProductById(admin, externalGid).catch(() => null);
+    const product = await cachedProductLookup(
+      cache,
+      productCacheKey("id", externalGid),
+      () => loadShopifyProductById(admin, externalGid).catch(() => null),
+    );
     if (product) return product;
   }
 
   if (lookup.handle) {
-    const product = await loadShopifyProductByHandle(admin, lookup.handle).catch(() => null);
+    const product = await cachedProductLookup(
+      cache,
+      productCacheKey("handle", lookup.handle),
+      () => loadShopifyProductByHandle(admin, lookup.handle).catch(() => null),
+    );
+    if (product) return product;
+  }
+
+  if (lookup.title) {
+    const product = await cachedProductLookup(
+      cache,
+      productCacheKey("title", lookup.title),
+      () => loadShopifyProductByTitle(admin, lookup.title).catch(() => null),
+    );
     if (product) return product;
   }
 
   const matchedProduct = findProductByTitle(products, record.productTitle);
   if (matchedProduct?.id) {
-    const product = await loadShopifyProductById(admin, matchedProduct.id).catch(() => null);
+    const product = await cachedProductLookup(
+      cache,
+      productCacheKey("id", matchedProduct.id),
+      () => loadShopifyProductById(admin, matchedProduct.id).catch(() => null),
+    );
     if (product) return product;
   }
 
@@ -1084,19 +1185,23 @@ async function loadDetailedProductForRecord(
 async function productContextForRecord(
   record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number],
   products: ShopifyProductSummary[],
-  options: { admin?: AdminGraphql; useProductDescription?: boolean } = {},
+  options: { admin?: AdminGraphql; useProductDescription?: boolean; productCache?: ProductDetailCache } = {},
 ) {
   const matchedProduct = findProductByTitle(products, record.productTitle);
-  const detailedProduct = options.useProductDescription
-    ? await loadDetailedProductForRecord(record, products, options.admin)
-    : null;
+  const detailedProduct = await loadDetailedProductForRecord(
+    record,
+    products,
+    options.admin,
+    options.productCache,
+  );
   const product = detailedProduct ?? matchedProduct;
   const storedTags = readStringListJson(record.productTagsJson);
+  const productTags = product?.tags.length ? product.tags : storedTags;
 
   return {
-    productTitle: record.productTitle || product?.title || "Store review",
-    productType: record.productType || product?.productType || "",
-    productTags: storedTags.length ? storedTags : product?.tags ?? [],
+    productTitle: product?.title || record.productTitle || "Store review",
+    productType: product?.productType || record.productType || "",
+    productTags,
     productDescription: options.useProductDescription ? product?.description || "" : "",
     matchedProduct: product,
   };
@@ -1108,11 +1213,13 @@ async function generateReplyForRecord(
   brandVoice: Awaited<ReturnType<typeof loadBrandVoiceForDrafts>>,
   appSettings: AppSettings,
   admin?: AdminGraphql,
+  productCache?: ProductDetailCache,
   nudge?: string,
 ) {
   const productContext = await productContextForRecord(record, products, {
     admin,
     useProductDescription: appSettings.useProductDescription,
+    productCache,
   });
   const result = await generateReviewReplyText({
     modelId: brandVoice.selectedModel,
@@ -1171,6 +1278,7 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
     loadBrandVoiceForDrafts(shop),
     loadAppSettings(shop),
   ]);
+  const productCache: ProductDetailCache = new Map();
   const result: DraftGenerationResult = {
     requested: records.length,
     generated: 0,
@@ -1199,7 +1307,7 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
 
   for (const record of records) {
     try {
-      const generated = await generateReplyForRecord(record, products, brandVoice, appSettings, admin);
+      const generated = await generateReplyForRecord(record, products, brandVoice, appSettings, admin, productCache);
       const confidence = buildConfidence({
         reviewBody: record.reviewBody,
         rating: record.rating ?? 0,
@@ -1273,6 +1381,7 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
     loadBrandVoiceForDrafts(shop),
     loadAppSettings(shop),
   ]);
+  const productCache: ProductDetailCache = new Map();
   const result: DraftGenerationResult = {
     requested: records.length,
     generated: 0,
@@ -1301,7 +1410,7 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
 
   for (const record of records) {
     try {
-      const generated = await generateReplyForRecord(record, products, brandVoice, appSettings, admin, nudge);
+      const generated = await generateReplyForRecord(record, products, brandVoice, appSettings, admin, productCache, nudge);
       const confidence = buildConfidence({
         reviewBody: record.reviewBody,
         rating: record.rating ?? 0,
@@ -1418,6 +1527,7 @@ export async function reviseDraft(shop: string, id: string, instruction: string,
   const productContext = await productContextForRecord(record, products, {
     admin,
     useProductDescription: appSettings.useProductDescription,
+    productCache: new Map(),
   });
   const cost = creditCostForReviewReply(brandVoice.selectedModel, {
     useProductDescription: appSettings.useProductDescription,
