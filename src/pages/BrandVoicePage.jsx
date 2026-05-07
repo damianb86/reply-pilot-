@@ -601,6 +601,8 @@ export default function BrandVoicePage({
   onSkipPersonalityBuilder,
   suppressPreviewFallback = false,
   livePreviewDescription,
+  hideSentReplyLoader = false,
+  showPersonalityPresetsByDefault = false,
 } = {}) {
   const shopify = useAppBridge();
   const routeLoaderData = useLoaderData();
@@ -672,7 +674,7 @@ export default function BrandVoicePage({
   }, [onActiveSectionChange]);
   const [savedConfig, setSavedConfig] = useState(initialConfig);
   const [localToast, setLocalToast] = useState(null);
-  const [showPersonalityPresets, setShowPersonalityPresets] = useState(false);
+  const [showPersonalityPresets, setShowPersonalityPresets] = useState(showPersonalityPresetsByDefault);
   const [showAdvancedLength, setShowAdvancedLength] = useState(initialConfig.replyLength === 'very_long');
   const [personalityHighlight, setPersonalityHighlight] = useState(false);
   const lastToastKey = useRef('');
@@ -1205,6 +1207,7 @@ export default function BrandVoicePage({
                     </Text>
                   </div>
 
+                  {!hideSentReplyLoader ? (
                   <div className="rp-source-reply-loader">
                     <InlineStack align="space-between" blockAlign="center" gap="300">
                       <InlineStack gap="400" blockAlign="center" wrap={false}>
@@ -1237,6 +1240,7 @@ export default function BrandVoicePage({
                       </InlineStack>
                     </InlineStack>
                   </div>
+                  ) : null}
 
                   {showManualReplyForm ? (
                     <div className="rp-manual-reply-form">

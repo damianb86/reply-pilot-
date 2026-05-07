@@ -238,6 +238,8 @@ export default function OnboardingPage() {
           onSkipPersonalityBuilder={() => goToBrandSection('personality-settings')}
           suppressPreviewFallback={currentStep.id === 'preview'}
           livePreviewDescription={currentStep.id === 'preview' ? 'Use this sample review as a starting point, or replace it with a real review from your store before generating the preview.' : undefined}
+          hideSentReplyLoader
+          showPersonalityPresetsByDefault
         />
       ) : null}
 
