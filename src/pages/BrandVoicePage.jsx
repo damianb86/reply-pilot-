@@ -27,7 +27,6 @@ import {
   MagicIcon,
   ProductIcon,
   PlusIcon,
-  RefreshIcon,
   SearchIcon,
   ShieldCheckMarkIcon,
   StarIcon,
@@ -310,17 +309,25 @@ function CreditInfoPanel() {
 
 function formatMultiplier(value) {
   const multiplier = Number(value);
-  if (!Number.isFinite(multiplier) || multiplier <= 1) return '1.3';
+  if (!Number.isFinite(multiplier) || multiplier <= 1) return '1';
   return String(Number(multiplier.toFixed(2)));
+}
+
+function formatPercentIncrease(value) {
+  const multiplier = Number(value);
+  if (!Number.isFinite(multiplier) || multiplier <= 1) return '';
+  return `${Math.round((multiplier - 1) * 100)}% more`;
 }
 
 function ProductDescriptionContextPanel({
   checked,
   onChange,
-  multiplier = 1.3,
+  multiplier = 1,
   costs,
 }) {
+  const hasSurcharge = Number(multiplier) > 1;
   const multiplierLabel = formatMultiplier(multiplier);
+  const percentIncreaseLabel = formatPercentIncrease(multiplier);
   const enabledCosts = costs
     ? [
         `Basic ${creditsText(costs.basic)}`,
@@ -330,21 +337,21 @@ function ProductDescriptionContextPanel({
     : null;
 
   return (
-    <div className={`rp-product-context-option ${checked ? 'is-enabled' : ''}`}>
+    <div className={`rp-product-context-option ${checked && hasSurcharge ? 'is-enabled' : ''}`}>
       <InlineStack align="space-between" blockAlign="start" gap="300">
         <BlockStack gap="150">
           <InlineStack gap="200" blockAlign="center">
             <Text as="h3" variant="headingMd">Product description context</Text>
-            <Badge tone={checked ? 'attention' : 'info'}>
-              {checked ? `${multiplierLabel}x reply credits` : 'Optional'}
+            <Badge tone={checked && hasSurcharge ? 'attention' : 'info'}>
+              {checked && hasSurcharge ? `${percentIncreaseLabel} credits` : 'Optional'}
             </Badge>
           </InlineStack>
           <Text as="p" variant="bodyMd" tone="subdued">
-            Include the cleaned Shopify product description when Reply Pilot drafts replies. This can improve product-specific answers, but reply generation costs {multiplierLabel}x credits because more context is sent to the AI.
+            Include the cleaned Shopify product description when Reply Pilot drafts replies. This can improve product-specific answers{hasSurcharge ? ` and costs ${percentIncreaseLabel} reply credits because more context is sent to the AI` : ''}.
           </Text>
-          {checked && enabledCosts ? (
+          {checked && hasSurcharge && enabledCosts ? (
             <Text as="p" variant="bodySm" tone="subdued">
-              With descriptions on: {enabledCosts}. Decimal credits are tracked internally.
+              With descriptions on: {enabledCosts}. Multiplier: {multiplierLabel}x. Decimal credits are tracked internally.
             </Text>
           ) : null}
         </BlockStack>
@@ -356,6 +363,14 @@ function ProductDescriptionContextPanel({
         />
       </InlineStack>
     </div>
+  );
+}
+
+function AiActionButton({children, className = '', icon = MagicIcon, ...buttonProps}) {
+  return (
+    <span className={`rp-ai-action-button ${className}`}>
+      <Button {...buttonProps} icon={icon}>{children}</Button>
+    </span>
   );
 }
 
@@ -590,7 +605,7 @@ export default function BrandVoicePage({
   onActiveSectionChange,
   useProductDescription = false,
   onUseProductDescriptionChange,
-  productDescriptionMultiplier = 1.3,
+  productDescriptionMultiplier = 1,
   productDescriptionReplyCosts,
   replyCreditMultiplier = 1,
   defaultSelectedModelOverride,
@@ -1170,15 +1185,14 @@ export default function BrandVoicePage({
                     >
                       Import replies
                     </Button>
-                    <Button
-                      icon={MagicIcon}
+                    <AiActionButton
                       variant="primary"
                       disabled={!exampleReplies.length || !selectedModelConfigured || !canGeneratePersonality || personalityTimeout.pending}
                       loading={personalityTimeout.pending}
                       onClick={handleGeneratePersonality}
                     >
                       Generate Personality · {creditsText(selectedCreditCosts.personality)}
-                    </Button>
+                    </AiActionButton>
                   </InlineStack>
                 </InlineGrid>
 
@@ -1494,8 +1508,7 @@ export default function BrandVoicePage({
               />
 
               <InlineStack align="start">
-                <Button
-                  icon={RefreshIcon}
+                <AiActionButton
                   variant="primary"
                   size="large"
                   disabled={!selectedModelConfigured || !canGeneratePreview || previewTimeout.pending}
@@ -1503,7 +1516,7 @@ export default function BrandVoicePage({
                   onClick={handleGeneratePreview}
                 >
                   {livePreview ? 'Regenerate preview' : 'Generate preview'}
-                </Button>
+                </AiActionButton>
               </InlineStack>
 
               <div className="rp-draft-box">

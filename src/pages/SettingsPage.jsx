@@ -56,9 +56,9 @@ const queueSortOptions = [
 ];
 
 const defaultProductDescriptionReplyCosts = {
-  basic: 1.3,
-  pro: 5.2,
-  premium: 15.6,
+  basic: 1,
+  pro: 4,
+  premium: 12,
 };
 
 const retentionOptions = [
@@ -140,10 +140,10 @@ export default function SettingsPage() {
   const saveFetcher = useFetcher();
   const cleanupFetcher = useFetcher();
   const lastToastKey = useRef('');
-  const configuredProductDescriptionMultiplier = Number(loaderData.productDescriptionCreditMultiplier ?? 1.3);
+  const configuredProductDescriptionMultiplier = Number(loaderData.productDescriptionCreditMultiplier ?? 1);
   const productDescriptionMultiplier = Number.isFinite(configuredProductDescriptionMultiplier)
     ? configuredProductDescriptionMultiplier
-    : 1.3;
+    : 1;
   const productDescriptionReplyCosts = {
     ...defaultProductDescriptionReplyCosts,
     ...(loaderData.productDescriptionReplyCosts ?? {}),

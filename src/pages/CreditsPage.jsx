@@ -201,7 +201,7 @@ export default function CreditsPage() {
             <Text as="p" variant="bodyMd" tone="subdued">
               Credits are spent when the AI agent generates replies, live previews, or Personality drafts. The cost depends on the AI model tier selected in Settings.
             </Text>
-            {credits.useProductDescription ? (
+            {credits.useProductDescription && Number(credits.productDescriptionMultiplier) > 1 ? (
               <Badge tone="attention">Product descriptions enabled: reply costs are {formatCreditNumber(credits.productDescriptionMultiplier)}x</Badge>
             ) : null}
           </BlockStack>

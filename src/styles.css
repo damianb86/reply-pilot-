@@ -1077,6 +1077,42 @@ select {
   background: linear-gradient(135deg, #ffffff 0%, #fff8eb 100%);
 }
 
+.rp-ai-action-button {
+  display: inline-flex;
+}
+
+.rp-ai-action-button.is-full {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.rp-ai-action-button.is-full .Polaris-Button {
+  width: 100%;
+}
+
+.rp-ai-action-button .Polaris-Button {
+  border-color: #8ec5ff;
+  background: linear-gradient(135deg, #e7f4ff 0%, #cceaff 100%);
+  color: #003f7d;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 91, 211, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.rp-ai-action-button .Polaris-Button:hover {
+  border-color: #66b4ff;
+  background: linear-gradient(135deg, #dff1ff 0%, #bfe4ff 100%);
+  color: #00376d;
+}
+
+.rp-ai-action-button .Polaris-Button:active {
+  background: #b8dcff;
+}
+
+.rp-ai-action-button .Polaris-Icon {
+  color: currentColor;
+}
+
 .rp-onboarding-progress {
   position: sticky;
   top: 0;
@@ -1095,6 +1131,41 @@ select {
   grid-template-columns: repeat(6, minmax(0, auto));
   gap: 8px;
   align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+}
+
+.rp-onboarding-nav-button {
+  min-width: 128px;
+  display: inline-flex;
+  justify-content: flex-start;
+}
+
+.rp-onboarding-nav-button.is-next {
+  justify-content: flex-end;
+}
+
+.rp-onboarding-nav-button .Polaris-Button {
+  min-height: 40px;
+  border-radius: 999px;
+}
+
+.rp-onboarding-nav-button.is-next .Polaris-Button {
+  border-color: #7abaff;
+  background: linear-gradient(135deg, #2c6ecb 0%, #6cc5ff 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(44, 110, 203, 0.18);
+}
+
+.rp-onboarding-nav-button.is-next .Polaris-Button:hover {
+  border-color: #4da4ff;
+  background: linear-gradient(135deg, #205eb8 0%, #58b8ff 100%);
+}
+
+.rp-onboarding-nav-spacer {
+  width: 128px;
+  height: 40px;
+  display: block;
 }
 
 .rp-onboarding-step {
@@ -1168,18 +1239,6 @@ select {
   width: min(860px, 100%);
   display: grid;
   gap: 16px;
-}
-
-.rp-onboarding-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 35;
-  padding: 14px;
-  border: 1px solid #dfe3e8;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 -8px 24px rgba(32, 34, 35, 0.08);
-  backdrop-filter: blur(8px);
 }
 
 .rp-personality-preset-grid {

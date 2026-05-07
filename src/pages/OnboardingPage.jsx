@@ -13,6 +13,8 @@ import {
   Text,
 } from '@shopify/polaris';
 import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
   CheckCircleIcon,
   ConnectIcon,
   MagicIcon,
@@ -33,14 +35,18 @@ const wizardSteps = [
   {id: 'finish', label: 'Finish', icon: CheckCircleIcon},
 ];
 
-function WizardProgressBar({currentStepIndex}) {
+function WizardProgressBar({currentStepIndex, canContinue, showNext, isFinishing, onBack, onNext, onFinish}) {
+  const isFirst = currentStepIndex === 0;
+  const isLast = wizardSteps[currentStepIndex]?.id === 'finish';
+
   return (
     <div className="rp-onboarding-progress" aria-label="Setup progress">
       <InlineStack align="space-between" blockAlign="center" gap="300">
-        <BlockStack gap="050">
-          <Text as="p" variant="bodySm" tone="subdued" fontWeight="semibold">SETUP WIZARD</Text>
-          <Text as="p" variant="headingMd">Step {currentStepIndex + 1} of {wizardSteps.length}</Text>
-        </BlockStack>
+        <span className="rp-onboarding-nav-button">
+          <Button icon={ArrowLeftIcon} size="large" disabled={isFirst || isFinishing} onClick={onBack}>
+            Back
+          </Button>
+        </span>
         <div className="rp-onboarding-steps">
           {wizardSteps.map((step, index) => {
             const active = index === currentStepIndex;
@@ -53,6 +59,19 @@ function WizardProgressBar({currentStepIndex}) {
             );
           })}
         </div>
+        <span className="rp-onboarding-nav-button is-next">
+          {isLast ? (
+            <Button icon={CheckCircleIcon} variant="primary" size="large" loading={isFinishing} disabled={!canContinue || isFinishing} onClick={onFinish}>
+              Finish setup
+            </Button>
+          ) : showNext ? (
+            <Button icon={ArrowRightIcon} variant="primary" size="large" disabled={!canContinue || isFinishing} onClick={onNext}>
+              Next
+            </Button>
+          ) : (
+            <span className="rp-onboarding-nav-spacer" />
+          )}
+        </span>
       </InlineStack>
     </div>
   );
@@ -96,30 +115,6 @@ function WizardHeader({step}) {
         <Icon source={step.icon} />
       </span>
     </InlineStack>
-  );
-}
-
-function WizardFooter({stepIndex, canContinue, showNext, isFinishing, onBack, onNext, onFinish}) {
-  const isFirst = stepIndex === 0;
-  const isLast = wizardSteps[stepIndex]?.id === 'finish';
-
-  return (
-    <div className="rp-onboarding-footer">
-      <InlineStack align="space-between" blockAlign="center" gap="300">
-        <Button disabled={isFirst || isFinishing} onClick={onBack}>Back</Button>
-        {isLast ? (
-          <Button variant="primary" size="large" loading={isFinishing} disabled={!canContinue || isFinishing} onClick={onFinish}>
-            Finish setup
-          </Button>
-        ) : showNext ? (
-          <Button variant="primary" size="large" disabled={!canContinue || isFinishing} onClick={onNext}>
-            Next
-          </Button>
-        ) : (
-          <span />
-        )}
-      </InlineStack>
-    </div>
   );
 }
 
@@ -198,7 +193,15 @@ export default function OnboardingPage() {
 
   return (
     <BlockStack gap="400">
-      <WizardProgressBar currentStepIndex={currentStepIndex} />
+      <WizardProgressBar
+        currentStepIndex={currentStepIndex}
+        canContinue={canContinue}
+        showNext={showNext}
+        isFinishing={finalizeTimeout.pending}
+        onBack={() => goToStep(currentStepIndex - 1)}
+        onNext={() => goToStep(currentStepIndex + 1)}
+        onFinish={finishSetup}
+      />
       <WizardHeader step={currentStep} />
 
       {connectResult?.message ? (
@@ -270,16 +273,6 @@ export default function OnboardingPage() {
           </Box>
         </Card>
       ) : null}
-
-      <WizardFooter
-        stepIndex={currentStepIndex}
-        canContinue={canContinue}
-        showNext={showNext}
-        isFinishing={finalizeTimeout.pending}
-        onBack={() => goToStep(currentStepIndex - 1)}
-        onNext={() => goToStep(currentStepIndex + 1)}
-        onFinish={finishSetup}
-      />
     </BlockStack>
   );
 }

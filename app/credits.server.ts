@@ -10,7 +10,7 @@ type CreditOperation = "reply" | "preview" | "personality";
 const INITIAL_FREE_CREDITS = 100;
 const FIRST_PURCHASE_BONUS_RATE = 0.35;
 const FIRST_PURCHASE_BONUS_PERCENT = Math.round(FIRST_PURCHASE_BONUS_RATE * 100);
-const DEFAULT_PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER = 1.3;
+const DEFAULT_PRODUCT_DESCRIPTION_CREDIT_MULTIPLIER = 1;
 const CREDIT_MULTIPLIERS: Record<string, number> = {
   dev: 0,
   basic: 1,

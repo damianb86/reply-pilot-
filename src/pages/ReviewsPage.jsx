@@ -90,6 +90,14 @@ function QueueEmptyState({connected, connectUrl, onRefresh, refreshing}) {
   );
 }
 
+function AiActionButton({children, className = '', icon = MagicIcon, ...buttonProps}) {
+  return (
+    <span className={`rp-ai-action-button ${className}`}>
+      <Button {...buttonProps} icon={icon}>{children}</Button>
+    </span>
+  );
+}
+
 function ResultBanner({result, syncError}) {
   if (result?.message && result.ok === false) {
     return (
@@ -723,15 +731,15 @@ function ReviewsContent() {
           <InlineStack align="space-between" blockAlign="center" gap="300">
             <InlineStack gap="200" blockAlign="center">
               <Text as="span" variant="bodyMd" fontWeight="semibold">{selectedCount} selected</Text>
-              <Button icon={MagicIcon} disabled={!aiConfigured || !selectedUngeneratedPendingIds.length || isSubmitting || !hasCreditsFor(selectedUngeneratedPendingIds.length)} onClick={() => submitAction('generate', selectedUngeneratedPendingIds)}>
+              <AiActionButton disabled={!aiConfigured || !selectedUngeneratedPendingIds.length || isSubmitting || !hasCreditsFor(selectedUngeneratedPendingIds.length)} onClick={() => submitAction('generate', selectedUngeneratedPendingIds)}>
                 Generate {selectedUngeneratedPendingIds.length} · {creditLabel(selectedUngeneratedPendingIds.length)}
-              </Button>
+              </AiActionButton>
               <Button icon={SendIcon} variant="primary" disabled={!selectedGeneratedPendingIds.length || isSubmitting} onClick={() => submitAction('send', selectedGeneratedPendingIds)}>
                 Approve & send all {selectedGeneratedPendingIds.length}
               </Button>
-              <Button icon={RefreshIcon} disabled={!aiConfigured || !selectedGeneratedPendingIds.length || isSubmitting || !hasCreditsFor(selectedGeneratedPendingIds.length)} onClick={() => submitAction('regenerate', selectedGeneratedPendingIds)}>
+              <AiActionButton disabled={!aiConfigured || !selectedGeneratedPendingIds.length || isSubmitting || !hasCreditsFor(selectedGeneratedPendingIds.length)} onClick={() => submitAction('regenerate', selectedGeneratedPendingIds)}>
                 Regenerate · {creditLabel(selectedGeneratedPendingIds.length)}
-              </Button>
+              </AiActionButton>
               <Button icon={XIcon} disabled={!selectedPendingIds.length || isSubmitting} onClick={() => submitAction('skip', selectedPendingIds)}>
                 Don't reply
               </Button>
@@ -749,9 +757,9 @@ function ReviewsContent() {
             </InlineStack>
             <InlineStack gap="200" blockAlign="center">
               {ungeneratedVisible.length ? (
-                <Button icon={MagicIcon} disabled={!aiConfigured || isSubmitting || !hasCreditsFor(ungeneratedVisible.length)} onClick={() => submitAction('generate', ungeneratedVisible.map((review) => review.id))}>
+                <AiActionButton disabled={!aiConfigured || isSubmitting || !hasCreditsFor(ungeneratedVisible.length)} onClick={() => submitAction('generate', ungeneratedVisible.map((review) => review.id))}>
                   Generate missing {ungeneratedVisible.length} · {creditLabel(ungeneratedVisible.length)}
-                </Button>
+                </AiActionButton>
               ) : null}
               <Text as="span" variant="bodyMd" tone="critical">{highConfidenceVisible.length} high-conf</Text>
               <Button disabled={!highConfidenceVisible.length} onClick={() => setSelectedIds(highConfidenceVisible.map((review) => review.id))}>
@@ -915,9 +923,9 @@ function ReviewsContent() {
                               Generate the first message when you are ready. Reply Pilot will use Brand Voice, product context, star rating, and this review.
                             </Text>
                             {activeReview.status === 'pending' ? (
-                              <Button icon={MagicIcon} variant="primary" disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
+                              <AiActionButton variant="primary" disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
                                 Generate message · {creditLabel(1)}
-                              </Button>
+                              </AiActionButton>
                             ) : null}
                           </BlockStack>
                         ) : (
@@ -967,14 +975,14 @@ function ReviewsContent() {
                               >
                                 Cancel
                               </Button>
-                              <Button
+                              <AiActionButton
                                 variant="primary"
                                 disabled={!aiConfigured || !draftInstruction.trim() || !hasCreditsFor(1)}
                                 loading={isSubmitting && fetcher.formData?.get('intent') === 'revise-draft'}
                                 onClick={handleReviseDraft}
                               >
                                 Apply change · {creditLabel(1)}
-                              </Button>
+                              </AiActionButton>
                             </InlineStack>
                           </BlockStack>
                         ) : null}
@@ -999,9 +1007,9 @@ function ReviewsContent() {
                           Don't reply
                         </Button>
                       ) : !activeHasDraft ? (
-                        <Button icon={MagicIcon} variant="primary" size="large" fullWidth disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
+                        <AiActionButton className="is-full" variant="primary" size="large" fullWidth disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
                           Generate message · {creditLabel(1)}
-                        </Button>
+                        </AiActionButton>
                       ) : (
                         <Button icon={SendIcon} variant="primary" size="large" fullWidth loading={isSubmitting && fetcher.formData?.get('intent') === 'send'} onClick={() => submitSingle('send', activeReview.id)}>
                           Approve & send
@@ -1010,7 +1018,7 @@ function ReviewsContent() {
                       {!activeHasJudgeMeReply ? (
                         <>
                           <Button icon={EditIcon} accessibilityLabel="Edit draft" disabled={activeReview.status !== 'pending'} onClick={() => setIsEditing(true)} />
-                          <Button icon={RefreshIcon} accessibilityLabel={`Regenerate draft, ${creditLabel(1)}`} disabled={!aiConfigured || isSubmitting || activeReview.status !== 'pending' || !activeHasDraft || !hasCreditsFor(1)} onClick={() => submitSingle('regenerate', activeReview.id)} />
+                          <AiActionButton className="is-icon-only" accessibilityLabel={`Regenerate draft, ${creditLabel(1)}`} disabled={!aiConfigured || isSubmitting || activeReview.status !== 'pending' || !activeHasDraft || !hasCreditsFor(1)} onClick={() => submitSingle('regenerate', activeReview.id)} />
                           <Button icon={XIcon} accessibilityLabel="Do not reply" disabled={isSubmitting || activeReview.status !== 'pending'} onClick={() => submitSingle('skip', activeReview.id)} />
                         </>
                       ) : null}
