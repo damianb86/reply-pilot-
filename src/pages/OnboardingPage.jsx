@@ -35,7 +35,7 @@ const wizardSteps = [
   {id: 'finish', label: 'Finish', icon: CheckCircleIcon},
 ];
 
-function WizardProgressBar({currentStepIndex, canContinue, showNext, isFinishing, onBack, onNext, onFinish}) {
+function WizardProgressBar({currentStepIndex, canContinue, isFinishing, onBack, onNext, onFinish}) {
   const isFirst = currentStepIndex === 0;
   const isLast = wizardSteps[currentStepIndex]?.id === 'finish';
 
@@ -64,12 +64,10 @@ function WizardProgressBar({currentStepIndex, canContinue, showNext, isFinishing
             <Button icon={CheckCircleIcon} variant="primary" size="large" loading={isFinishing} disabled={!canContinue || isFinishing} onClick={onFinish}>
               Finish setup
             </Button>
-          ) : showNext ? (
+          ) : (
             <Button icon={ArrowRightIcon} variant="primary" size="large" disabled={!canContinue || isFinishing} onClick={onNext}>
               Next
             </Button>
-          ) : (
-            <span className="rp-onboarding-nav-spacer" />
           )}
         </span>
       </InlineStack>
@@ -168,12 +166,9 @@ export default function OnboardingPage() {
     if (currentStep.id === 'builder') return personaHasText;
     if (currentStep.id === 'voice') return personaHasText;
     if (currentStep.id === 'model') return modelSelected;
+    if (currentStep.id === 'finish') return connected && personaHasText && modelSelected;
     return true;
   }, [connected, currentStep.id, modelSelected, personaHasText]);
-  const showNext = currentStep.id === 'connect'
-    ? connected
-    : currentStep.id !== 'builder' || personaHasText;
-
   const goToStep = useCallback((index) => {
     setCurrentStepIndex(Math.max(0, Math.min(wizardSteps.length - 1, index)));
   }, []);
@@ -196,7 +191,6 @@ export default function OnboardingPage() {
       <WizardProgressBar
         currentStepIndex={currentStepIndex}
         canContinue={canContinue}
-        showNext={showNext}
         isFinishing={finalizeTimeout.pending}
         onBack={() => goToStep(currentStepIndex - 1)}
         onNext={() => goToStep(currentStepIndex + 1)}

@@ -34,7 +34,7 @@ const defaultSettings = {
   routeSensitiveReviews: true,
   routeLowStarReviews: true,
   sendReplyEmail: false,
-  useProductDescription: false,
+  useProductDescription: true,
   onboardingCompleted: false,
   defaultQueueRange: '7-days',
   defaultQueueSort: 'newest',

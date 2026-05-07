@@ -338,10 +338,17 @@ function ProductDescriptionContextPanel({
 
   return (
     <div className={`rp-product-context-option ${checked && hasSurcharge ? 'is-enabled' : ''}`}>
-      <InlineStack align="space-between" blockAlign="start" gap="300">
+      <InlineStack blockAlign="start" gap="300" wrap={false}>
+        <div className="rp-product-context-checkbox">
+          <Checkbox
+            label="Product description context"
+            checked={checked}
+            onChange={onChange}
+            disabled={!onChange}
+          />
+        </div>
         <BlockStack gap="150">
           <InlineStack gap="200" blockAlign="center">
-            <Text as="h3" variant="headingMd">Product description context</Text>
             <Badge tone={checked && hasSurcharge ? 'attention' : 'info'}>
               {checked && hasSurcharge ? `${percentIncreaseLabel} credits` : 'Optional'}
             </Badge>
@@ -355,12 +362,6 @@ function ProductDescriptionContextPanel({
             </Text>
           ) : null}
         </BlockStack>
-        <Checkbox
-          label="Use product descriptions"
-          checked={checked}
-          onChange={onChange}
-          disabled={!onChange}
-        />
       </InlineStack>
     </div>
   );
