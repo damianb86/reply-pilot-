@@ -471,7 +471,7 @@ async function grantPurchasedCredits(
 }
 
 function billingIsTest() {
-  if (process.env.SHOPIFY_BILLING_TEST === "false") return false;
+  if (process.env.SHOPIFY_BILLING_TEST === "true") return true;
   return (process.env.APP_ENV || process.env.NODE_ENV || "development") !== "production";
 }
 
