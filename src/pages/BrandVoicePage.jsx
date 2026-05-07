@@ -233,8 +233,6 @@ function replyCostBadge(model, multiplier = 1) {
 }
 
 function ModelCard({model, selected, onSelect, replyCreditMultiplier = 1}) {
-  const previewCost = creditsText(model.credits?.preview ?? model.credits?.reply);
-
   return (
     <button
       type="button"
@@ -258,13 +256,6 @@ function ModelCard({model, selected, onSelect, replyCreditMultiplier = 1}) {
             <Text as="h3" variant="headingMd">{model.bestFor}</Text>
             <Text as="p" variant="bodyMd" tone="subdued">{model.description}</Text>
           </BlockStack>
-
-          <div className="rp-model-card-divider" />
-
-          <Text as="p" variant="bodySm" tone="subdued">
-            Preview: {previewCost} · Personality: {creditsText(model.credits?.personality)}
-          </Text>
-
           {model.strengths?.length ? (
             <div className="rp-model-strengths">
               {model.strengths.map((strength) => (
