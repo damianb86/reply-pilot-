@@ -645,11 +645,9 @@ function ReviewsContent() {
                 </span>
                 <span className="rp-brand-name">Reviews</span>
               </span>
-              <Badge tone="info">Shortcuts enabled</Badge>
             </InlineStack>
             <InlineStack gap="200" blockAlign="center">
               <Badge tone={aiConfigured ? 'info' : 'critical'}>AI: {aiDisplayName}</Badge>
-              <Text as="span" variant="bodySm" tone="subdued">{aiProvider} from Brand Voice</Text>
               <Badge tone={creditBalance < replyCreditCost ? 'critical' : 'info'}>{formatCreditAmount(creditBalance)} credits</Badge>
               {productDescriptionMultiplier > 1 ? <Badge tone="attention">Product descriptions {productDescriptionMultiplier}x</Badge> : null}
               <Badge>{pageData.connected ? 'Judge.me connected' : 'Source missing'}</Badge>
