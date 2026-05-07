@@ -31,10 +31,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return redirect(pathWithEmbeddedParams(url, "/app/onboarding"));
   }
 
-  if (settings.onboardingCompleted && isOnboardingRoute) {
-    return redirect(pathWithEmbeddedParams(url, "/app/dashboard"));
-  }
-
   // eslint-disable-next-line no-undef
   return {
     apiKey: process.env.SHOPIFY_API_KEY || "",

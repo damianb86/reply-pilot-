@@ -9,7 +9,7 @@ export const loader = async ({request}: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const search = url.searchParams.toString();
 
-  return redirect(search ? `/app/dashboard?${search}` : "/app/dashboard");
+  return redirect(search ? `/app/reviews?${search}` : "/app/reviews");
 };
 
 export default function AppIndexRoute() {
