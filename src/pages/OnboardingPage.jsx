@@ -231,8 +231,6 @@ export default function OnboardingPage() {
           onActiveSectionChange={goToBrandSection}
           useProductDescription={useProductDescription}
           onUseProductDescriptionChange={setUseProductDescription}
-          productDescriptionMultiplier={loaderData.productDescriptionCreditMultiplier}
-          productDescriptionReplyCosts={loaderData.productDescriptionReplyCosts}
           replyCreditMultiplier={useProductDescription ? loaderData.productDescriptionCreditMultiplier : 1}
           defaultSelectedModelOverride="pro"
           hideSaveBar

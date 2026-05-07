@@ -1066,19 +1066,10 @@ select {
 }
 
 .rp-product-context-option {
-  padding: 18px;
+  padding: 14px 16px;
   border: 1px solid #d4e2f7;
   border-radius: 12px;
   background: linear-gradient(135deg, #ffffff 0%, #f7fbff 100%);
-}
-
-.rp-product-context-option.is-enabled {
-  border-color: #ffd79d;
-  background: linear-gradient(135deg, #ffffff 0%, #fff8eb 100%);
-}
-
-.rp-product-context-checkbox {
-  min-width: 220px;
 }
 
 .rp-ai-action-button {
@@ -2005,14 +1996,6 @@ select {
 
   .rp-onboarding-finish-checks {
     grid-template-columns: 1fr;
-  }
-
-  .rp-product-context-option .Polaris-InlineStack {
-    flex-wrap: wrap;
-  }
-
-  .rp-product-context-checkbox {
-    min-width: 0;
   }
 
   .rp-sent-row {

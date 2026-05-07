@@ -307,62 +307,23 @@ function CreditInfoPanel() {
   );
 }
 
-function formatMultiplier(value) {
-  const multiplier = Number(value);
-  if (!Number.isFinite(multiplier) || multiplier <= 1) return '1';
-  return String(Number(multiplier.toFixed(2)));
-}
-
-function formatPercentIncrease(value) {
-  const multiplier = Number(value);
-  if (!Number.isFinite(multiplier) || multiplier <= 1) return '';
-  return `${Math.round((multiplier - 1) * 100)}% more`;
-}
-
 function ProductDescriptionContextPanel({
   checked,
   onChange,
-  multiplier = 1,
-  costs,
 }) {
-  const hasSurcharge = Number(multiplier) > 1;
-  const multiplierLabel = formatMultiplier(multiplier);
-  const percentIncreaseLabel = formatPercentIncrease(multiplier);
-  const enabledCosts = costs
-    ? [
-        `Basic ${creditsText(costs.basic)}`,
-        `Pro ${creditsText(costs.pro)}`,
-        `Premium ${creditsText(costs.premium)}`,
-      ].join(' · ')
-    : null;
-
   return (
-    <div className={`rp-product-context-option ${checked && hasSurcharge ? 'is-enabled' : ''}`}>
-      <InlineStack blockAlign="start" gap="300" wrap={false}>
-        <div className="rp-product-context-checkbox">
-          <Checkbox
-            label="Product description context"
-            checked={checked}
-            onChange={onChange}
-            disabled={!onChange}
-          />
-        </div>
-        <BlockStack gap="150">
-          <InlineStack gap="200" blockAlign="center">
-            <Badge tone={checked && hasSurcharge ? 'attention' : 'info'}>
-              {checked && hasSurcharge ? `${percentIncreaseLabel} credits` : 'Optional'}
-            </Badge>
-          </InlineStack>
-          <Text as="p" variant="bodyMd" tone="subdued">
-            Include the cleaned Shopify product description when Reply Pilot drafts replies. This can improve product-specific answers{hasSurcharge ? ` and costs ${percentIncreaseLabel} reply credits because more context is sent to the AI` : ''}.
-          </Text>
-          {checked && hasSurcharge && enabledCosts ? (
-            <Text as="p" variant="bodySm" tone="subdued">
-              With descriptions on: {enabledCosts}. Multiplier: {multiplierLabel}x. Decimal credits are tracked internally.
-            </Text>
-          ) : null}
-        </BlockStack>
-      </InlineStack>
+    <div className="rp-product-context-option">
+      <BlockStack gap="200">
+        <Checkbox
+          label="Use product descriptions"
+          checked={checked}
+          onChange={onChange}
+          disabled={!onChange}
+        />
+        <Text as="p" variant="bodyMd" tone="subdued">
+          Keep this enabled to let Reply Pilot read cleaned Shopify product descriptions when drafting replies. Turn it off if you want responses based only on the review, product title, tags, and rating.
+        </Text>
+      </BlockStack>
     </div>
   );
 }
@@ -606,8 +567,6 @@ export default function BrandVoicePage({
   onActiveSectionChange,
   useProductDescription = false,
   onUseProductDescriptionChange,
-  productDescriptionMultiplier = 1,
-  productDescriptionReplyCosts,
   replyCreditMultiplier = 1,
   defaultSelectedModelOverride,
   hideSaveBar = false,
@@ -1192,7 +1151,7 @@ export default function BrandVoicePage({
                       loading={personalityTimeout.pending}
                       onClick={handleGeneratePersonality}
                     >
-                      Generate Personality · {creditsText(selectedCreditCosts.personality)}
+                      Generate Personality
                     </AiActionButton>
                   </InlineStack>
                 </InlineGrid>
@@ -1434,8 +1393,6 @@ export default function BrandVoicePage({
               <ProductDescriptionContextPanel
                 checked={Boolean(useProductDescription)}
                 onChange={(value) => onUseProductDescriptionChange?.(value)}
-                multiplier={productDescriptionMultiplier}
-                costs={productDescriptionReplyCosts}
               />
 
               <CreditInfoPanel />

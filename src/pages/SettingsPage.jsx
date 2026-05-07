@@ -55,12 +55,6 @@ const queueSortOptions = [
   {label: 'Oldest first', value: 'oldest'},
 ];
 
-const defaultProductDescriptionReplyCosts = {
-  basic: 1,
-  pro: 4,
-  premium: 12,
-};
-
 const retentionOptions = [
   {label: '12 months', value: '12-months'},
   {label: '24 months', value: '24-months'},
@@ -144,10 +138,6 @@ export default function SettingsPage() {
   const productDescriptionMultiplier = Number.isFinite(configuredProductDescriptionMultiplier)
     ? configuredProductDescriptionMultiplier
     : 1;
-  const productDescriptionReplyCosts = {
-    ...defaultProductDescriptionReplyCosts,
-    ...(loaderData.productDescriptionReplyCosts ?? {}),
-  };
   const [activeSection, setActiveSection] = useState(() => {
     const requestedSection = new URLSearchParams(location.search).get('section');
     return requestedSection && [...brandVoiceSectionIds, ...generalSettingsNav.map((item) => item.id)].includes(requestedSection)
@@ -298,8 +288,6 @@ export default function SettingsPage() {
               onActiveSectionChange={setActiveSection}
               useProductDescription={settings.useProductDescription}
               onUseProductDescriptionChange={(value) => set('useProductDescription', value)}
-              productDescriptionMultiplier={productDescriptionMultiplier}
-              productDescriptionReplyCosts={productDescriptionReplyCosts}
               replyCreditMultiplier={settings.useProductDescription ? productDescriptionMultiplier : 1}
             />
           ) : null}

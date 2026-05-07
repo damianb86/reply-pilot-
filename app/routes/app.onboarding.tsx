@@ -1,10 +1,7 @@
 import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import OnboardingPage from "../../src/pages/OnboardingPage";
 import { loadBrandVoicePageData, saveBrandVoiceSettings } from "../brand-voice.server";
-import {
-  creditCostForReviewReply,
-  productDescriptionCreditMultiplier,
-} from "../credits.server";
+import { productDescriptionCreditMultiplier } from "../credits.server";
 import db from "../db.server";
 import { getJudgeMeConnectionView } from "../judgeme.server";
 import { loadAppSettings, saveAppSettings } from "../settings.server";
@@ -99,11 +96,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     },
     productDescriptionCreditMultiplier: productDescriptionCreditMultiplier(true),
-    productDescriptionReplyCosts: {
-      basic: creditCostForReviewReply("basic", { useProductDescription: true }),
-      pro: creditCostForReviewReply("pro", { useProductDescription: true }),
-      premium: creditCostForReviewReply("premium", { useProductDescription: true }),
-    },
   };
 }
 
