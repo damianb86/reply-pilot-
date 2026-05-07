@@ -697,8 +697,6 @@ export default function BrandVoicePage({
   const selectedModelConfigured = selectedModelConfig?.configured ?? false;
   const creditOverview = previewFetcher.data?.credits ?? personalityFetcher.data?.credits ?? loaderData.credits ?? {balance: 0};
   const selectedCreditCosts = selectedModelConfig?.credits ?? {reply: 1, preview: 1, personality: 2};
-  const canGeneratePreview = Number(creditOverview.balance ?? 0) >= Number(selectedCreditCosts.preview ?? 0);
-  const canGeneratePersonality = Number(creditOverview.balance ?? 0) >= Number(selectedCreditCosts.personality ?? 0);
   const previewProductContextText = useMemo(() => {
     if (!previewProductTitle) return 'Open Shopify product picker to search the full catalog.';
 
@@ -782,6 +780,19 @@ export default function BrandVoicePage({
       window.setTimeout(() => setLocalToast(null), data.ok ? 4000 : 8000);
     }
   }, [shopify]);
+
+  function hasEnoughCredits(requiredCredits, actionLabel) {
+    const required = Number(requiredCredits || 0);
+    const available = Number(creditOverview.balance ?? 0);
+    if (required <= available) return true;
+
+    showToast({
+      ok: false,
+      intent: 'insufficient-credits',
+      message: `${actionLabel} needs ${creditsText(required)}, but you only have ${creditsText(available)}. Buy more credits to continue.`,
+    });
+    return false;
+  }
 
   const updatePersona = useCallback((value) => {
     setPersona(limitPersonalityText(value));
@@ -992,6 +1003,8 @@ export default function BrandVoicePage({
   }
 
   function handleGeneratePersonality() {
+    if (!hasEnoughCredits(selectedCreditCosts.personality, 'Generating Personality')) return;
+
     const formData = new FormData();
     formData.set('intent', 'generate-personality');
     formData.set('modelId', selectedModel);
@@ -1015,6 +1028,8 @@ export default function BrandVoicePage({
   }
 
   function handleGeneratePreview() {
+    if (!hasEnoughCredits(selectedCreditCosts.preview, livePreview ? 'Regenerating the preview' : 'Generating the preview')) return;
+
     const formData = new FormData();
     formData.set('intent', 'generate-preview');
     formData.set('modelId', selectedModel);
@@ -1291,7 +1306,7 @@ export default function BrandVoicePage({
                   <InlineStack align="end">
                     <AiActionButton
                       variant="primary"
-                      disabled={!exampleReplies.length || !selectedModelConfigured || !canGeneratePersonality || personalityTimeout.pending}
+                      disabled={!exampleReplies.length || !selectedModelConfigured || personalityTimeout.pending}
                       loading={personalityTimeout.pending}
                       onClick={handleGeneratePersonality}
                     >
@@ -1586,7 +1601,7 @@ export default function BrandVoicePage({
                 <AiActionButton
                   variant="primary"
                   size="large"
-                  disabled={!selectedModelConfigured || !canGeneratePreview || previewTimeout.pending}
+                  disabled={!selectedModelConfigured || previewTimeout.pending}
                   loading={previewTimeout.pending}
                   onClick={handleGeneratePreview}
                 >
