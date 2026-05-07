@@ -755,6 +755,16 @@ select {
   height: auto;
 }
 
+.rp-draft-empty {
+  min-height: 204px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+
 .rp-detail-footer {
   margin-top: auto;
   padding: 16px 20px;

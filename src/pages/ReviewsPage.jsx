@@ -910,18 +910,13 @@ function ReviewsContent() {
                             </InlineStack>
                           </BlockStack>
                         ) : !activeHasDraft ? (
-                          <BlockStack gap="250" align="center">
+                          <div className="rp-draft-empty">
                             <DraftPlaceholderIllustration />
                             <Text as="h3" variant="headingMd" alignment="center">Draft not generated yet</Text>
                             <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
                               Generate the first message when you are ready. Reply Pilot will use Brand Voice, product context, star rating, and this review.
                             </Text>
-                            {activeReview.status === 'pending' ? (
-                              <AiActionButton variant="primary" disabled={!aiConfigured || !hasCreditsFor(1)} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingle('generate', activeReview.id)}>
-                                Generate message
-                              </AiActionButton>
-                            ) : null}
-                          </BlockStack>
+                          </div>
                         ) : (
                           <Text as="p" variant="bodyLg">{activeReview.draft}</Text>
                         )}
