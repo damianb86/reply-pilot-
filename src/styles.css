@@ -1221,6 +1221,62 @@ select {
   color: currentColor;
 }
 
+.rp-onboarding-finish-card {
+  min-height: 420px;
+  padding: 56px 28px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 28px;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(234, 243, 255, 0.95) 0%, rgba(255, 255, 255, 0) 42%),
+    linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.rp-onboarding-finish-card .rp-onboarding-finish-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  color: #108043;
+  background: #e3f1df;
+  box-shadow:
+    0 0 0 8px rgba(227, 241, 223, 0.7),
+    0 16px 36px rgba(16, 128, 67, 0.14);
+}
+
+.rp-onboarding-finish-card .Polaris-Button {
+  min-width: 180px;
+}
+
+.rp-onboarding-finish-checks {
+  width: min(620px, 100%);
+  padding: 16px;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.rp-onboarding-finish-check {
+  min-height: 42px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #202223;
+  background: #f7f8f9;
+}
+
+.rp-onboarding-finish-check .Polaris-Icon {
+  width: 18px;
+  height: 18px;
+}
+
 .rp-onboarding-connect-panel {
   width: 100%;
   display: grid;
@@ -1945,6 +2001,10 @@ select {
 
   .rp-onboarding-step {
     justify-content: center;
+  }
+
+  .rp-onboarding-finish-checks {
+    grid-template-columns: 1fr;
   }
 
   .rp-product-context-option .Polaris-InlineStack {

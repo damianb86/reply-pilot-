@@ -2,7 +2,6 @@
 import {useCallback, useMemo, useState} from 'react';
 import {useFetcher, useLoaderData, useLocation} from 'react-router';
 import {
-  Badge,
   Banner,
   BlockStack,
   Box,
@@ -246,24 +245,40 @@ export default function OnboardingPage() {
 
       {currentStep.id === 'finish' ? (
         <Card>
-          <Box padding="500">
-            <BlockStack gap="400">
-              <InlineStack gap="300" blockAlign="center">
-                <span className="rp-onboarding-finish-icon"><Icon source={CheckCircleIcon} /></span>
-                <BlockStack gap="100">
-                  <Text as="h2" variant="headingLg">Ready to save setup</Text>
-                  <Text as="p" variant="bodyMd" tone="subdued">
-                    Reply Pilot will remember your connection, Personality, AI model, preview test, and product-description setting for this shop.
-                  </Text>
-                </BlockStack>
-              </InlineStack>
-              <InlineStack gap="200" wrap>
-                <Badge tone={connected ? 'success' : 'critical'}>{connected ? 'Source connected' : 'Source missing'}</Badge>
-                <Badge tone={personaHasText ? 'success' : 'critical'}>{personaHasText ? 'Personality ready' : 'Personality missing'}</Badge>
-                <Badge tone="info">{brandVoiceConfig.selectedModel || 'pro'} model</Badge>
-                {useProductDescription ? <Badge tone="attention">Product descriptions on</Badge> : <Badge>Product descriptions off</Badge>}
-              </InlineStack>
-            </BlockStack>
+          <Box padding="0">
+            <div className="rp-onboarding-finish-card">
+              <span className="rp-onboarding-finish-icon"><Icon source={CheckCircleIcon} /></span>
+              <BlockStack gap="250" align="center">
+                <Text as="h2" variant="heading2xl" alignment="center">Reply Pilot is ready</Text>
+                <Text as="p" variant="bodyLg" tone="subdued" alignment="center">
+                  Your review source, brand voice, AI model, and preview test are configured. You can now start reviewing customer messages and generating replies.
+                </Text>
+              </BlockStack>
+
+              <div className="rp-onboarding-finish-checks">
+                {[
+                  'Review source connected',
+                  'Brand voice prepared',
+                  'AI reply workflow ready',
+                ].map((item) => (
+                  <div className="rp-onboarding-finish-check" key={item}>
+                    <Icon source={CheckCircleIcon} tone="success" />
+                    <Text as="span" variant="bodyMd" fontWeight="medium">{item}</Text>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                icon={ArrowRightIcon}
+                variant="primary"
+                size="large"
+                loading={finalizeTimeout.pending}
+                disabled={!canContinue || finalizeTimeout.pending}
+                onClick={finishSetup}
+              >
+                Go to Reviews
+              </Button>
+            </div>
           </Box>
         </Card>
       ) : null}
