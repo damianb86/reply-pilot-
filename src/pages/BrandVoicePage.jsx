@@ -73,6 +73,12 @@ const defaultReplyLength = 'adaptive';
 const personalityMaxWords = 200;
 const personalityMaxCharacters = 1400;
 const previewRatingValues = [1, 2, 3, 4, 5];
+const sentReplyOptions = [
+  {label: 'Last 5 sent replies', value: '5'},
+  {label: 'Last 10 sent replies', value: '10'},
+  {label: 'Last 25 sent replies', value: '25'},
+  {label: 'Last 50 sent replies', value: '50'},
+];
 
 const personalityPresets = [
   {
@@ -204,6 +210,28 @@ function ExampleRow({example, onRemove}) {
       <Button icon={DeleteIcon} variant="plain" accessibilityLabel="Remove example reply" onClick={onRemove} />
     </div>
   );
+}
+
+function mergeExampleReplies(current, incoming) {
+  const seen = new Set();
+  const merged = [];
+
+  for (const reply of [...incoming, ...current]) {
+    const text = String(reply?.text ?? '').trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push({
+      ...reply,
+      text,
+      id: reply.id || `reply-${merged.length}`,
+      source: reply.source || 'Example reply',
+    });
+    if (merged.length >= 50) break;
+  }
+
+  return merged;
 }
 
 function creditsText(amount) {
@@ -578,12 +606,17 @@ export default function BrandVoicePage({
   const routeLoaderData = useLoaderData();
   const loaderData = data ?? routeLoaderData.brandVoice ?? routeLoaderData;
   const saveFetcher = useFetcher();
+  const sentRepliesFetcher = useFetcher();
   const personalityFetcher = useFetcher();
   const previewFetcher = useFetcher();
   const productFetcher = useFetcher();
   const saveTimeout = useFetcherTimeout(saveFetcher, {
     timeoutMs: 20000,
     message: 'Saving Brand Voice took too long. Please try again later.',
+  });
+  const sentRepliesTimeout = useFetcherTimeout(sentRepliesFetcher, {
+    timeoutMs: 20000,
+    message: 'Loading sent replies took too long. Please try again later.',
   });
   const personalityTimeout = useFetcherTimeout(personalityFetcher, {
     timeoutMs: 60000,
@@ -620,6 +653,7 @@ export default function BrandVoicePage({
   const [showManualReplyForm, setShowManualReplyForm] = useState(false);
   const [manualReplyRating, setManualReplyRating] = useState('5');
   const [manualReplyText, setManualReplyText] = useState('');
+  const [sentReplyLimit, setSentReplyLimit] = useState('10');
   const [livePreview, setLivePreview] = useState(initialConfig.livePreview);
   const [previewReview, setPreviewReview] = useState(initialConfig.previewReview);
   const [previewProductId, setPreviewProductId] = useState(initialConfig.previewProductId);
@@ -644,6 +678,7 @@ export default function BrandVoicePage({
   const lastToastKey = useRef('');
   const personalityHighlightTimer = useRef(null);
   const saveResult = saveTimeout.result || saveFetcher.data;
+  const sentRepliesResult = sentRepliesTimeout.result || sentRepliesFetcher.data;
   const personalityResult = personalityTimeout.result || personalityFetcher.data;
   const previewResult = previewTimeout.result || previewFetcher.data;
   const productResult = productTimeout.result || productFetcher.data;
@@ -768,6 +803,18 @@ export default function BrandVoicePage({
   useEffect(() => {
     setAiModels(loaderAiModels);
   }, [loaderAiModels]);
+
+  useEffect(() => {
+    showToast(sentRepliesResult);
+
+    if (
+      sentRepliesFetcher.data?.ok &&
+      sentRepliesFetcher.data.intent === 'load-sent-replies' &&
+      Array.isArray(sentRepliesFetcher.data.importedReplies)
+    ) {
+      setExampleReplies((current) => mergeExampleReplies(current, sentRepliesFetcher.data.importedReplies));
+    }
+  }, [sentRepliesFetcher.data, sentRepliesResult, showToast]);
 
   useEffect(() => {
     showToast(personalityResult);
@@ -937,6 +984,13 @@ export default function BrandVoicePage({
     applyConfig(savedConfig);
   }
 
+  function handleLoadSentReplies() {
+    const formData = new FormData();
+    formData.set('intent', 'load-sent-replies');
+    formData.set('limit', sentReplyLimit);
+    submitBrandVoice(sentRepliesFetcher, formData);
+  }
+
   function handleGeneratePersonality() {
     const formData = new FormData();
     formData.set('intent', 'generate-personality');
@@ -990,7 +1044,7 @@ export default function BrandVoicePage({
     const text = manualReplyText.trim();
     if (!text) return;
 
-    setExampleReplies((current) => [
+    setExampleReplies((current) => mergeExampleReplies(current, [
       {
         id: `manual-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         text,
@@ -999,8 +1053,7 @@ export default function BrandVoicePage({
         product: null,
         source: 'Manual example',
       },
-      ...current,
-    ].slice(0, 50));
+    ]));
     setManualReplyText('');
     setManualReplyRating('5');
     setShowManualReplyForm(false);
@@ -1135,6 +1188,39 @@ export default function BrandVoicePage({
                     <Text as="p" variant="bodySm" tone="subdued">
                       Best results come from 3-10 real public replies. Copy the exact response you would send to a customer, choose the review rating it answered, and remove any example that does not match the voice you want.
                     </Text>
+                  </div>
+
+                  <div className="rp-source-reply-loader">
+                    <InlineStack align="space-between" blockAlign="center" gap="300">
+                      <InlineStack gap="250" blockAlign="center" wrap={false}>
+                        <span className="rp-source-button-mark">
+                          <img src="/provider-logos/judgeme.png" alt="" aria-hidden="true" />
+                        </span>
+                        <BlockStack gap="050">
+                          <Text as="p" variant="bodyMd" fontWeight="semibold">Load sent replies from Judge.me history</Text>
+                          <Text as="p" variant="bodySm" tone="subdued">
+                            Use replies that Reply Pilot already sent and stored for this shop. This does not call Judge.me; it loads your saved sent reply history.
+                          </Text>
+                        </BlockStack>
+                      </InlineStack>
+                      <InlineStack gap="200" blockAlign="center" align="end" wrap={false}>
+                        <div className="rp-filter-select">
+                          <Select
+                            label="Sent reply count"
+                            labelHidden
+                            options={sentReplyOptions}
+                            value={sentReplyLimit}
+                            onChange={setSentReplyLimit}
+                          />
+                        </div>
+                        <Button loading={sentRepliesTimeout.pending} disabled={sentRepliesTimeout.pending} onClick={handleLoadSentReplies}>
+                          <span className="rp-source-load-button">
+                            <img src="/provider-logos/judgeme.png" alt="" aria-hidden="true" />
+                            Load replies
+                          </span>
+                        </Button>
+                      </InlineStack>
+                    </InlineStack>
                   </div>
 
                   {showManualReplyForm ? (

@@ -1362,6 +1362,46 @@ select {
   color: #005bd3;
 }
 
+.rp-source-reply-loader {
+  padding: 14px;
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.rp-source-button-mark {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #dfe3e8;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.rp-source-button-mark img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+}
+
+.rp-source-load-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rp-source-load-button img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
+}
+
 .rp-manual-reply-form {
   padding: 14px;
   border: 1px solid var(--rp-border);
@@ -2010,6 +2050,10 @@ select {
   .rp-personality-preset-grid,
   .rp-model-grid {
     grid-template-columns: 1fr;
+  }
+
+  .rp-source-reply-loader .Polaris-InlineStack {
+    flex-wrap: wrap;
   }
 
   .rp-onboarding-steps {

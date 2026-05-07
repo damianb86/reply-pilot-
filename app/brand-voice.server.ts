@@ -140,6 +140,28 @@ export async function loadBrandVoicePageData(shop: string) {
   };
 }
 
+export async function loadSentReplyExamplesForBrandVoice(shop: string, limit: number) {
+  const safeLimit = Math.max(5, Math.min(limit || 10, 50));
+  const sentReplies = await db.reviewDraft.findMany({
+    where: { shop, status: "sent" },
+    orderBy: [{ sentAt: "desc" }, { updatedAt: "desc" }],
+    take: safeLimit,
+  });
+
+  return {
+    importedReplies: sentReplies.map((reply, index) => ({
+      id: `sent-${reply.id}`,
+      text: reply.draft,
+      rating: reply.rating,
+      customer: reply.customerName,
+      product: reply.productTitle,
+      source: index === 0 ? "Latest sent Judge.me reply" : "Sent Judge.me reply",
+    })),
+    importedCount: sentReplies.length,
+    requestedCount: safeLimit,
+  };
+}
+
 export async function generateBrandVoicePersonality(input: {
   modelId?: string | null;
   replies: ImportedReply[];

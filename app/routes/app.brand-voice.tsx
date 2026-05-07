@@ -2,6 +2,7 @@ import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "reac
 import {
   generateBrandVoicePersonality,
   generateBrandVoicePreview,
+  loadSentReplyExamplesForBrandVoice,
   loadBrandVoicePageData,
   saveBrandVoiceSettings,
 } from "../brand-voice.server";
@@ -222,6 +223,22 @@ export async function action({ request }: ActionFunctionArgs) {
         message: "Brand voice saved.",
         settings,
         aiModels: await getAiModelOptions(),
+      };
+    }
+
+    if (intent === "load-sent-replies") {
+      const limit = Number(formData.get("limit") ?? 10);
+      const result = await loadSentReplyExamplesForBrandVoice(session.shop, limit);
+
+      return {
+        ok: result.importedCount > 0,
+        intent,
+        message: result.importedCount
+          ? result.importedCount === 1
+            ? "Loaded 1 sent reply example."
+            : `Loaded ${result.importedCount} sent reply examples.`
+          : "No sent replies are available yet. Send a few replies first, or add examples manually.",
+        ...result,
       };
     }
 
