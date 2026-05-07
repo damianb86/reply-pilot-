@@ -509,7 +509,7 @@ function ConnectedManager({connection, fetcher, actionPath, onChangeProvider}) {
   );
 }
 
-function ConnectPanel({connection, fetcher, loaderData, actionPath, showProviderSetup, onChangeProvider}) {
+export function ConnectPanel({connection, fetcher, loaderData, actionPath, showProviderSetup, onChangeProvider}) {
   if (connection && !showProviderSetup) {
     return (
       <ConnectedManager

@@ -4,7 +4,6 @@ import {useFetcher, useLoaderData, useLocation} from 'react-router';
 import {SaveBar, useAppBridge} from '@shopify/app-bridge-react';
 import {
   Badge,
-  Banner,
   BlockStack,
   Box,
   Button,
@@ -36,6 +35,7 @@ const defaultSettings = {
   routeLowStarReviews: true,
   sendReplyEmail: false,
   useProductDescription: false,
+  onboardingCompleted: false,
   defaultQueueRange: '7-days',
   defaultQueueSort: 'newest',
   showSkippedByDefault: false,
@@ -76,22 +76,6 @@ function buildSettings(settings) {
 
 function settingsSignature(settings) {
   return JSON.stringify(buildSettings(settings));
-}
-
-function formatMultiplier(value) {
-  const multiplier = Number(value);
-  if (!Number.isFinite(multiplier)) return '1.3';
-  return String(Number(multiplier.toFixed(2)));
-}
-
-function formatCreditAmount(value) {
-  const credits = Number(value);
-  if (!Number.isFinite(credits)) return '0';
-  const hasDecimals = !Number.isInteger(Math.abs(credits));
-  return credits.toLocaleString('en', {
-    minimumFractionDigits: hasDecimals ? 1 : 0,
-    maximumFractionDigits: hasDecimals ? 1 : 0,
-  });
 }
 
 function FieldRow({label, description, children}) {
@@ -313,6 +297,9 @@ export default function SettingsPage() {
               activeSection={activeSection}
               onActiveSectionChange={setActiveSection}
               useProductDescription={settings.useProductDescription}
+              onUseProductDescriptionChange={(value) => set('useProductDescription', value)}
+              productDescriptionMultiplier={productDescriptionMultiplier}
+              productDescriptionReplyCosts={productDescriptionReplyCosts}
               replyCreditMultiplier={settings.useProductDescription ? productDescriptionMultiplier : 1}
             />
           ) : null}
@@ -402,30 +389,6 @@ export default function SettingsPage() {
                   onChange={(value) => set('sendReplyEmail', value)}
                 />
               </FieldRow>
-              <FieldRow
-                label="Use product descriptions"
-                description="Adds the Shopify product description to AI reply context when Reply Pilot can match the reviewed product."
-              >
-                <Checkbox
-                  label="Use product descriptions"
-                  checked={settings.useProductDescription}
-                  onChange={(value) => set('useProductDescription', value)}
-                />
-              </FieldRow>
-              {settings.useProductDescription ? (
-                <div className="rp-field-row">
-                  <Banner tone="warning">
-                    <BlockStack gap="100">
-                      <Text as="p" variant="bodyMd" fontWeight="semibold">
-                        Product descriptions increase reply-generation credits by {formatMultiplier(productDescriptionMultiplier)}x.
-                      </Text>
-                      <Text as="p" variant="bodyMd">
-                        Basic replies cost {formatCreditAmount(productDescriptionReplyCosts.basic)} credits, Pro replies cost {formatCreditAmount(productDescriptionReplyCosts.pro)} credits, and Premium replies cost {formatCreditAmount(productDescriptionReplyCosts.premium)} credits while this setting is enabled. Decimal credits are tracked internally; descriptions are stripped of HTML, cleaned, and shortened before they are sent to the AI.
-                      </Text>
-                    </BlockStack>
-                  </Banner>
-                </div>
-              ) : null}
             </SectionCard>
           ) : null}
 

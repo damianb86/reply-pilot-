@@ -7,6 +7,7 @@ import {
   BlockStack,
   Box,
   Button,
+  Checkbox,
   Divider,
   Icon,
   InlineGrid,
@@ -307,6 +308,57 @@ function CreditInfoPanel() {
   );
 }
 
+function formatMultiplier(value) {
+  const multiplier = Number(value);
+  if (!Number.isFinite(multiplier) || multiplier <= 1) return '1.3';
+  return String(Number(multiplier.toFixed(2)));
+}
+
+function ProductDescriptionContextPanel({
+  checked,
+  onChange,
+  multiplier = 1.3,
+  costs,
+}) {
+  const multiplierLabel = formatMultiplier(multiplier);
+  const enabledCosts = costs
+    ? [
+        `Basic ${creditsText(costs.basic)}`,
+        `Pro ${creditsText(costs.pro)}`,
+        `Premium ${creditsText(costs.premium)}`,
+      ].join(' · ')
+    : null;
+
+  return (
+    <div className={`rp-product-context-option ${checked ? 'is-enabled' : ''}`}>
+      <InlineStack align="space-between" blockAlign="start" gap="300">
+        <BlockStack gap="150">
+          <InlineStack gap="200" blockAlign="center">
+            <Text as="h3" variant="headingMd">Product description context</Text>
+            <Badge tone={checked ? 'attention' : 'info'}>
+              {checked ? `${multiplierLabel}x reply credits` : 'Optional'}
+            </Badge>
+          </InlineStack>
+          <Text as="p" variant="bodyMd" tone="subdued">
+            Include the cleaned Shopify product description when Reply Pilot drafts replies. This can improve product-specific answers, but reply generation costs {multiplierLabel}x credits because more context is sent to the AI.
+          </Text>
+          {checked && enabledCosts ? (
+            <Text as="p" variant="bodySm" tone="subdued">
+              With descriptions on: {enabledCosts}. Decimal credits are tracked internally.
+            </Text>
+          ) : null}
+        </BlockStack>
+        <Checkbox
+          label="Use product descriptions"
+          checked={checked}
+          onChange={onChange}
+          disabled={!onChange}
+        />
+      </InlineStack>
+    </div>
+  );
+}
+
 function PreviewRatingPicker({value, onChange}) {
   const selectedRating = Math.max(1, Math.min(5, Number(value) || 5));
   const tone = selectedRating <= 2 ? 'critical' : selectedRating === 3 ? 'attention' : 'success';
@@ -537,7 +589,16 @@ export default function BrandVoicePage({
   activeSection: controlledActiveSection,
   onActiveSectionChange,
   useProductDescription = false,
+  onUseProductDescriptionChange,
+  productDescriptionMultiplier = 1.3,
+  productDescriptionReplyCosts,
   replyCreditMultiplier = 1,
+  defaultSelectedModelOverride,
+  hideSaveBar = false,
+  onConfigChange,
+  onSkipPersonalityBuilder,
+  suppressPreviewFallback = false,
+  livePreviewDescription,
 } = {}) {
   const shopify = useAppBridge();
   const routeLoaderData = useLoaderData();
@@ -569,7 +630,7 @@ export default function BrandVoicePage({
   });
   const connection = loaderData.connection;
   const loaderAiModels = useMemo(() => loaderData.aiModels ?? [], [loaderData.aiModels]);
-  const defaultSelectedModel = loaderData.defaultAiModelId ?? loaderAiModels[0]?.id ?? 'basic';
+  const defaultSelectedModel = defaultSelectedModelOverride ?? loaderData.defaultAiModelId ?? loaderAiModels[0]?.id ?? 'basic';
   const importedReplyOptions = [
     {label: 'Last 5 replies', value: '5'},
     {label: 'Last 10 replies', value: '10'},
@@ -696,6 +757,10 @@ export default function BrandVoicePage({
   ]);
 
   const isDirty = configSignature(currentConfig) !== configSignature(savedConfig);
+
+  useEffect(() => {
+    onConfigChange?.(currentConfig);
+  }, [currentConfig, onConfigChange]);
 
   const showToast = useCallback((data) => {
     if (!data?.message) return;
@@ -988,10 +1053,12 @@ export default function BrandVoicePage({
 
   return (
     <BlockStack gap="400">
+      {!hideSaveBar ? (
       <SaveBar open={isDirty}>
         <button variant="primary" disabled={saveTimeout.pending} onClick={handleSave}>Save</button>
         <button onClick={handleDiscard}>Discard</button>
       </SaveBar>
+      ) : null}
 
       {localToast ? (
         <div className={`rp-local-toast ${localToast.isError ? 'is-error' : ''}`} role="status">
@@ -1142,6 +1209,14 @@ export default function BrandVoicePage({
                   )}
                 </div>
               </div>
+
+              {onSkipPersonalityBuilder ? (
+                <InlineStack align="end">
+                  <Button variant="plain" onClick={onSkipPersonalityBuilder}>
+                    I’ll write the Personality myself
+                  </Button>
+                </InlineStack>
+              ) : null}
             </BlockStack>
           </section>
           ) : null}
@@ -1341,6 +1416,13 @@ export default function BrandVoicePage({
                 ))}
               </div>
 
+              <ProductDescriptionContextPanel
+                checked={Boolean(useProductDescription)}
+                onChange={(value) => onUseProductDescriptionChange?.(value)}
+                multiplier={productDescriptionMultiplier}
+                costs={productDescriptionReplyCosts}
+              />
+
               <CreditInfoPanel />
             </BlockStack>
           </section>
@@ -1358,15 +1440,10 @@ export default function BrandVoicePage({
                   </Text>
                   {useProductDescription ? <Badge tone="attention">Product description on</Badge> : null}
                 </InlineStack>
-                <Button
-                  icon={RefreshIcon}
-                  disabled={!selectedModelConfigured || !canGeneratePreview || previewTimeout.pending}
-                  loading={previewTimeout.pending}
-                  onClick={handleGeneratePreview}
-                >
-                  {livePreview ? 'Regenerate preview' : 'Generate preview'} · {creditsText(selectedCreditCosts.preview)}
-                </Button>
               </InlineStack>
+              {livePreviewDescription ? (
+                <Text as="p" variant="bodyMd" tone="subdued">{livePreviewDescription}</Text>
+              ) : null}
 
               <InlineGrid columns={{xs: 1, md: 2}} gap="300">
                 <BlockStack gap="150">
@@ -1416,8 +1493,23 @@ export default function BrandVoicePage({
                 helpText="Saved with Brand voice so you can reuse the same test review while tuning settings."
               />
 
+              <InlineStack align="start">
+                <Button
+                  icon={RefreshIcon}
+                  variant="primary"
+                  size="large"
+                  disabled={!selectedModelConfigured || !canGeneratePreview || previewTimeout.pending}
+                  loading={previewTimeout.pending}
+                  onClick={handleGeneratePreview}
+                >
+                  {livePreview ? 'Regenerate preview' : 'Generate preview'}
+                </Button>
+              </InlineStack>
+
               <div className="rp-draft-box">
-                <Text as="p" variant="bodyLg">{livePreview || previewReply}</Text>
+                <Text as="p" variant="bodyLg">
+                  {livePreview || (!suppressPreviewFallback ? previewReply : 'Generate a preview to see how Reply Pilot will answer this review.')}
+                </Text>
               </div>
             </BlockStack>
           </section>

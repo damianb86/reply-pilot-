@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData, useLocation, useNavigation, useRouteError } from "react-router";
+import { Outlet, redirect, useLoaderData, useLocation, useNavigation, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
 import { NavMenu } from "@shopify/app-bridge-react";
@@ -10,14 +10,36 @@ import { authenticate } from "../shopify.server";
 import IguShell from "../components/IguShell";
 import PageLoadingState from "../../src/PageLoadingState";
 import { getCreditOverview } from "../credits.server";
+import { loadAppSettings } from "../settings.server";
+
+function pathWithEmbeddedParams(url: URL, pathname: string) {
+  const nextUrl = new URL(pathname, url.origin);
+  for (const key of ["embedded", "host", "shop"]) {
+    const value = url.searchParams.get(key);
+    if (value) nextUrl.searchParams.set(key, value);
+  }
+  return `${nextUrl.pathname}${nextUrl.search}`;
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const settings = await loadAppSettings(session.shop);
+  const isOnboardingRoute = url.pathname.endsWith("/app/onboarding");
+
+  if (!settings.onboardingCompleted && !isOnboardingRoute) {
+    return redirect(pathWithEmbeddedParams(url, "/app/onboarding"));
+  }
+
+  if (settings.onboardingCompleted && isOnboardingRoute) {
+    return redirect(pathWithEmbeddedParams(url, "/app/dashboard"));
+  }
 
   // eslint-disable-next-line no-undef
   return {
     apiKey: process.env.SHOPIFY_API_KEY || "",
     credits: await getCreditOverview(session.shop),
+    onboardingCompleted: settings.onboardingCompleted,
   };
 };
 
@@ -47,6 +69,13 @@ function loadingCopyForPath(pathname: string) {
     return {
       title: "Loading Credits",
       description: "Preparing balance, purchase packages, and recent credit activity...",
+    };
+  }
+
+  if (pathname.endsWith("/onboarding")) {
+    return {
+      title: "Loading Setup",
+      description: "Preparing your first Reply Pilot setup steps...",
     };
   }
 
@@ -98,7 +127,7 @@ export default function App() {
           <a href={withEmbeddedSearch("/app/settings")}>Settings</a>
           <a href={withEmbeddedSearch("/app/help")}>Help</a>
         </NavMenu>
-        <IguShell credits={credits}>
+        <IguShell credits={credits} hideCredits={location.pathname.endsWith("/onboarding")}>
           {isRouteLoading ? (
             <PageLoadingState title={loadingCopy.title} description={loadingCopy.description} />
           ) : (

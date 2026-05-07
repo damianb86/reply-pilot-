@@ -21,6 +21,7 @@ describe("settings.server", () => {
     form.set("timezone", "Invalid/Zone");
     form.set("routeSensitiveReviews", "on");
     form.set("useProductDescription", "on");
+    form.set("onboardingCompleted", "true");
 
     const result = settingsFromFormData(form);
 
@@ -32,6 +33,7 @@ describe("settings.server", () => {
     expect(result.timezone).toBe(DEFAULT_APP_SETTINGS.timezone);
     expect(result.routeSensitiveReviews).toBe(true);
     expect(result.useProductDescription).toBe(true);
+    expect(result.onboardingCompleted).toBe(true);
   });
 
   it("detects sensitive reviews in English and Spanish copy", () => {

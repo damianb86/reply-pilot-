@@ -7,6 +7,7 @@ export type AppSettings = {
   routeLowStarReviews: boolean;
   sendReplyEmail: boolean;
   useProductDescription: boolean;
+  onboardingCompleted: boolean;
   defaultQueueRange: "7-days" | "30-days" | "all";
   defaultQueueSort: "newest" | "oldest";
   showSkippedByDefault: boolean;
@@ -22,6 +23,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   routeLowStarReviews: true,
   sendReplyEmail: false,
   useProductDescription: false,
+  onboardingCompleted: false,
   defaultQueueRange: "7-days",
   defaultQueueSort: "newest",
   showSkippedByDefault: false,
@@ -134,6 +136,7 @@ function normalizeSettings(input: Record<string, unknown>): AppSettings {
     routeLowStarReviews: booleanValue(input.routeLowStarReviews, DEFAULT_APP_SETTINGS.routeLowStarReviews),
     sendReplyEmail: booleanValue(input.sendReplyEmail, DEFAULT_APP_SETTINGS.sendReplyEmail),
     useProductDescription: booleanValue(input.useProductDescription, DEFAULT_APP_SETTINGS.useProductDescription),
+    onboardingCompleted: booleanValue(input.onboardingCompleted, DEFAULT_APP_SETTINGS.onboardingCompleted),
     defaultQueueRange: enumValue(input.defaultQueueRange, DEFAULT_APP_SETTINGS.defaultQueueRange, [
       "7-days",
       "30-days",
@@ -159,6 +162,7 @@ export function settingsFromFormData(formData: FormData) {
     routeLowStarReviews: formData.get("routeLowStarReviews"),
     sendReplyEmail: formData.get("sendReplyEmail"),
     useProductDescription: formData.get("useProductDescription"),
+    onboardingCompleted: formData.get("onboardingCompleted"),
     defaultQueueRange: formData.get("defaultQueueRange"),
     defaultQueueSort: formData.get("defaultQueueSort"),
     showSkippedByDefault: formData.get("showSkippedByDefault"),
