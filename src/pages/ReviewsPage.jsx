@@ -416,7 +416,14 @@ function ReviewsContent() {
   }, [activeReview?.id, activeReview?.draft]);
 
   useEffect(() => {
-    if ((fetcher.data?.ok || fetcher.data?.generation?.generated) && ['send', 'skip', 'restore', 'generate', 'regenerate'].includes(fetcher.data.intent)) {
+    if (['generate', 'regenerate'].includes(fetcher.data?.intent)) {
+      const generatedIds = Array.isArray(fetcher.data?.generation?.generatedIds)
+        ? fetcher.data.generation.generatedIds
+        : [];
+      if (generatedIds.length) {
+        setSelectedIds((current) => current.filter((id) => !generatedIds.includes(id)));
+      }
+    } else if ((fetcher.data?.ok || fetcher.data?.generation?.generated) && ['send', 'skip', 'restore'].includes(fetcher.data?.intent)) {
       setSelectedIds([]);
     }
 
@@ -643,15 +650,7 @@ function ReviewsContent() {
 
       <InlineStack align="space-between" blockAlign="center" gap="300">
         <BlockStack gap="100">
-          <div className="rp-title-row">
-            <Text as="h1" variant="heading2xl">Reply Pilot · Reviews</Text>
-            <span className="rp-title-metric is-yellow">{stats.pending} pending</span>
-            {stats.ungenerated ? <span className="rp-title-metric">{stats.ungenerated} need draft</span> : null}
-            {stats.judgeMeReplied ? <span className="rp-title-metric is-green">{stats.judgeMeReplied} Judge.me replied</span> : null}
-            <span className="rp-title-metric is-green">{stats.sentToday} sent today</span>
-            {showSent && stats.sent ? <span className="rp-title-metric is-green">{stats.sent} sent total</span> : null}
-            {stats.skipped ? <span className="rp-title-metric">{stats.skipped} skipped</span> : null}
-          </div>
+          <Text as="h1" variant="heading2xl">Reviews</Text>
           <Text as="p" variant="bodyLg" tone="subdued">
             Review approvals stay table-first for speed while existing Judge.me replies and AI drafts remain visible in the side panel.
           </Text>
@@ -671,6 +670,8 @@ function ReviewsContent() {
                 </span>
                 <span className="rp-brand-name">Reviews</span>
               </span>
+              <span className="rp-queue-metric">{stats.pending} pending</span>
+              <span className="rp-queue-metric">{stats.sentToday} sent today</span>
             </InlineStack>
             <InlineStack gap="200" blockAlign="center">
               <Badge tone={aiConfigured ? 'info' : 'critical'}>AI: {aiDisplayName}</Badge>
@@ -749,15 +750,17 @@ function ReviewsContent() {
           <InlineStack align="space-between" blockAlign="center" gap="300">
             <InlineStack gap="200" blockAlign="center">
               <Text as="span" variant="bodyMd" fontWeight="semibold">{selectedCount} selected</Text>
-              <AiActionButton disabled={!aiConfigured || !selectedUngeneratedPendingIds.length || isSubmitting} onClick={() => submitAiAction('generate', selectedUngeneratedPendingIds, `Generating ${selectedUngeneratedPendingIds.length} ${selectedUngeneratedPendingIds.length === 1 ? 'reply' : 'replies'}`)}>
-                Generate {selectedUngeneratedPendingIds.length}
-              </AiActionButton>
+              <span className="rp-ai-action-group">
+                <AiActionButton disabled={!aiConfigured || !selectedUngeneratedPendingIds.length || isSubmitting} onClick={() => submitAiAction('generate', selectedUngeneratedPendingIds, `Generating ${selectedUngeneratedPendingIds.length} ${selectedUngeneratedPendingIds.length === 1 ? 'reply' : 'replies'}`)}>
+                  {selectedUngeneratedPendingIds.length ? `Generate ${selectedUngeneratedPendingIds.length}` : 'Generate'}
+                </AiActionButton>
+                <AiActionButton disabled={!aiConfigured || !selectedGeneratedPendingIds.length || isSubmitting} onClick={() => submitAiAction('regenerate', selectedGeneratedPendingIds, `Regenerating ${selectedGeneratedPendingIds.length} ${selectedGeneratedPendingIds.length === 1 ? 'reply' : 'replies'}`)}>
+                  {selectedGeneratedPendingIds.length ? `Regenerate ${selectedGeneratedPendingIds.length}` : 'Regenerate'}
+                </AiActionButton>
+              </span>
               <Button icon={SendIcon} variant="primary" disabled={!selectedGeneratedPendingIds.length || isSubmitting} onClick={() => submitAction('send', selectedGeneratedPendingIds)}>
-                Approve & send all {selectedGeneratedPendingIds.length}
+                {selectedGeneratedPendingIds.length ? `Approve & send all ${selectedGeneratedPendingIds.length}` : 'Approve & send'}
               </Button>
-              <AiActionButton disabled={!aiConfigured || !selectedGeneratedPendingIds.length || isSubmitting} onClick={() => submitAiAction('regenerate', selectedGeneratedPendingIds, `Regenerating ${selectedGeneratedPendingIds.length} ${selectedGeneratedPendingIds.length === 1 ? 'reply' : 'replies'}`)}>
-                Regenerate
-              </AiActionButton>
               <Button icon={XIcon} disabled={!selectedPendingIds.length || isSubmitting} onClick={() => submitAction('skip', selectedPendingIds)}>
                 Don't reply
               </Button>

@@ -1259,6 +1259,7 @@ async function generateReplyForRecord(
 type DraftGenerationResult = {
   requested: number;
   generated: number;
+  generatedIds: string[];
   failed: number;
   credits: {
     costPerDraft: number;
@@ -1282,6 +1283,7 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
   const result: DraftGenerationResult = {
     requested: records.length,
     generated: 0,
+    generatedIds: [],
     failed: 0,
     credits: {
       costPerDraft: creditCostForReviewReply(brandVoice.selectedModel, {
@@ -1341,6 +1343,7 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
         },
       });
       result.generated += 1;
+      result.generatedIds.push(record.id);
     } catch (error) {
       const details = compactError(error);
       result.failed += 1;
@@ -1385,6 +1388,7 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
   const result: DraftGenerationResult = {
     requested: records.length,
     generated: 0,
+    generatedIds: [],
     failed: 0,
     credits: {
       costPerDraft: creditCostForReviewReply(brandVoice.selectedModel, {
@@ -1444,6 +1448,7 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
         },
       });
       result.generated += 1;
+      result.generatedIds.push(record.id);
     } catch (error) {
       const details = compactError(error);
       result.failed += 1;
