@@ -1335,11 +1335,33 @@ select {
 }
 
 .rp-builder-evidence {
-  margin-top: 30px;
+  margin-top: 6px;
 }
 
 .rp-builder-method + .rp-builder-method {
   margin-top: -4px;
+}
+
+.rp-manual-reply-note {
+  padding: 12px 14px;
+  border: 1px solid #d4e2f7;
+  border-radius: 8px;
+  background: #f6fbff;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.rp-manual-reply-note .Polaris-Icon {
+  color: #005bd3;
+}
+
+.rp-manual-reply-form {
+  padding: 14px;
+  border: 1px solid var(--rp-border);
+  border-radius: 8px;
+  background: #ffffff;
 }
 
 .rp-voice-slider + .rp-voice-slider {

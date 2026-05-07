@@ -7,12 +7,7 @@ import {
   resolveAiModelId,
 } from "./ai.server";
 import { getCreditOverview } from "./credits.server";
-import {
-  callJudgeMeApi,
-  decryptSecret,
-  getJudgeMeConnectionView,
-  JudgeMeApiError,
-} from "./judgeme.server";
+import { getJudgeMeConnectionView } from "./judgeme.server";
 
 type ImportedReply = {
   id: string;
@@ -37,16 +32,6 @@ const DEFAULT_PREVIEW_REVIEW =
   "Obsessed with these napkins. The fabric feels substantial, the print looks even better in person, and they made our dinner table feel special.";
 const PERSONALITY_MAX_WORDS = 200;
 const PERSONALITY_MAX_CHARS = 1400;
-
-function readObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function readString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
 
 function readNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -124,88 +109,6 @@ function mapBrandVoiceSettings(
   };
 }
 
-function replyTextFromValue(value: unknown): string[] {
-  if (typeof value === "string") {
-    return value.trim() ? [value.trim()] : [];
-  }
-
-  if (Array.isArray(value)) {
-    return value.flatMap(replyTextFromValue);
-  }
-
-  const object = readObject(value);
-  if (!Object.keys(object).length) return [];
-
-  return [
-    object.content,
-    object.body,
-    object.text,
-    object.message,
-    object.reply,
-    object.reply_body,
-    object.reply_content,
-  ].flatMap(replyTextFromValue);
-}
-
-function extractReplyTexts(rawReview: unknown) {
-  const review = readObject(rawReview);
-  const replyKeys = [
-    "reply",
-    "replies",
-    "reply_body",
-    "reply_content",
-    "public_reply",
-    "private_reply",
-    "merchant_reply",
-    "shop_reply",
-    "answer",
-  ];
-
-  const directReplies = replyKeys.flatMap((key) => replyTextFromValue(review[key]));
-  const looseReplies = Object.entries(review)
-    .filter(([key]) => key.toLowerCase().includes("reply"))
-    .flatMap(([, value]) => replyTextFromValue(value));
-
-  return Array.from(new Set([...directReplies, ...looseReplies])).filter(Boolean);
-}
-
-function normalizeReply(reply: ImportedReply, index: number): ImportedReply {
-  return {
-    ...reply,
-    id: reply.id || `reply-${index}`,
-    text: reply.text.trim(),
-    customer: reply.customer?.trim() || "Customer",
-    product: reply.product?.trim() || "Store review",
-  };
-}
-
-function uniqueReplies(replies: ImportedReply[], limit: number) {
-  const seen = new Set<string>();
-  const results: ImportedReply[] = [];
-
-  for (const reply of replies.map(normalizeReply)) {
-    const key = reply.text.toLowerCase();
-    if (!reply.text || seen.has(key)) continue;
-    seen.add(key);
-    results.push(reply);
-    if (results.length >= limit) break;
-  }
-
-  return results;
-}
-
-async function getConnectedJudgeMeCredentials(shop: string) {
-  const connection = await db.judgeMeConnection.findUnique({ where: { shop } });
-  if (!connection || connection.status !== "connected") {
-    throw new JudgeMeApiError("Connect Judge.me before importing reply examples.");
-  }
-
-  return {
-    shopDomain: connection.shopDomain,
-    apiToken: decryptSecret(connection.encryptedApiToken),
-  };
-}
-
 export async function loadBrandVoicePageData(shop: string) {
   const [connection, recentSentReplies, settings, aiModels, credits] = await Promise.all([
     getJudgeMeConnectionView(shop),
@@ -235,75 +138,6 @@ export async function loadBrandVoicePageData(shop: string) {
     credits,
     defaultAiModelId: getDefaultAiModelId(),
   };
-}
-
-async function importReplyExamples(shop: string, limit: number) {
-  const safeLimit = Math.max(5, Math.min(limit || 25, 50));
-  const credentials = await getConnectedJudgeMeCredentials(shop);
-
-  const sentReplies = await db.reviewDraft.findMany({
-    where: { shop, status: "sent" },
-    orderBy: [{ sentAt: "desc" }, { updatedAt: "desc" }],
-    take: safeLimit,
-  });
-
-  const appReplies: ImportedReply[] = sentReplies.map((reply) => ({
-    id: reply.id,
-    text: reply.draft,
-    rating: reply.rating,
-    customer: reply.customerName,
-    product: reply.productTitle,
-    source: "Reply Pilot sent reply",
-  }));
-
-  const reviewsResponse = await callJudgeMeApi("/reviews", {
-    apiToken: credentials.apiToken,
-    shopDomain: credentials.shopDomain,
-    searchParams: { per_page: safeLimit, page: 1 },
-  });
-  const reviews = Array.isArray(readObject(reviewsResponse).reviews)
-    ? (readObject(reviewsResponse).reviews as unknown[])
-    : [];
-
-  const judgeMeReplies: ImportedReply[] = reviews.flatMap((rawReview, reviewIndex) => {
-    const review = readObject(rawReview);
-    const reviewer = readObject(review.reviewer);
-    const customer =
-      readString(reviewer.name) ||
-      readString(review.name) ||
-      readString(review.reviewer_name) ||
-      "Customer";
-    const product = readString(review.product_title) || "Store review";
-    const rating = readNumber(review.rating);
-
-    return extractReplyTexts(rawReview).map((text, replyIndex) => ({
-      id: `judgeme-${String(review.id ?? reviewIndex)}-${replyIndex}`,
-      text,
-      rating,
-      customer,
-      product,
-      source: "Judge.me reply",
-    }));
-  });
-
-  const importedReplies = uniqueReplies([...appReplies, ...judgeMeReplies], safeLimit);
-
-  return {
-    importedReplies,
-    importedCount: importedReplies.length,
-    requestedCount: safeLimit,
-    sourceNote:
-      judgeMeReplies.length > 0
-        ? "Included Judge.me reply bodies and sent Reply Pilot history."
-        : "Judge.me did not return reply bodies; imported stored sent replies for this shop.",
-  };
-}
-
-export async function importReplyExamplesForBrandVoice(
-  shop: string,
-  limit: number,
-) {
-  return importReplyExamples(shop, limit);
 }
 
 export async function generateBrandVoicePersonality(input: {

@@ -2,7 +2,6 @@ import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "reac
 import {
   generateBrandVoicePersonality,
   generateBrandVoicePreview,
-  importReplyExamplesForBrandVoice,
   loadBrandVoicePageData,
   saveBrandVoiceSettings,
 } from "../brand-voice.server";
@@ -66,7 +65,7 @@ function parseImportedReplies(value: FormDataEntryValue | null) {
                 rating: null,
                 customer: null,
                 product: null,
-                source: "Imported reply",
+                source: "Manual example",
               }
             : null;
         }
@@ -82,7 +81,7 @@ function parseImportedReplies(value: FormDataEntryValue | null) {
           rating: typeof reply.rating === "number" ? reply.rating : null,
           customer: typeof reply.customer === "string" ? reply.customer : null,
           product: typeof reply.product === "string" ? reply.product : null,
-          source: typeof reply.source === "string" && reply.source ? reply.source : "Imported reply",
+          source: typeof reply.source === "string" && reply.source ? reply.source : "Manual example",
         };
       })
       .filter((reply): reply is ParsedReply => Boolean(reply))
@@ -226,22 +225,6 @@ export async function action({ request }: ActionFunctionArgs) {
       };
     }
 
-    if (intent === "import-replies") {
-      const limit = Number(formData.get("limit") ?? 25);
-      const result = await importReplyExamplesForBrandVoice(session.shop, limit);
-
-      return {
-        ok: result.importedCount > 0,
-        intent,
-        message: result.importedCount
-          ? result.importedCount === 1
-            ? "Imported 1 reply."
-            : `Imported ${result.importedCount} replies.`
-          : "No reply bodies were available to import for this shop yet.",
-        ...result,
-      };
-    }
-
     if (intent === "generate-personality") {
       const replies = parseImportedReplies(formData.get("replies"));
       const modelId = String(formData.get("modelId") ?? "");
@@ -250,7 +233,7 @@ export async function action({ request }: ActionFunctionArgs) {
         return {
           ok: false,
           intent,
-          message: "Import replies before generating Personality.",
+          message: "Add at least one example reply before generating Personality.",
         };
       }
 

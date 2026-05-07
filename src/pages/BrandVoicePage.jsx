@@ -23,7 +23,6 @@ import {
   ChatIcon,
   HeartIcon,
   InfoIcon,
-  ImportIcon,
   MagicIcon,
   ProductIcon,
   PlusIcon,
@@ -337,16 +336,27 @@ function AiActionButton({children, className = '', icon = MagicIcon, ...buttonPr
 }
 
 function PreviewRatingPicker({value, onChange}) {
+  return (
+    <StarRatingPicker
+      value={value}
+      onChange={onChange}
+      label="Preview rating"
+      helpText="The reply changes tone based on the customer rating."
+    />
+  );
+}
+
+function StarRatingPicker({value, onChange, label, helpText}) {
   const selectedRating = Math.max(1, Math.min(5, Number(value) || 5));
   const tone = selectedRating <= 2 ? 'critical' : selectedRating === 3 ? 'attention' : 'success';
 
   return (
     <BlockStack gap="150">
       <InlineStack align="space-between" blockAlign="center">
-        <Text as="p" variant="bodyMd" fontWeight="semibold">Preview rating</Text>
+        <Text as="p" variant="bodyMd" fontWeight="semibold">{label}</Text>
         <Badge tone={tone}>{selectedRating} out of 5</Badge>
       </InlineStack>
-      <div className="rp-preview-rating-picker" role="radiogroup" aria-label="Preview rating">
+      <div className="rp-preview-rating-picker" role="radiogroup" aria-label={label}>
         {previewRatingValues.map((rating) => (
           <button
             key={rating}
@@ -361,9 +371,7 @@ function PreviewRatingPicker({value, onChange}) {
           </button>
         ))}
       </div>
-      <Text as="p" variant="bodySm" tone="subdued">
-        The reply changes tone based on the customer rating.
-      </Text>
+      {helpText ? <Text as="p" variant="bodySm" tone="subdued">{helpText}</Text> : null}
     </BlockStack>
   );
 }
@@ -579,17 +587,12 @@ export default function BrandVoicePage({
   const routeLoaderData = useLoaderData();
   const loaderData = data ?? routeLoaderData.brandVoice ?? routeLoaderData;
   const saveFetcher = useFetcher();
-  const importFetcher = useFetcher();
   const personalityFetcher = useFetcher();
   const previewFetcher = useFetcher();
   const productFetcher = useFetcher();
   const saveTimeout = useFetcherTimeout(saveFetcher, {
     timeoutMs: 20000,
     message: 'Saving Brand Voice took too long. Please try again later.',
-  });
-  const importTimeout = useFetcherTimeout(importFetcher, {
-    timeoutMs: 30000,
-    message: 'Importing past replies took too long. Please try again later.',
   });
   const personalityTimeout = useFetcherTimeout(personalityFetcher, {
     timeoutMs: 60000,
@@ -603,15 +606,8 @@ export default function BrandVoicePage({
     timeoutMs: 30000,
     message: 'Loading the selected Shopify product took too long. Please try again later.',
   });
-  const connection = loaderData.connection;
   const loaderAiModels = useMemo(() => loaderData.aiModels ?? [], [loaderData.aiModels]);
   const defaultSelectedModel = defaultSelectedModelOverride ?? loaderData.defaultAiModelId ?? loaderAiModels[0]?.id ?? 'basic';
-  const importedReplyOptions = [
-    {label: 'Last 5 replies', value: '5'},
-    {label: 'Last 10 replies', value: '10'},
-    {label: 'Last 25 replies', value: '25'},
-    {label: 'Last 50 replies', value: '50'},
-  ];
   const initialConfig = useMemo(
     () => buildConfig(loaderData.settings, defaultSelectedModel),
     [loaderData.settings, defaultSelectedModel],
@@ -630,7 +626,9 @@ export default function BrandVoicePage({
   const [personalityStrength, setPersonalityStrength] = useState(initialConfig.personalityStrength);
   const [replyLength, setReplyLength] = useState(initialConfig.replyLength);
   const [exampleReplies, setExampleReplies] = useState([]);
-  const [importLimit, setImportLimit] = useState('25');
+  const [showManualReplyForm, setShowManualReplyForm] = useState(false);
+  const [manualReplyRating, setManualReplyRating] = useState('5');
+  const [manualReplyText, setManualReplyText] = useState('');
   const [livePreview, setLivePreview] = useState(initialConfig.livePreview);
   const [previewReview, setPreviewReview] = useState(initialConfig.previewReview);
   const [previewProductId, setPreviewProductId] = useState(initialConfig.previewProductId);
@@ -655,7 +653,6 @@ export default function BrandVoicePage({
   const lastToastKey = useRef('');
   const personalityHighlightTimer = useRef(null);
   const saveResult = saveTimeout.result || saveFetcher.data;
-  const importResult = importTimeout.result || importFetcher.data;
   const personalityResult = personalityTimeout.result || personalityFetcher.data;
   const previewResult = previewTimeout.result || previewFetcher.data;
   const productResult = productTimeout.result || productFetcher.data;
@@ -780,16 +777,6 @@ export default function BrandVoicePage({
   useEffect(() => {
     setAiModels(loaderAiModels);
   }, [loaderAiModels]);
-
-  useEffect(() => {
-    showToast(importResult);
-
-    if (importFetcher.data?.ok && importFetcher.data.intent === 'import-replies') {
-      if (Array.isArray(importFetcher.data.importedReplies) && importFetcher.data.importedReplies.length) {
-        setExampleReplies(importFetcher.data.importedReplies);
-      }
-    }
-  }, [importFetcher.data, importResult, showToast]);
 
   useEffect(() => {
     showToast(personalityResult);
@@ -959,13 +946,6 @@ export default function BrandVoicePage({
     applyConfig(savedConfig);
   }
 
-  function handleImportReplies() {
-    const formData = new FormData();
-    formData.set('intent', 'import-replies');
-    formData.set('limit', importLimit);
-    submitBrandVoice(importFetcher, formData);
-  }
-
   function handleGeneratePersonality() {
     const formData = new FormData();
     formData.set('intent', 'generate-personality');
@@ -1013,6 +993,31 @@ export default function BrandVoicePage({
 
   function removeExampleReply(id) {
     setExampleReplies((current) => current.filter((example) => example.id !== id));
+  }
+
+  function addManualExampleReply() {
+    const text = manualReplyText.trim();
+    if (!text) return;
+
+    setExampleReplies((current) => [
+      {
+        id: `manual-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        text,
+        rating: Number(manualReplyRating) || null,
+        customer: null,
+        product: null,
+        source: 'Manual example',
+      },
+      ...current,
+    ].slice(0, 50));
+    setManualReplyText('');
+    setManualReplyRating('5');
+    setShowManualReplyForm(false);
+    showToast({
+      ok: true,
+      intent: 'add-example-reply',
+      message: 'Example reply added. Generate Personality when you have enough examples.',
+    });
   }
 
   function applyPersonalityPreset(preset) {
@@ -1083,13 +1088,11 @@ export default function BrandVoicePage({
                   <BlockStack gap="100">
                     <Text as="h2" variant="headingLg">Personality builder</Text>
                     <Text as="p" variant="bodyMd" tone="subdued">
-                      Start with a preset or learn from approved Judge.me replies, then refine the Personality text below.
+                      Start with a preset or add real reply examples manually, then refine the Personality text below.
                     </Text>
                   </BlockStack>
                 </InlineStack>
-                <Badge tone={connection?.status === 'connected' ? 'success' : 'attention'}>
-                  {connection?.status === 'connected' ? 'Judge.me ready' : 'Judge.me not connected'}
-                </Badge>
+                <Badge tone="info">Manual setup</Badge>
               </InlineStack>
 
               <div className="rp-builder-method">
@@ -1120,31 +1123,95 @@ export default function BrandVoicePage({
               </div>
 
               <div className="rp-builder-method">
-                <InlineGrid columns={{xs: 1, md: 2}} gap="300">
-                  <BlockStack gap="100">
-                    <Text as="h3" variant="headingMd">Generate from past replies</Text>
-                    <Text as="p" variant="bodySm" tone="subdued">
-                      Import approved replies as evidence. Reply Pilot uses them to draft Personality without saving until you review it.
-                    </Text>
-                  </BlockStack>
-                  <InlineStack gap="200" blockAlign="end" align="end">
-                    <div className="rp-filter-select">
-                      <Select
-                        label="Reply import count"
-                        labelHidden
-                        options={importedReplyOptions}
-                        value={importLimit}
-                        onChange={setImportLimit}
-                      />
-                    </div>
+                <BlockStack gap="300">
+                  <InlineStack align="space-between" blockAlign="start" gap="300">
+                    <BlockStack gap="100">
+                      <Text as="h3" variant="headingMd">Generate from example replies</Text>
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        Reply platforms do not always expose past merchant replies. Add examples manually after you have answered a few reviews, or paste replies you wrote in another platform, so Reply Pilot can learn your real voice.
+                      </Text>
+                    </BlockStack>
                     <Button
-                      icon={ImportIcon}
-                      disabled={connection?.status !== 'connected' || importTimeout.pending}
-                      loading={importTimeout.pending}
-                      onClick={handleImportReplies}
+                      icon={showManualReplyForm ? XIcon : PlusIcon}
+                      onClick={() => setShowManualReplyForm((value) => !value)}
                     >
-                      Import replies
+                      {showManualReplyForm ? 'Close' : 'Add reply'}
                     </Button>
+                  </InlineStack>
+
+                  <div className="rp-manual-reply-note">
+                    <Icon source={InfoIcon} tone="base" />
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Best results come from 3-10 real public replies. Copy the exact response you would send to a customer, choose the review rating it answered, and remove any example that does not match the voice you want.
+                    </Text>
+                  </div>
+
+                  {showManualReplyForm ? (
+                    <div className="rp-manual-reply-form">
+                      <BlockStack gap="300">
+                        <StarRatingPicker
+                          value={manualReplyRating}
+                          onChange={setManualReplyRating}
+                          label="Review stars"
+                          helpText="Use the rating from the review this response was written for."
+                        />
+                        <TextField
+                          label="Reply example"
+                          value={manualReplyText}
+                          onChange={setManualReplyText}
+                          autoComplete="off"
+                          multiline={4}
+                          maxLength={1000}
+                          showCharacterCount
+                          placeholder="Paste a real reply you wrote to a customer review."
+                          helpText="Only paste the merchant reply, not the original review."
+                        />
+                        <InlineStack align="end" gap="200">
+                          <Button
+                            onClick={() => {
+                              setManualReplyText('');
+                              setManualReplyRating('5');
+                              setShowManualReplyForm(false);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button variant="primary" icon={PlusIcon} disabled={!manualReplyText.trim()} onClick={addManualExampleReply}>
+                            Add example
+                          </Button>
+                        </InlineStack>
+                      </BlockStack>
+                    </div>
+                  ) : null}
+
+                  <div className="rp-builder-evidence">
+                    {exampleReplies.length ? (
+                      <BlockStack gap="200">
+                        <InlineStack align="space-between" blockAlign="center" gap="300">
+                          <Text as="p" variant="bodySm" tone="subdued">
+                            {exampleReplies.length} example {exampleReplies.length === 1 ? 'reply' : 'replies'} ready as voice evidence.
+                          </Text>
+                          <Badge tone="info">Manual evidence</Badge>
+                        </InlineStack>
+                        {exampleReplies.map((example) => (
+                          <ExampleRow
+                            key={example.id}
+                            example={example}
+                            onRemove={() => removeExampleReply(example.id)}
+                          />
+                        ))}
+                      </BlockStack>
+                    ) : (
+                      <div className="rp-example-empty">
+                        <Icon source={ChatIcon} tone="subdued" />
+                        <Text as="p" variant="bodyMd" tone="subdued">
+                          Add real reply examples to generate a Personality from language you already use.
+                        </Text>
+                      </div>
+                    )}
+                  </div>
+
+                  <InlineStack align="end">
                     <AiActionButton
                       variant="primary"
                       disabled={!exampleReplies.length || !selectedModelConfigured || !canGeneratePersonality || personalityTimeout.pending}
@@ -1154,34 +1221,7 @@ export default function BrandVoicePage({
                       Generate Personality
                     </AiActionButton>
                   </InlineStack>
-                </InlineGrid>
-
-                <div className="rp-builder-evidence">
-                  {exampleReplies.length ? (
-                    <BlockStack gap="200">
-                      <InlineStack align="space-between" blockAlign="center" gap="300">
-                        <Text as="p" variant="bodySm" tone="subdued">
-                          {exampleReplies.length} imported {exampleReplies.length === 1 ? 'reply' : 'replies'} ready as voice evidence.
-                        </Text>
-                        <Badge tone="info">Evidence only</Badge>
-                      </InlineStack>
-                      {exampleReplies.map((example) => (
-                        <ExampleRow
-                          key={example.id}
-                          example={example}
-                          onRemove={() => removeExampleReply(example.id)}
-                        />
-                      ))}
-                    </BlockStack>
-                  ) : (
-                    <div className="rp-example-empty">
-                      <Icon source={ImportIcon} tone="subdued" />
-                      <Text as="p" variant="bodyMd" tone="subdued">
-                        Import replies to generate a Personality from real merchant language.
-                      </Text>
-                    </div>
-                  )}
-                </div>
+                </BlockStack>
               </div>
 
               {onSkipPersonalityBuilder ? (
