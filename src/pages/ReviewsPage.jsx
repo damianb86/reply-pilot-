@@ -271,7 +271,6 @@ function ReviewsContent() {
   const aiConfig = pageData.aiConfig ?? {};
   const aiConfigured = aiConfig.configured !== false;
   const aiDisplayName = aiConfig.displayName || aiConfig.activeVariant?.name || aiConfig.selectedModel?.name || 'Brand Voice model';
-  const aiProvider = aiConfig.provider || aiConfig.activeVariant?.provider || aiConfig.selectedModel?.provider || 'AI';
   const productDescriptionMultiplier = Number(aiConfig.productDescriptionMultiplier ?? 1);
   const creditBalance = Number(pageData.credits?.balance ?? 0);
   const replyCreditCost = Number(aiConfig.replyCreditCost ?? 1);

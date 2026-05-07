@@ -1192,7 +1192,7 @@ export default function BrandVoicePage({
 
                   <div className="rp-source-reply-loader">
                     <InlineStack align="space-between" blockAlign="center" gap="300">
-                      <InlineStack gap="250" blockAlign="center" wrap={false}>
+                      <InlineStack gap="400" blockAlign="center" wrap={false}>
                         <span className="rp-source-button-mark">
                           <img src="/provider-logos/judgeme.png" alt="" aria-hidden="true" />
                         </span>
