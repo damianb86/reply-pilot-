@@ -82,11 +82,35 @@ const sentReplyOptions = [
 const manualReplyMaxCharacters = 1000;
 const bulkReplyMaxCharacters = 12000;
 
+const presetPreviewReviews = [
+  {
+    rating: 1,
+    review: 'My order never arrived and I have not received any update.',
+  },
+  {
+    rating: 2,
+    review: 'The package arrived damaged and the product box was crushed.',
+  },
+  {
+    rating: 3,
+    review: 'It works, but the quality feels more basic than I expected.',
+  },
+  {
+    rating: 4,
+    review: 'Good product overall, but shipping took longer than expected.',
+  },
+  {
+    rating: 5,
+    review: 'Really happy with this. It looks good and works as expected.',
+  },
+];
+
 const personalityPresets = [
   {
     id: 'warm-small-team',
-    name: 'Warm small team',
+    name: 'Warm',
     icon: HeartIcon,
+    tone: 'warm',
     summary: 'Human, attentive, and grounded for most stores.',
     tags: ['Warm', 'General', 'Trust'],
     persona: `Brand personality: warm, attentive, and genuinely human.
@@ -96,11 +120,19 @@ This voice feels like a small team that actually reads every review. It is kind,
 Basic rules: stay grounded in what the customer said, avoid exaggerated emotion, do not sound corporate or defensive, and never promise anything the business cannot guarantee.
 
 The goal is to make customers feel seen by real people who care about the product and the post-purchase experience.`,
+    previewReplies: [
+      "Hi there - I'm really sorry your order still has not arrived. That is frustrating, and it is not the experience we want you waiting through. Please send us your order details so we can look into the shipment and help with the next step.",
+      "Hi there - I'm sorry the package arrived in that condition. Thanks for letting us know; crushed packaging is disappointing, especially when you were expecting everything to arrive ready to use. Please send us a photo and your order details so we can take a closer look.",
+      "Hi there - thank you for being honest about that. I'm glad it works, but I understand that the feel did not fully match what you expected. We appreciate the feedback and will keep it in mind as we review the product experience.",
+      "Hi there - thank you for the kind words about the product, and I'm sorry shipping took longer than expected. We know timing matters, and we appreciate your patience while it made its way to you.",
+      "Hi there - thank you so much for sharing this. We're really glad it looks good and works the way you hoped. We appreciate you taking the time to leave such a thoughtful review.",
+    ],
   },
   {
     id: 'premium-concierge',
-    name: 'Premium concierge',
+    name: 'Premium',
     icon: StarIcon,
+    tone: 'premium',
     summary: 'Composed and refined for higher-touch brands.',
     tags: ['Premium', 'Calm', 'Refined'],
     persona: `Brand personality: polished, composed, and quietly premium.
@@ -110,11 +142,19 @@ This voice has the restraint of a thoughtful concierge: respectful, precise, and
 Basic rules: do not over-explain, do not sound alarmed, keep claims measured, and communicate confidence, taste, and accountability.
 
 The goal is to make every response feel considered, professional, and worthy of a brand that pays attention to details.`,
+    previewReplies: [
+      'Hi there - thank you for bringing this to our attention. An order that has not arrived deserves a careful follow-up, and we are sorry for the delay and lack of clarity. Please share your order details so our team can review the shipment and advise on the next step.',
+      'Hi there - we are sorry your package arrived damaged. That is not the condition we want any order to be received in, and we appreciate you letting us know. Please send your order details and a photo so we can review this properly.',
+      'Hi there - thank you for the candid feedback. We are glad the product is working for you, though we understand it did not feel as elevated as expected. Your note is helpful as we continue refining the product experience.',
+      'Hi there - thank you for your thoughtful review. We are pleased the product met expectations overall, and we regret that the delivery timing was slower than it should have been. We appreciate your patience.',
+      'Hi there - thank you for the lovely review. We are so pleased the product looks good and performs as expected. Your feedback means a great deal to our team.',
+    ],
   },
   {
     id: 'direct-product-expert',
-    name: 'Product expert',
+    name: 'Expert',
     icon: ProductIcon,
+    tone: 'expert',
     summary: 'Practical and knowledgeable when shoppers care about details.',
     tags: ['Direct', 'Useful', 'Expert'],
     persona: `Brand personality: practical, knowledgeable, and product-first.
@@ -124,11 +164,19 @@ This voice sounds like an experienced product specialist who wants customers to 
 Basic rules: avoid fluff, vague praise, and generic customer-service language. Do not invent technical details, product claims, policies, fixes, or anything not supported by the review or product context.
 
 The goal is to make replies feel useful to both the reviewer and future shoppers reading the public thread.`,
+    previewReplies: [
+      'Hi there - thanks for flagging this. If the order has not arrived and there has been no update, the next useful step is for us to check the shipment details directly. Please send your order information so we can review what happened.',
+      'Hi there - thanks for the clear note. Damaged outer packaging and a crushed product box should be reviewed with the order details and photos, so we can understand the condition it arrived in. Please send those through and we will take a look.',
+      'Hi there - thanks for the straightforward feedback. It is helpful to know the product works but feels more basic than expected. We will use that as product feedback, especially around how expectations are set before purchase.',
+      'Hi there - thank you for the review. It is good to hear the product worked well overall, and the slower shipping is useful feedback for us to track separately from the product experience.',
+      'Hi there - thank you for sharing this. We are glad the product looks good and performs as expected. That is exactly the kind of clear product feedback future shoppers look for.',
+    ],
   },
   {
     id: 'playful-community',
-    name: 'Playful community',
+    name: 'Playful',
     icon: ChatIcon,
+    tone: 'playful',
     summary: 'Social, lively, and lightly witty without becoming silly.',
     tags: ['Playful', 'Friendly', 'Social'],
     persona: `Brand personality: upbeat, friendly, and lightly playful.
@@ -138,11 +186,19 @@ This voice talks like a confident community host: conversational, appreciative, 
 Basic rules: avoid forced jokes, unnatural slang, or overusing exclamation points. When a customer is upset, keep the warmth but do not joke over the concern.
 
 The goal is to make replies feel alive, social, and memorable while still helping the customer and protecting trust.`,
+    previewReplies: [
+      "Hi there - oh no, an order should not disappear into the void. I'm really sorry it never arrived and that you were left without an update. Send us your order details and we will help look into where things stand.",
+      "Hi there - that is definitely not the unboxing moment we want for you. I'm sorry the package showed up damaged and crushed. Please send a photo and your order details so we can take a closer look.",
+      'Hi there - thank you for the honest take. Glad it works, but we hear you that the quality felt more basic than expected. That kind of feedback helps us keep the product experience honest and useful.',
+      "Hi there - thanks for sticking with it through the slower shipping. We're glad the product landed well overall, even if the wait was not ideal. We appreciate you sharing both sides.",
+      "Hi there - love hearing this. We're so glad it looks good, works well, and did what you needed it to do. Thanks for making our day with this review.",
+    ],
   },
   {
     id: 'calm-problem-solver',
-    name: 'Calm resolver',
+    name: 'Calm',
     icon: ShieldCheckMarkIcon,
+    tone: 'calm',
     summary: 'Steady and accountable for support-sensitive brands.',
     tags: ['Support', 'Calm', 'Safe'],
     persona: `Brand personality: calm, accountable, and solution-oriented.
@@ -152,11 +208,19 @@ This voice is especially careful with frustration, low ratings, delivery issues,
 Basic rules: avoid blame, defensiveness, excessive apology, and vague phrases like "we strive to do better." Only mention next steps that are realistic and supported.
 
 The goal is to make customers feel that the brand is composed, fair, and capable of handling problems responsibly.`,
+    previewReplies: [
+      "Hi there - I'm sorry your order has not arrived and that you have not received an update. That needs a closer look. Please send us your order details so we can review the shipment and help with the next step.",
+      "Hi there - I'm sorry the package arrived damaged. Please send a photo of the packaging and your order details so we can review the condition it arrived in and help from there.",
+      'Hi there - thank you for sharing this honestly. It is helpful to know the product works, but the quality did not fully meet your expectations. We will take that feedback seriously.',
+      "Hi there - thank you for the balanced review. I'm glad the product was good overall, and I understand that delayed shipping affected the experience. We appreciate your patience.",
+      'Hi there - thank you for your review. We are glad the product looks good and works as expected. We appreciate you taking the time to share your experience.',
+    ],
   },
   {
     id: 'theatrical-roast',
-    name: 'Theatrical roast',
+    name: 'Bold',
     icon: WandIcon,
+    tone: 'bold',
     summary: 'Sharp, performative, and intentionally absurd.',
     tags: ['Sarcastic', 'Bold', 'Comedic'],
     persona: `Brand personality: sarcastic, theatrical, hostile in a funny way, and intentionally rude as a clear performance.
@@ -166,6 +230,13 @@ This voice treats customers like charming little disasters who somehow managed t
 Basic rules: the cruelty is performative and witty, not genuinely harmful. The voice can roast, exaggerate, and show playful contempt, but it must stay useful and clearly absurd.
 
 The goal is to make the customer feel roasted, not genuinely harmed. Avoid real threats, protected-class insults, body, identity, or health attacks, and anything that feels like actual harassment.`,
+    previewReplies: [
+      'Hi there - your order appears to have taken a dramatic side quest instead of arriving like a normal package with a job. Annoying, and not okay. Send us your order details so we can investigate this little shipping performance.',
+      "Hi there - crushed packaging is a bold design choice, unfortunately not one we ordered. I'm sorry it arrived that way. Send us a photo and your order details so we can inspect the damage and help from there.",
+      'Hi there - fair enough. It works, but did not exactly sweep you off your feet and write poetry about craftsmanship. We appreciate the honest feedback and will use it to keep expectations clear.',
+      'Hi there - thank you for the review. The product did its job, while shipping apparently chose to walk there slowly and reflect on life. We appreciate your patience and the balanced feedback.',
+      'Hi there - excellent, the product behaved itself and looked good doing it. A rare moment of retail peace. Thank you for the lovely review; we are glad it worked as expected.',
+    ],
   },
 ];
 
@@ -424,6 +495,70 @@ function StarRatingPicker({value, onChange, label, helpText}) {
   );
 }
 
+function presetPreviewItems(preset) {
+  return presetPreviewReviews.map((review, index) => ({
+    ...review,
+    reply: preset?.previewReplies?.[index] || '',
+  }));
+}
+
+function presetIdForPersona(value) {
+  return personalityPresets.find((preset) => preset.persona.trim() === String(value ?? '').trim())?.id;
+}
+
+function PreviewStars({rating}) {
+  return (
+    <span className="rp-preset-preview-stars" aria-label={`${rating} out of 5 stars`}>
+      {presetPreviewReviews.map((_, index) => (
+        <span key={index} className={index >= rating ? 'is-empty' : undefined}>★</span>
+      ))}
+    </span>
+  );
+}
+
+function PersonalityPresetPreviewPanel({preset, previewIndex}) {
+  const previews = presetPreviewItems(preset);
+  const preview = previews[previewIndex % previews.length] ?? previews[0];
+
+  return (
+    <aside className="rp-personality-preview-panel" aria-label="Live personality preview">
+      <BlockStack gap="300">
+        <BlockStack gap="050">
+          <Text as="h3" variant="headingMd">Live personality preview</Text>
+          <Text as="p" variant="bodySm" tone="subdued">
+            Common reviews rotate with saved replies for the selected preset.
+          </Text>
+        </BlockStack>
+
+        <div key={`${preset.id}-${preview.rating}`} className="rp-preset-preview-frame">
+          <div className="rp-preset-preview-review">
+            <InlineStack align="space-between" blockAlign="start" gap="200">
+              <Text as="span" variant="bodySm" fontWeight="semibold">Original review</Text>
+              <PreviewStars rating={preview.rating} />
+            </InlineStack>
+            <Text as="p" variant="bodyMd">{preview.review}</Text>
+          </div>
+
+          <div className="rp-preset-preview-reply">
+            <Text as="span" variant="bodySm" fontWeight="semibold">AI reply preview</Text>
+            <Text as="p" variant="bodyMd">{preview.reply}</Text>
+          </div>
+        </div>
+
+        <InlineStack align="space-between" blockAlign="center" gap="200">
+          <Badge tone="info">{preset.name}</Badge>
+          <Text as="span" variant="bodySm" tone="subdued">
+            {preview.rating} star example
+          </Text>
+        </InlineStack>
+        <Text as="p" variant="bodySm" tone="subdued">
+          These examples are pregenerated. Final replies still use your product, review, and settings.
+        </Text>
+      </BlockStack>
+    </aside>
+  );
+}
+
 function PersonalityPresetCard({preset, selected, onApply}) {
   return (
     <button
@@ -435,14 +570,14 @@ function PersonalityPresetCard({preset, selected, onApply}) {
         <InlineStack align="space-between" blockAlign="start" gap="200" wrap={false}>
           <BlockStack gap="050">
             <span className="rp-preset-title-row">
-              <span className="rp-preset-title-icon">
+              <span className={`rp-preset-title-icon is-${preset.tone || 'default'}`}>
                 <Icon source={preset.icon} />
               </span>
               <Text as="span" variant="headingMd">{preset.name}</Text>
             </span>
             <Text as="span" variant="bodySm" tone="subdued">{preset.summary}</Text>
           </BlockStack>
-          {selected ? <Badge tone="success">Applied</Badge> : null}
+          {selected ? <Badge tone="info">Previewing</Badge> : null}
         </InlineStack>
         <InlineStack gap="100">
           {preset.tags.map((tag) => (
@@ -631,7 +766,6 @@ export default function BrandVoicePage({
   suppressPreviewFallback = false,
   livePreviewDescription,
   hideSentReplyLoader = false,
-  showPersonalityPresetsByDefault = false,
 } = {}) {
   const shopify = useAppBridge();
   const routeLoaderData = useLoaderData();
@@ -705,7 +839,8 @@ export default function BrandVoicePage({
   }, [onActiveSectionChange]);
   const [savedConfig, setSavedConfig] = useState(initialConfig);
   const [localToast, setLocalToast] = useState(null);
-  const [showPersonalityPresets, setShowPersonalityPresets] = useState(showPersonalityPresetsByDefault);
+  const [selectedPresetId, setSelectedPresetId] = useState(() => presetIdForPersona(initialConfig.persona));
+  const [presetPreviewIndex, setPresetPreviewIndex] = useState(0);
   const [showAdvancedLength, setShowAdvancedLength] = useState(initialConfig.replyLength === 'very_long');
   const [personalityHighlight, setPersonalityHighlight] = useState(false);
   const lastToastKey = useRef('');
@@ -721,6 +856,10 @@ export default function BrandVoicePage({
   const personalityIsAtLimit =
     wordCount >= personalityMaxWords || characterCount >= personalityMaxCharacters;
   const bulkReplyCount = useMemo(() => splitBulkReplyText(bulkReplyText).length, [bulkReplyText]);
+  const selectedPreset = useMemo(
+    () => personalityPresets.find((preset) => preset.id === selectedPresetId) ?? personalityPresets[0],
+    [selectedPresetId],
+  );
 
   const previewReply = useMemo(() => {
     const safeGreeting = greeting.replace('{name}', 'Anya').trim() || 'Hi Anya -';
@@ -846,6 +985,20 @@ export default function BrandVoicePage({
   }, []);
 
   useEffect(() => {
+    setPresetPreviewIndex(0);
+  }, [selectedPresetId]);
+
+  useEffect(() => {
+    if (activeSection !== 'personality-builder' || !selectedPreset?.previewReplies?.length) return undefined;
+
+    const timer = window.setInterval(() => {
+      setPresetPreviewIndex((index) => (index + 1) % presetPreviewReviews.length);
+    }, 7600);
+
+    return () => window.clearInterval(timer);
+  }, [activeSection, selectedPreset]);
+
+  useEffect(() => {
     setAiModels(loaderAiModels);
   }, [loaderAiModels]);
 
@@ -926,6 +1079,7 @@ export default function BrandVoicePage({
       setPreviewProductType(nextConfig.previewProductType);
       setPreviewProductTags(nextConfig.previewProductTags);
       setPreviewRating(nextConfig.previewRating);
+      setSelectedPresetId(presetIdForPersona(nextConfig.persona));
       setSavedConfig(nextConfig);
     }
   }, [saveFetcher.data, defaultSelectedModel, saveResult, showToast, updatePersona]);
@@ -965,6 +1119,7 @@ export default function BrandVoicePage({
     setPreviewProductType(config.previewProductType);
     setPreviewProductTags(config.previewProductTags);
     setPreviewRating(config.previewRating);
+    setSelectedPresetId(presetIdForPersona(config.persona));
   }
 
   function loadPreviewProduct(productId) {
@@ -1145,13 +1300,12 @@ export default function BrandVoicePage({
   }
 
   function applyPersonalityPreset(preset) {
+    setSelectedPresetId(preset.id);
     updatePersona(preset.persona);
-    setShowPersonalityPresets(false);
-    revealPersonalitySettings();
     showToast({
       ok: true,
       intent: 'apply-personality-preset',
-      message: `${preset.name} preset applied. Review it, then use Shopify Save to keep it.`,
+      message: `${preset.name} preset selected. Preview the examples, then continue to review the Personality text.`,
     });
   }
 
@@ -1219,32 +1373,40 @@ export default function BrandVoicePage({
                 <Badge tone="info">Manual setup</Badge>
               </InlineStack>
 
-              <div className="rp-builder-method">
-                <InlineStack align="space-between" blockAlign="center" gap="300">
-                  <BlockStack gap="050">
-                    <Text as="h3" variant="headingMd">Choose a preset</Text>
-                    <Text as="p" variant="bodySm" tone="subdued">
-                      Use a ready-made voice direction when you want a fast starting point.
-                    </Text>
-                  </BlockStack>
-                  <Button onClick={() => setShowPersonalityPresets((value) => !value)}>
-                    {showPersonalityPresets ? 'Hide presets' : 'Show presets'}
-                  </Button>
-                </InlineStack>
+              <div className="rp-personality-builder-layout">
+                <div className="rp-builder-method is-presets">
+                  <BlockStack gap="300">
+                    <BlockStack gap="050">
+                      <Text as="h3" variant="headingMd">Choose a starting personality</Text>
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        Pick a preset to see how it replies to common review situations before editing the Personality text.
+                      </Text>
+                    </BlockStack>
 
-                {showPersonalityPresets ? (
-                  <div className="rp-personality-preset-grid">
-                    {personalityPresets.map((preset) => (
-                      <PersonalityPresetCard
-                        key={preset.id}
-                        preset={preset}
-                        selected={persona.trim() === preset.persona.trim()}
-                        onApply={() => applyPersonalityPreset(preset)}
-                      />
-                    ))}
-                  </div>
-                ) : null}
+                    <div className="rp-personality-preset-grid">
+                      {personalityPresets.map((preset) => (
+                        <PersonalityPresetCard
+                          key={preset.id}
+                          preset={preset}
+                          selected={selectedPresetId === preset.id}
+                          onApply={() => applyPersonalityPreset(preset)}
+                        />
+                      ))}
+                    </div>
+                  </BlockStack>
+                </div>
+
+                <PersonalityPresetPreviewPanel
+                  preset={selectedPreset}
+                  previewIndex={presetPreviewIndex}
+                />
               </div>
+
+              <InlineStack align="end">
+                <Button variant="primary" onClick={revealPersonalitySettings}>
+                  Next: review Personality
+                </Button>
+              </InlineStack>
 
               <div className="rp-builder-method">
                 <BlockStack gap="300">

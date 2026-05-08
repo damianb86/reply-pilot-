@@ -1576,15 +1576,21 @@ select {
   gap: 16px;
 }
 
+.rp-personality-builder-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 0.85fr);
+  gap: 16px;
+  align-items: start;
+}
+
 .rp-personality-preset-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .rp-personality-preset {
-  min-height: 124px;
+  min-height: 156px;
   padding: 12px;
   border: 1px solid var(--rp-border);
   border-radius: 8px;
@@ -1608,13 +1614,13 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 8px;
 }
 
 .rp-preset-title-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1624,9 +1630,98 @@ select {
 }
 
 .rp-preset-title-icon .Polaris-Icon {
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   color: currentColor;
+}
+
+.rp-preset-title-icon.is-warm {
+  color: var(--rp-generated-text);
+  background: var(--rp-generated-surface);
+}
+
+.rp-preset-title-icon.is-premium {
+  color: var(--rp-preview-text);
+  background: var(--rp-preview-surface);
+}
+
+.rp-preset-title-icon.is-expert {
+  color: var(--rp-action-publish);
+  background: var(--rp-ai-accent);
+}
+
+.rp-preset-title-icon.is-playful {
+  color: var(--rp-ai-primary);
+  background: var(--rp-ai-selected);
+}
+
+.rp-preset-title-icon.is-calm {
+  color: var(--rp-approved-text);
+  background: var(--rp-approved-surface);
+}
+
+.rp-preset-title-icon.is-bold {
+  color: var(--rp-edited-text);
+  background: var(--rp-edited-surface);
+}
+
+.rp-personality-preview-panel {
+  position: sticky;
+  top: 16px;
+  padding: 16px;
+  border: 1px solid var(--rp-border);
+  border-radius: 8px;
+  background: var(--rp-card-surface);
+  box-shadow: 0 14px 34px rgba(var(--rp-text-primary-rgb), 0.08);
+}
+
+.rp-preset-preview-frame {
+  display: grid;
+  gap: 12px;
+  animation: rp-preset-preview-fade 7600ms ease-in-out both;
+}
+
+.rp-preset-preview-review,
+.rp-preset-preview-reply {
+  padding: 14px;
+  border: 1px solid var(--rp-border);
+  border-radius: 8px;
+  background: var(--rp-card-surface);
+}
+
+.rp-preset-preview-reply {
+  border-color: var(--rp-generated-border);
+  background: var(--rp-generated-surface);
+}
+
+.rp-preset-preview-stars {
+  display: inline-flex;
+  gap: 2px;
+  color: var(--rp-rating-star);
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.rp-preset-preview-stars .is-empty {
+  color: var(--rp-rating-star-muted);
+}
+
+@keyframes rp-preset-preview-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  10%,
+  86% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
 }
 
 .rp-builder-method {
@@ -1634,6 +1729,10 @@ select {
   border: 1px solid var(--rp-ai-selected);
   border-radius: 8px;
   background: var(--rp-ai-surface);
+}
+
+.rp-builder-method.is-presets {
+  height: 100%;
 }
 
 .rp-builder-evidence {
@@ -2350,6 +2449,14 @@ select {
   .rp-personality-preset-grid,
   .rp-model-grid {
     grid-template-columns: 1fr;
+  }
+
+  .rp-personality-builder-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .rp-personality-preview-panel {
+    position: static;
   }
 
   .rp-source-reply-loader .Polaris-InlineStack {
