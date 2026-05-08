@@ -1707,6 +1707,7 @@ export default function BrandVoicePage({
 
               <InlineStack align="start">
                 <AiActionButton
+                  className="is-preview"
                   variant="primary"
                   size="large"
                   disabled={!selectedModelConfigured || previewTimeout.pending}
@@ -1717,7 +1718,7 @@ export default function BrandVoicePage({
                 </AiActionButton>
               </InlineStack>
 
-              <div className="rp-draft-box">
+              <div className="rp-draft-box is-preview">
                 <Text as="p" variant="bodyLg">
                   {livePreview || (!suppressPreviewFallback ? previewReply : 'Generate a preview to see how Reply Pilot will answer this review.')}
                 </Text>

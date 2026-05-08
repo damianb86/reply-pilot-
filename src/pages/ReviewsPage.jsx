@@ -179,17 +179,17 @@ function DraftPlaceholderIllustration() {
     <svg className="rp-draft-illustration" viewBox="0 0 180 132" role="img" aria-label="Draft not generated">
       <defs>
         <linearGradient id="draft-card" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0%" stopColor="#EBF5FF" />
-          <stop offset="100%" stopColor="#F8E6D9" />
+          <stop offset="0%" stopColor="#EEF0FF" />
+          <stop offset="100%" stopColor="#DCE7FF" />
         </linearGradient>
       </defs>
       <rect x="30" y="18" width="120" height="86" rx="14" fill="url(#draft-card)" />
-      <rect x="46" y="38" width="62" height="8" rx="4" fill="#8AA7C7" opacity="0.9" />
-      <rect x="46" y="56" width="88" height="7" rx="3.5" fill="#C2D3E5" />
-      <rect x="46" y="72" width="72" height="7" rx="3.5" fill="#C2D3E5" />
+      <rect x="46" y="38" width="62" height="8" rx="4" fill="#5B5BD6" opacity="0.76" />
+      <rect x="46" y="56" width="88" height="7" rx="3.5" fill="#8B7CFF" opacity="0.5" />
+      <rect x="46" y="72" width="72" height="7" rx="3.5" fill="#8B7CFF" opacity="0.42" />
       <circle cx="135" cy="33" r="18" fill="#FFFFFF" />
-      <path d="M135 23l2.6 6.6 7.1 1.1-5.1 4.9 1.2 7-5.8-3.3-6.2 3.3 1.3-7-5.1-4.9 7.1-1.1L135 23z" fill="#C74600" />
-      <path d="M58 103c10 8 54 9 67 0" fill="none" stroke="#8AA7C7" strokeWidth="5" strokeLinecap="round" opacity="0.55" />
+      <path d="M135 23l2.6 6.6 7.1 1.1-5.1 4.9 1.2 7-5.8-3.3-6.2 3.3 1.3-7-5.1-4.9 7.1-1.1L135 23z" fill="#5B5BD6" />
+      <path d="M58 103c10 8 54 9 67 0" fill="none" stroke="#5B5BD6" strokeWidth="5" strokeLinecap="round" opacity="0.38" />
     </svg>
   );
 }
@@ -754,16 +754,20 @@ function ReviewsContent() {
                 <AiActionButton disabled={!aiConfigured || !selectedUngeneratedPendingIds.length || isSubmitting} onClick={() => submitAiAction('generate', selectedUngeneratedPendingIds, `Generating ${selectedUngeneratedPendingIds.length} ${selectedUngeneratedPendingIds.length === 1 ? 'reply' : 'replies'}`)}>
                   {selectedUngeneratedPendingIds.length ? `Generate ${selectedUngeneratedPendingIds.length}` : 'Generate'}
                 </AiActionButton>
-                <AiActionButton disabled={!aiConfigured || !selectedGeneratedPendingIds.length || isSubmitting} onClick={() => submitAiAction('regenerate', selectedGeneratedPendingIds, `Regenerating ${selectedGeneratedPendingIds.length} ${selectedGeneratedPendingIds.length === 1 ? 'reply' : 'replies'}`)}>
+                <AiActionButton className="is-secondary" disabled={!aiConfigured || !selectedGeneratedPendingIds.length || isSubmitting} onClick={() => submitAiAction('regenerate', selectedGeneratedPendingIds, `Regenerating ${selectedGeneratedPendingIds.length} ${selectedGeneratedPendingIds.length === 1 ? 'reply' : 'replies'}`)}>
                   {selectedGeneratedPendingIds.length ? `Regenerate ${selectedGeneratedPendingIds.length}` : 'Regenerate'}
                 </AiActionButton>
               </span>
-              <Button icon={SendIcon} variant="primary" disabled={!selectedGeneratedPendingIds.length || isSubmitting} onClick={() => submitAction('send', selectedGeneratedPendingIds)}>
-                {selectedGeneratedPendingIds.length ? `Approve & send all ${selectedGeneratedPendingIds.length}` : 'Approve & send'}
-              </Button>
-              <Button icon={XIcon} disabled={!selectedPendingIds.length || isSubmitting} onClick={() => submitAction('skip', selectedPendingIds)}>
-                Don't reply
-              </Button>
+              <span className="rp-action-button is-publish">
+                <Button icon={SendIcon} variant="primary" disabled={!selectedGeneratedPendingIds.length || isSubmitting} onClick={() => submitAction('send', selectedGeneratedPendingIds)}>
+                  {selectedGeneratedPendingIds.length ? `Approve & send all ${selectedGeneratedPendingIds.length}` : 'Approve & send'}
+                </Button>
+              </span>
+              <span className="rp-action-button is-reject">
+                <Button icon={XIcon} disabled={!selectedPendingIds.length || isSubmitting} onClick={() => submitAction('skip', selectedPendingIds)}>
+                  Don't reply
+                </Button>
+              </span>
               {showSkipped ? (
                 <Button icon={RefreshIcon} disabled={!selectedSkippedIds.length || isSubmitting} onClick={() => submitAction('restore', selectedSkippedIds)}>
                   Restore {selectedSkippedIds.length}
@@ -899,8 +903,10 @@ function ReviewsContent() {
                     <>
                       <InlineStack align="space-between" blockAlign="center">
                         <InlineStack gap="200" blockAlign="center">
-                          <Icon source={MagicIcon} tone="critical" />
-                          <Text as="h3" variant="headingMd" tone="critical">AI draft</Text>
+                          <span className="rp-ai-heading-icon">
+                            <Icon source={MagicIcon} tone="base" />
+                          </span>
+                          <Text as="h3" variant="headingMd">AI draft</Text>
                         </InlineStack>
                         {activeHasDraft ? (
                           <InlineStack gap="200" blockAlign="center">
@@ -916,7 +922,7 @@ function ReviewsContent() {
                         )}
                       </InlineStack>
 
-                      <div className="rp-draft-box">
+                      <div className={`rp-draft-box ${isEditing ? 'is-editing' : ''}`}>
                         {isEditing ? (
                           <BlockStack gap="300">
                             <TextField
@@ -931,9 +937,11 @@ function ReviewsContent() {
                               <Button onClick={() => { setDraftValue(activeReview.draft); setIsEditing(false); }}>
                                 Cancel
                               </Button>
-                              <Button variant="primary" loading={isSubmitting && fetcher.formData?.get('intent') === 'update-draft'} onClick={handleSaveDraft}>
-                                Save draft
-                              </Button>
+                              <span className="rp-action-button is-save">
+                                <Button variant="primary" loading={isSubmitting && fetcher.formData?.get('intent') === 'update-draft'} onClick={handleSaveDraft}>
+                                  Save draft
+                                </Button>
+                              </span>
                             </InlineStack>
                           </BlockStack>
                         ) : !activeHasDraft ? (
@@ -992,6 +1000,7 @@ function ReviewsContent() {
                                 Cancel
                               </Button>
                               <AiActionButton
+                                className="is-tone"
                                 variant="primary"
                                 disabled={!aiConfigured || !draftInstruction.trim()}
                                 loading={isSubmitting && fetcher.formData?.get('intent') === 'revise-draft'}
@@ -1019,23 +1028,29 @@ function ReviewsContent() {
                           Already sent
                         </Button>
                       ) : activeHasJudgeMeReply ? (
-                        <Button icon={XIcon} variant="primary" size="large" fullWidth disabled={isSubmitting} loading={isSubmitting && fetcher.formData?.get('intent') === 'skip'} onClick={() => submitSingle('skip', activeReview.id)}>
-                          Don't reply
-                        </Button>
+                        <span className="rp-action-button is-reject is-full">
+                          <Button icon={XIcon} variant="primary" size="large" fullWidth disabled={isSubmitting} loading={isSubmitting && fetcher.formData?.get('intent') === 'skip'} onClick={() => submitSingle('skip', activeReview.id)}>
+                            Don't reply
+                          </Button>
+                        </span>
                       ) : !activeHasDraft ? (
                         <AiActionButton className="is-full" variant="primary" size="large" fullWidth disabled={!aiConfigured} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingleAiAction('generate', activeReview.id, 'Generating this message')}>
                           Generate message
                         </AiActionButton>
                       ) : (
-                        <Button icon={SendIcon} variant="primary" size="large" fullWidth loading={isSubmitting && fetcher.formData?.get('intent') === 'send'} onClick={() => submitSingle('send', activeReview.id)}>
-                          Approve & send
-                        </Button>
+                        <span className="rp-action-button is-publish is-full">
+                          <Button icon={SendIcon} variant="primary" size="large" fullWidth loading={isSubmitting && fetcher.formData?.get('intent') === 'send'} onClick={() => submitSingle('send', activeReview.id)}>
+                            Approve & send
+                          </Button>
+                        </span>
                       )}
                       {!activeHasJudgeMeReply ? (
                         <>
                           <Button icon={EditIcon} accessibilityLabel="Edit draft" disabled={activeReview.status !== 'pending'} onClick={() => setIsEditing(true)} />
-                          <AiActionButton className="is-icon-only" accessibilityLabel="Regenerate draft" disabled={!aiConfigured || isSubmitting || activeReview.status !== 'pending' || !activeHasDraft} onClick={() => submitSingleAiAction('regenerate', activeReview.id, 'Regenerating this draft')} />
-                          <Button icon={XIcon} accessibilityLabel="Do not reply" disabled={isSubmitting || activeReview.status !== 'pending'} onClick={() => submitSingle('skip', activeReview.id)} />
+                          <AiActionButton className="is-icon-only is-secondary" accessibilityLabel="Regenerate draft" disabled={!aiConfigured || isSubmitting || activeReview.status !== 'pending' || !activeHasDraft} onClick={() => submitSingleAiAction('regenerate', activeReview.id, 'Regenerating this draft')} />
+                          <span className="rp-action-button is-reject">
+                            <Button icon={XIcon} accessibilityLabel="Do not reply" disabled={isSubmitting || activeReview.status !== 'pending'} onClick={() => submitSingle('skip', activeReview.id)} />
+                          </span>
                         </>
                       ) : null}
                     </InlineStack>
