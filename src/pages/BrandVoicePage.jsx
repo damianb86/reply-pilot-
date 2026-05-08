@@ -19,17 +19,22 @@ import {
   TextField,
 } from '@shopify/polaris';
 import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
   DeleteIcon,
   ChatIcon,
-  HeartIcon,
+  ImageMagicIcon,
   InfoIcon,
+  LightbulbIcon,
   MagicIcon,
-  ProductIcon,
+  PageHeartIcon,
+  PauseCircleIcon,
+  PlayCircleIcon,
   PlusIcon,
   SearchIcon,
   ShieldCheckMarkIcon,
-  StarIcon,
-  WandIcon,
+  SmileyJoyIcon,
+  StarFilledIcon,
   XIcon,
 } from '@shopify/polaris-icons';
 import {
@@ -109,7 +114,7 @@ const personalityPresets = [
   {
     id: 'warm-small-team',
     name: 'Warm',
-    icon: HeartIcon,
+    icon: PageHeartIcon,
     tone: 'warm',
     summary: 'Human, attentive, and grounded for most stores.',
     tags: ['Warm', 'General', 'Trust'],
@@ -131,7 +136,7 @@ The goal is to make customers feel seen by real people who care about the produc
   {
     id: 'premium-concierge',
     name: 'Premium',
-    icon: StarIcon,
+    icon: StarFilledIcon,
     tone: 'premium',
     summary: 'Composed and refined for higher-touch brands.',
     tags: ['Premium', 'Calm', 'Refined'],
@@ -153,7 +158,7 @@ The goal is to make every response feel considered, professional, and worthy of 
   {
     id: 'direct-product-expert',
     name: 'Expert',
-    icon: ProductIcon,
+    icon: LightbulbIcon,
     tone: 'expert',
     summary: 'Practical and knowledgeable when shoppers care about details.',
     tags: ['Direct', 'Useful', 'Expert'],
@@ -175,7 +180,7 @@ The goal is to make replies feel useful to both the reviewer and future shoppers
   {
     id: 'playful-community',
     name: 'Playful',
-    icon: ChatIcon,
+    icon: SmileyJoyIcon,
     tone: 'playful',
     summary: 'Social, lively, and lightly witty without becoming silly.',
     tags: ['Playful', 'Friendly', 'Social'],
@@ -219,7 +224,7 @@ The goal is to make customers feel that the brand is composed, fair, and capable
   {
     id: 'theatrical-roast',
     name: 'Bold',
-    icon: WandIcon,
+    icon: ImageMagicIcon,
     tone: 'bold',
     summary: 'Sharp, performative, and intentionally absurd.',
     tags: ['Sarcastic', 'Bold', 'Comedic'],
@@ -516,9 +521,21 @@ function PreviewStars({rating}) {
   );
 }
 
-function PersonalityPresetPreviewPanel({preset, previewIndex}) {
+function tagKey(tag) {
+  return String(tag ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+}
+
+function PersonalityPresetPreviewPanel({
+  isPaused,
+  onNext,
+  onPrevious,
+  onTogglePause,
+  preset,
+  previewIndex,
+}) {
   const previews = presetPreviewItems(preset);
   const preview = previews[previewIndex % previews.length] ?? previews[0];
+  const currentPreviewNumber = (previewIndex % previews.length) + 1;
 
   return (
     <aside className="rp-personality-preview-panel" aria-label="Live personality preview">
@@ -547,9 +564,37 @@ function PersonalityPresetPreviewPanel({preset, previewIndex}) {
 
         <InlineStack align="space-between" blockAlign="center" gap="200">
           <Badge tone="info">{preset.name}</Badge>
-          <Text as="span" variant="bodySm" tone="subdued">
-            {preview.rating} star example
-          </Text>
+          <InlineStack gap="100" blockAlign="center" wrap={false}>
+            <Text as="span" variant="bodySm" tone="subdued">
+              {currentPreviewNumber}/{previews.length}
+            </Text>
+            <div className="rp-preset-preview-controls" aria-label="Preview controls">
+              <button
+                type="button"
+                className="rp-preset-preview-control"
+                onClick={onPrevious}
+                aria-label="Previous preview"
+              >
+                <Icon source={ChevronLeftIcon} />
+              </button>
+              <button
+                type="button"
+                className="rp-preset-preview-control"
+                onClick={onTogglePause}
+                aria-label={isPaused ? 'Resume preview rotation' : 'Pause preview rotation'}
+              >
+                <Icon source={isPaused ? PlayCircleIcon : PauseCircleIcon} />
+              </button>
+              <button
+                type="button"
+                className="rp-preset-preview-control"
+                onClick={onNext}
+                aria-label="Next preview"
+              >
+                <Icon source={ChevronRightIcon} />
+              </button>
+            </div>
+          </InlineStack>
         </InlineStack>
         <Text as="p" variant="bodySm" tone="subdued">
           These examples are pregenerated. Final replies still use your product, review, and settings.
@@ -577,13 +622,15 @@ function PersonalityPresetCard({preset, selected, onApply}) {
             </span>
             <Text as="span" variant="bodySm" tone="subdued">{preset.summary}</Text>
           </BlockStack>
-          {selected ? <Badge tone="info">Previewing</Badge> : null}
         </InlineStack>
-        <InlineStack gap="100">
+        <div className="rp-preset-pill-list">
           {preset.tags.map((tag) => (
-            <Badge key={tag}>{tag}</Badge>
+            <span key={tag} className="rp-preset-pill" data-tag={tagKey(tag)}>
+              <span className="rp-preset-pill-mark" aria-hidden="true" />
+              {tag}
+            </span>
           ))}
-        </InlineStack>
+        </div>
       </BlockStack>
     </button>
   );
@@ -841,6 +888,7 @@ export default function BrandVoicePage({
   const [localToast, setLocalToast] = useState(null);
   const [selectedPresetId, setSelectedPresetId] = useState(() => presetIdForPersona(initialConfig.persona));
   const [presetPreviewIndex, setPresetPreviewIndex] = useState(0);
+  const [presetPreviewPaused, setPresetPreviewPaused] = useState(false);
   const [showAdvancedLength, setShowAdvancedLength] = useState(initialConfig.replyLength === 'very_long');
   const [personalityHighlight, setPersonalityHighlight] = useState(false);
   const lastToastKey = useRef('');
@@ -989,14 +1037,25 @@ export default function BrandVoicePage({
   }, [selectedPresetId]);
 
   useEffect(() => {
-    if (activeSection !== 'personality-builder' || !selectedPreset?.previewReplies?.length) return undefined;
+    if (
+      activeSection !== 'personality-builder' ||
+      presetPreviewPaused ||
+      !selectedPreset?.previewReplies?.length
+    ) return undefined;
 
     const timer = window.setInterval(() => {
       setPresetPreviewIndex((index) => (index + 1) % presetPreviewReviews.length);
     }, 7600);
 
     return () => window.clearInterval(timer);
-  }, [activeSection, selectedPreset]);
+  }, [activeSection, presetPreviewPaused, selectedPreset]);
+
+  const movePresetPreview = useCallback((direction) => {
+    setPresetPreviewPaused(true);
+    setPresetPreviewIndex((index) => (
+      index + direction + presetPreviewReviews.length
+    ) % presetPreviewReviews.length);
+  }, []);
 
   useEffect(() => {
     setAiModels(loaderAiModels);
@@ -1397,6 +1456,10 @@ export default function BrandVoicePage({
                 </div>
 
                 <PersonalityPresetPreviewPanel
+                  isPaused={presetPreviewPaused}
+                  onNext={() => movePresetPreview(1)}
+                  onPrevious={() => movePresetPreview(-1)}
+                  onTogglePause={() => setPresetPreviewPaused((paused) => !paused)}
                   preset={selectedPreset}
                   previewIndex={presetPreviewIndex}
                 />
