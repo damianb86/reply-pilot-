@@ -29,6 +29,7 @@ import {
   XIcon,
 } from '@shopify/polaris-icons';
 import {useFetcherTimeout} from '../hooks/useFetcherTimeout';
+import PageLoadingState from '../PageLoadingState';
 
 function Stars({rating}) {
   return (
@@ -179,17 +180,17 @@ function DraftPlaceholderIllustration() {
     <svg className="rp-draft-illustration" viewBox="0 0 180 132" role="img" aria-label="Draft not generated">
       <defs>
         <linearGradient id="draft-card" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0%" stopColor="#EEF0FF" />
-          <stop offset="100%" stopColor="#DCE7FF" />
+          <stop offset="0%" stopColor="var(--rp-ai-surface)" />
+          <stop offset="100%" stopColor="var(--rp-ai-selected)" />
         </linearGradient>
       </defs>
       <rect x="30" y="18" width="120" height="86" rx="14" fill="url(#draft-card)" />
-      <rect x="46" y="38" width="62" height="8" rx="4" fill="#5B5BD6" opacity="0.76" />
-      <rect x="46" y="56" width="88" height="7" rx="3.5" fill="#8B7CFF" opacity="0.5" />
-      <rect x="46" y="72" width="72" height="7" rx="3.5" fill="#8B7CFF" opacity="0.42" />
-      <circle cx="135" cy="33" r="18" fill="#FFFFFF" />
-      <path d="M135 23l2.6 6.6 7.1 1.1-5.1 4.9 1.2 7-5.8-3.3-6.2 3.3 1.3-7-5.1-4.9 7.1-1.1L135 23z" fill="#5B5BD6" />
-      <path d="M58 103c10 8 54 9 67 0" fill="none" stroke="#5B5BD6" strokeWidth="5" strokeLinecap="round" opacity="0.38" />
+      <rect x="46" y="38" width="62" height="8" rx="4" fill="var(--rp-ai-primary)" opacity="0.76" />
+      <rect x="46" y="56" width="88" height="7" rx="3.5" fill="var(--rp-ai-secondary)" opacity="0.5" />
+      <rect x="46" y="72" width="72" height="7" rx="3.5" fill="var(--rp-ai-secondary)" opacity="0.42" />
+      <circle cx="135" cy="33" r="18" fill="var(--rp-card-surface)" />
+      <path d="M135 23l2.6 6.6 7.1 1.1-5.1 4.9 1.2 7-5.8-3.3-6.2 3.3 1.3-7-5.1-4.9 7.1-1.1L135 23z" fill="var(--rp-ai-primary)" />
+      <path d="M58 103c10 8 54 9 67 0" fill="none" stroke="var(--rp-ai-primary)" strokeWidth="5" strokeLinecap="round" opacity="0.38" />
     </svg>
   );
 }
@@ -261,7 +262,9 @@ function ReviewsContent() {
   const fetcher = useFetcher();
   const shopify = useAppBridge();
   const lastToastKey = useRef('');
+  const initialRefreshStarted = useRef(false);
   const [localToast, setLocalToast] = useState(null);
+  const [showInitialRefreshLoading, setShowInitialRefreshLoading] = useState(Boolean(loaderData.connected));
   const pageData = fetcher.data?.reviews ? fetcher.data : loaderData;
   const reviews = useMemo(() => pageData.reviews ?? [], [pageData.reviews]);
   const stats = pageData.stats ?? {pending: 0, sentToday: 0, sent: 0, skipped: 0, ungenerated: 0, judgeMeReplied: 0, highConfidence: 0, needsHuman: 0};
@@ -401,6 +404,27 @@ function ReviewsContent() {
     });
     return false;
   }, [creditBalance, creditText, creditsFor, showToast]);
+
+  useEffect(() => {
+    if (!loaderData.connected || initialRefreshStarted.current) return;
+    initialRefreshStarted.current = true;
+    setShowInitialRefreshLoading(true);
+    const formData = new FormData();
+    formData.set('intent', 'sync');
+    formData.set('ids', '[]');
+    formData.set('source', 'initial-load');
+    fetcher.submit(formData, {method: 'post'});
+  }, [fetcher, loaderData.connected]);
+
+  useEffect(() => {
+    if (
+      showInitialRefreshLoading &&
+      fetcher.state === 'idle' &&
+      fetcher.data?.intent === 'sync'
+    ) {
+      setShowInitialRefreshLoading(false);
+    }
+  }, [fetcher.data?.intent, fetcher.state, showInitialRefreshLoading]);
 
   useEffect(() => {
     if (!activeReview && filteredReviews[0]) {
@@ -608,6 +632,15 @@ function ReviewsContent() {
     </IndexTable.Row>
   ));
 
+  if (showInitialRefreshLoading) {
+    return (
+      <PageLoadingState
+        title="Loading Reviews"
+        description="Refreshing reviews and preparing AI drafts, filters, and reply status..."
+      />
+    );
+  }
+
   return (
     <BlockStack gap="400">
       {localToast ? (
@@ -676,7 +709,7 @@ function ReviewsContent() {
             <InlineStack gap="200" blockAlign="center">
               <Badge tone={aiConfigured ? 'info' : 'critical'}>AI: {aiDisplayName}</Badge>
               <Badge tone={creditBalance < replyCreditCost ? 'critical' : 'info'}>{formatCreditAmount(creditBalance)} credits</Badge>
-              {productDescriptionMultiplier > 1 ? <Badge tone="attention">Product descriptions {productDescriptionMultiplier}x</Badge> : null}
+              {productDescriptionMultiplier > 1 ? <Badge tone="info">Product descriptions {productDescriptionMultiplier}x</Badge> : null}
               <Badge>{pageData.connected ? 'Judge.me connected' : 'Source missing'}</Badge>
               <Badge tone={pageData.connected ? 'success' : 'attention'}>{pageData.connected ? 'Ready' : 'Setup needed'}</Badge>
             </InlineStack>

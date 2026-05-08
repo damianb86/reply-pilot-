@@ -53,8 +53,8 @@ function generationMessage(
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { admin, session } = await authenticate.admin(request);
-  return loadReviewsPageData(session.shop, { sync: true, admin });
+  const { session } = await authenticate.admin(request);
+  return loadReviewsPageData(session.shop);
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -64,6 +64,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     if (intent === "sync") {
+      const source = String(formData.get("source") ?? "");
       const data = await loadReviewsPageData(session.shop, { sync: true, admin });
       if (!data.connected) {
         return {
@@ -74,7 +75,7 @@ export async function action({ request }: ActionFunctionArgs) {
         };
       }
 
-      return { ok: true, intent, message: "Reviews refreshed.", ...data };
+      return { ok: true, intent, message: source === "initial-load" ? "" : "Reviews refreshed.", ...data };
     }
 
     if (intent === "regenerate") {

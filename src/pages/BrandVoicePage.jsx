@@ -1614,7 +1614,7 @@ export default function BrandVoicePage({
                 <InlineStack gap="150" blockAlign="center">
                   <Badge tone={creditOverview.balance <= 25 ? 'critical' : 'info'}>{creditsNumber(creditOverview.balance)} credits left</Badge>
                   {selectedModelConfig ? <Badge>{selectedModelConfig.name} selected</Badge> : null}
-                  {replyCreditMultiplier > 1 ? <Badge tone="attention">Product descriptions {replyCreditMultiplier}x replies</Badge> : null}
+                  {replyCreditMultiplier > 1 ? <Badge tone="info">Product descriptions {replyCreditMultiplier}x replies</Badge> : null}
                 </InlineStack>
               </InlineStack>
 
@@ -1650,7 +1650,7 @@ export default function BrandVoicePage({
                   <Text as="span" variant="bodySm" tone="subdued">
                     against your saved test review · {selectedModelConfig?.name ?? 'selected tier'}
                   </Text>
-                  {useProductDescription ? <Badge tone="attention">Product description on</Badge> : null}
+                  {useProductDescription ? <Badge tone="info">Product description on</Badge> : null}
                 </InlineStack>
               </InlineStack>
               {livePreviewDescription ? (
