@@ -14,30 +14,61 @@
         line-height: 1.6;
       }
 
+      * {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
       }
 
       main {
-        max-width: 860px;
+        max-width: 920px;
         margin: 0 auto;
-        padding: 48px 20px 64px;
+        padding: 48px 20px 72px;
+      }
+
+      article {
+        background: #ffffff;
+        border: 1px solid #d9dee7;
+        border-radius: 8px;
+        padding: 40px;
+      }
+
+      header {
+        border-bottom: 1px solid #e3e7ee;
+        margin-bottom: 28px;
+        padding-bottom: 24px;
       }
 
       h1,
-      h2 {
+      h2,
+      h3 {
         color: #111827;
         line-height: 1.2;
       }
 
       h1 {
         margin: 0 0 8px;
-        font-size: 2.25rem;
+        font-size: clamp(2rem, 5vw, 2.6rem);
       }
 
       h2 {
-        margin-top: 32px;
+        border-top: 1px solid #e3e7ee;
+        margin: 32px 0 12px;
+        padding-top: 28px;
         font-size: 1.25rem;
+      }
+
+      .summary + h2 {
+        border-top: 0;
+        margin-top: 28px;
+        padding-top: 0;
+      }
+
+      h3 {
+        margin: 24px 0 8px;
+        font-size: 1rem;
       }
 
       p,
@@ -45,101 +76,262 @@
         font-size: 1rem;
       }
 
-      .updated {
-        color: #52606d;
-        margin-top: 0;
+      p {
+        margin: 0 0 14px;
+      }
+
+      ul {
+        margin: 0 0 16px;
+        padding-left: 22px;
+      }
+
+      li {
+        margin-bottom: 8px;
       }
 
       a {
         color: #0f62fe;
       }
+
+      .updated,
+      .note {
+        color: #52606d;
+      }
+
+      .summary {
+        background: #f8fafc;
+        border: 1px solid #dce4ee;
+        border-radius: 8px;
+        margin: 24px 0 4px;
+        padding: 18px 20px 8px;
+      }
+
+      .summary h2 {
+        border-top: 0;
+        margin: 0 0 10px;
+        padding-top: 0;
+      }
+
+      .contact {
+        background: #f8fafc;
+        border: 1px solid #dce4ee;
+        border-radius: 8px;
+        padding: 18px 20px;
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding: 24px 12px 48px;
+        }
+
+        article {
+          padding: 24px 18px;
+        }
+      }
     </style>
   </head>
   <body>
     <main>
-      <h1>Reply Pilot Privacy Policy</h1>
-      <p class="updated">Last updated: May 3, 2026</p>
+      <article>
+        <header>
+          <h1>Reply Pilot Privacy Policy</h1>
+          <p class="updated">Last updated: May 8, 2026</p>
+          <p>
+            Reply Pilot is an embedded Shopify app that helps merchants import
+            product reviews, draft replies with AI, approve those replies, and
+            send them through a connected review provider. This policy explains
+            what data Reply Pilot processes, why it is used, how long it is kept,
+            and how merchants and shoppers can request access or deletion.
+          </p>
+          <p>
+            For shopper personal data, the Shopify merchant remains responsible
+            for the storefront customer relationship. Reply Pilot acts as a
+            service provider for the merchant and processes data only to operate
+            the app, support the merchant, and meet Shopify platform obligations.
+          </p>
+        </header>
 
-      <p>
-        Reply Pilot is a Shopify embedded app for merchant review-reply workflows. This
-        policy explains what data the app may process, how it is used, and how
-        merchants and shoppers can request access or deletion.
-      </p>
+        <section class="summary" aria-labelledby="summary-heading">
+          <h2 id="summary-heading">Summary</h2>
+          <ul>
+            <li>Reply Pilot reads only the Shopify scopes approved during installation. The current production scope is product read access.</li>
+            <li>Review provider data is processed only when a merchant connects a provider such as Judge.me and supplies the required shop identifier and private API token.</li>
+            <li>AI generation uses review, product, and brand voice context so the merchant can approve or edit replies before they are sent.</li>
+            <li>Reply Pilot does not sell personal data and does not use shopper data for advertising or cross-merchant profiling.</li>
+            <li>Merchants can request a data summary or delete stored app data from the in-app Help page, and Shopify privacy webhooks are implemented for platform requests.</li>
+          </ul>
+        </section>
 
-      <h2>Data Read From Shopify</h2>
-      <p>
-        Reply Pilot uses Shopify API access only for the scopes approved by the
-        merchant during installation. Depending on enabled features, Reply Pilot may
-        read shop domain, app session data, product information, and review or
-        workflow context supplied by the merchant or connected services.
-      </p>
+        <h2>Data Reply Pilot Processes</h2>
+        <h3>Shopify account and session data</h3>
+        <p>
+          Reply Pilot stores Shopify shop domains, installation/session records,
+          access tokens, approved scopes, and limited admin user metadata needed
+          for Shopify authentication. Depending on the authenticated Shopify API
+          request, session metadata can include admin user name, email, locale,
+          collaborator status, account owner status, and token expiration.
+        </p>
 
-      <h2>Data Sent By Merchants</h2>
-      <p>
-        Merchants may submit support requests, customization requests,
-        configuration values, brand voice guidance, and other operational text
-        entered in the app. Reply Pilot stores these records to provide support,
-        maintain settings, and operate the app.
-      </p>
+        <h3>Shopify product data</h3>
+        <p>
+          When product context is enabled, Reply Pilot may read product titles,
+          product types, tags, and cleaned product description context. This is
+          used to help draft more accurate public replies to product reviews.
+        </p>
 
-      <h2>Shopper Data</h2>
-      <p>
-        Reply Pilot is not designed to store Shopify customer account records. If a
-        merchant connects review workflows, shopper review text, customer names,
-        ratings, product references, or reply drafts may be processed so the
-        merchant can manage replies. Reply Pilot does not sell shopper data.
-      </p>
+        <h3>Connected review provider data</h3>
+        <p>
+          If a merchant connects Judge.me or another supported review source,
+          Reply Pilot stores the review provider shop identifier, connection
+          status, encrypted private API token, masked token display, account
+          metadata, settings metadata, review counts, and recent review samples
+          needed to verify and operate the connection.
+        </p>
 
-      <h2>Use Of Data</h2>
-      <p>
-        Data is used to authenticate the app, provide embedded app features,
-        support merchants, improve app reliability, respond to privacy requests,
-        and comply with Shopify platform requirements.
-      </p>
+        <h3>Review and reply workflow data</h3>
+        <p>
+          Reply Pilot stores imported review records and reply workflow state,
+          including review text, rating, source review ID, source payload,
+          customer or reviewer name/initials when supplied by the review
+          provider, product title/type/tags, draft reply text, AI model metadata,
+          generation timestamps, edit status, sent/skipped status, and last error
+          details.
+        </p>
 
-      <h2>Retention</h2>
-      <p>
-        App sessions and merchant-entered data are retained while the app is
-        installed or while needed for support, security, legal compliance, and
-        operational records. Shop data is deleted when required by Shopify
-        privacy webhooks or upon verified merchant request.
-      </p>
+        <h3>Merchant-entered app data</h3>
+        <p>
+          Merchants may enter brand voice guidance, greetings, sign-offs,
+          preferred phrases, phrases to avoid, preview review text, selected AI
+          model tier, app settings, support requests, customization requests,
+          feedback, and reply email addresses for support follow-up.
+        </p>
 
-      <h2>Providers</h2>
-      <p>
-        Reply Pilot uses Shopify for platform services, PostgreSQL for app data storage,
-        Docker hosting infrastructure, and SMTP email providers configured by
-        the app operator for support messages. If Gmail SMTP is used, the SMTP
-        password must be a Gmail App Password.
-      </p>
+        <h3>Credits and billing records</h3>
+        <p>
+          Reply Pilot stores credit balances, credit ledger entries, package
+          selections, purchase status, Shopify billing purchase identifiers,
+          billing names, confirmation URLs, timestamps, and billing error
+          metadata. Payment card details are handled by Shopify and are not
+          stored by Reply Pilot.
+        </p>
 
-      <h2>Security</h2>
-      <p>
-        Reply Pilot validates Shopify authentication and webhooks, uses HTTPS in
-        production, stores secrets outside version control, and limits database
-        access per app with a dedicated database user.
-      </p>
+        <h2>How Data Is Used</h2>
+        <ul>
+          <li>Authenticate merchants and keep the embedded Shopify app working securely.</li>
+          <li>Connect to the merchant's selected review provider and import review data.</li>
+          <li>Generate, edit, preview, queue, approve, send, skip, and audit review replies.</li>
+          <li>Apply merchant brand voice and product context to AI-generated replies.</li>
+          <li>Track credit balances, credit spending, and Shopify billing status.</li>
+          <li>Provide support, customization help, troubleshooting, and privacy request handling.</li>
+          <li>Protect the service from errors, unauthorized access, and abuse.</li>
+          <li>Comply with Shopify App Store and privacy webhook requirements.</li>
+        </ul>
 
-      <h2>Your Rights</h2>
-      <p>
-        Merchants and shoppers may request access, correction, export, or
-        deletion of personal data. Shopper requests should include the shop name
-        and enough information for the merchant and app operator to locate the
-        relevant records.
-      </p>
+        <h2>AI Providers</h2>
+        <p>
+          When a merchant uses AI features, Reply Pilot may send the minimum
+          necessary review text, product context, merchant brand voice settings,
+          and draft instructions to configured AI providers such as OpenAI or
+          Google Gemini. AI output is returned to Reply Pilot as a draft for
+          merchant review. Merchants should avoid entering unnecessary sensitive
+          information in brand voice fields, support messages, preview text, or
+          review reply instructions.
+        </p>
 
-      <h2>Privacy Webhooks</h2>
-      <p>
-        Reply Pilot implements Shopify mandatory privacy webhooks for
-        customers/data_request, customers/redact, and shop/redact. The shop
-        redact webhook deletes persisted data for the affected shop.
-      </p>
+        <h2>Sharing and Service Providers</h2>
+        <p>
+          Reply Pilot shares data only as needed to operate the app. Service
+          providers may include Shopify, the merchant's connected review provider
+          such as Judge.me, configured AI providers, database and hosting
+          infrastructure, SMTP/email providers used for support and privacy
+          notices, and Shopify billing services. Reply Pilot does not sell
+          shopper or merchant personal data.
+        </p>
 
-      <h2>Contact</h2>
-      <p>
-        For privacy or support requests, contact the app operator at the email
-        configured as CONTACT_EMAIL in production.
-      </p>
+        <h2>Retention and Deletion</h2>
+        <p>
+          Data is retained while the app is installed and while needed to provide
+          the app, support the merchant, maintain security, keep billing records,
+          or comply with legal obligations. Sent and skipped review history is
+          retained according to the merchant's in-app retention settings.
+        </p>
+        <p>
+          Disconnecting a review provider removes the saved provider connection
+          and encrypted API token, but it does not automatically delete all
+          review history, reply drafts, app settings, credit records, support
+          requests, or Shopify session records. Merchants can request deletion of
+          all stored app data from the Help page inside the app.
+        </p>
+        <p>
+          When Shopify sends a shop redaction request after uninstall, Reply
+          Pilot deletes persisted app data for the affected shop, including
+          review records, AI drafts, brand voice settings, review provider
+          connection records, app settings, credit records, support/contact
+          requests, and Shopify sessions, unless retention is legally required.
+        </p>
+
+        <h2>Security</h2>
+        <p>
+          Reply Pilot uses Shopify authentication, Shopify webhook verification,
+          HTTPS in production, database access controls, environment-based
+          secrets, and per-app database credentials. Review provider private API
+          tokens are encrypted at rest using AES-256-GCM with a server-side key.
+          No system can guarantee absolute security, but Reply Pilot is designed
+          to limit access to the data needed for app operation.
+        </p>
+
+        <h2>Shopify Privacy Webhooks</h2>
+        <p>
+          Shopify requires public apps to implement mandatory privacy webhooks.
+          Reply Pilot implements customers/data_request, customers/redact, and
+          shop/redact endpoints and verifies Shopify webhook authenticity before
+          processing them.
+        </p>
+        <ul>
+          <li>customers/data_request notifies the app operator so the relevant customer data request can be reviewed and answered.</li>
+          <li>customers/redact removes matching customer-related records when Shopify provides customer identifiers such as email, phone, or customer ID.</li>
+          <li>shop/redact deletes persisted app data for the affected shop after uninstall or a Shopify shop deletion request.</li>
+        </ul>
+
+        <h2>Merchant and Shopper Rights</h2>
+        <p>
+          Merchants can request access, correction, export, or deletion of data
+          associated with their shop. Inside the app, the Help page includes data
+          summary and full app-data deletion controls.
+        </p>
+        <p>
+          Shoppers should usually contact the merchant first because the merchant
+          controls the storefront customer relationship. Shopper requests sent to
+          Reply Pilot should include the shop domain, review provider context,
+          and enough identifying information to locate the relevant records.
+        </p>
+
+        <h2>International Processing</h2>
+        <p>
+          Reply Pilot and its service providers may process data in the United
+          States or other countries where the app operator, hosting providers,
+          Shopify, connected review providers, AI providers, or email providers
+          operate. Those locations may have data protection rules different from
+          the merchant's or shopper's location.
+        </p>
+
+        <h2>Changes to This Policy</h2>
+        <p>
+          This policy may be updated as Reply Pilot changes features, providers,
+          data handling, or legal requirements. The "Last updated" date above
+          reflects the latest version of this document.
+        </p>
+
+        <h2>Contact</h2>
+        <div class="contact">
+          <p>
+            For privacy, support, access, or deletion requests, contact the
+            Reply Pilot operator using the support email listed in the Shopify
+            App Store listing and shown on the in-app Help page.
+          </p>
+          <!-- Replace this public contact text with a direct production email before Shopify App Review if the app listing does not expose one clearly. -->
+        </div>
+      </article>
     </main>
   </body>
 </html>
