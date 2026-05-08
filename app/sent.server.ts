@@ -1,5 +1,5 @@
 import db from "./db.server";
-import { syncJudgeMeReviews } from "./reviews.server";
+import { syncReviewProviders } from "./reviews.server";
 import {
   cleanupExpiredReviewHistory,
   isSameTimeZoneDay,
@@ -8,7 +8,7 @@ import {
   timeZoneDayKey,
 } from "./settings.server";
 
-type AdminGraphql = Parameters<typeof syncJudgeMeReviews>[1];
+type AdminGraphql = Parameters<typeof syncReviewProviders>[1];
 type SentRecord = Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number];
 
 function readStringListJson(value?: string | null) {
@@ -164,7 +164,7 @@ export async function loadSentPageData(shop: string) {
 }
 
 export async function refreshSentPageData(shop: string, admin?: AdminGraphql) {
-  const syncResult = await syncJudgeMeReviews(shop, admin);
+  const syncResult = await syncReviewProviders(shop, admin);
   return {
     syncResult,
     ...(await loadSentPageData(shop)),

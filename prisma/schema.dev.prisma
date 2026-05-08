@@ -49,6 +49,32 @@ model JudgeMeConnection {
   @@index([shop, status])
 }
 
+model ReviewProviderConnection {
+  id                       String    @id @default(cuid())
+  shop                     String
+  provider                 String
+  providerAccountId        String?
+  providerShopDomain       String?
+  authMethod               String
+  encryptedCredentialsJson String
+  credentialMaskJson       String
+  scope                    String?
+  status                   String    @default("connected")
+  displayName              String?
+  reviewCount              Int?
+  lastVerifiedAt           DateTime?
+  lastError                String?
+  accountJson              String?
+  settingsJson             String?
+  sampleReviewsJson        String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@unique([shop, provider])
+  @@index([shop, status])
+  @@index([shop, provider, status])
+}
+
 model ReviewDraft {
   id               String    @id @default(cuid())
   shop             String

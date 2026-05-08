@@ -8,6 +8,7 @@
 | Sensitive review routing | `tests/unit/settings.server.test.ts` | Low-star and sensitive review queue cases |
 | Credits math | `tests/unit/credits.server.test.ts` | Billing purchase flow |
 | Judge.me secret handling | `tests/unit/judgeme.server.test.ts` | Connect real test token |
+| Yotpo provider API | `tests/unit/yotpo.server.test.ts` | Connect real Yotpo account and send a test comment |
 | AI error handling | `tests/unit/ai.server.test.ts` | Provider outage/fallback with real keys |
 | Product GraphQL parsing | `tests/unit/shopify-products.server.test.ts` | Product picker/context in Admin |
 | Login errors | `tests/unit/login-error.test.ts` | Open outside Shopify |

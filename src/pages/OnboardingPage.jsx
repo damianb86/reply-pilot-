@@ -78,7 +78,7 @@ function WizardHeader({step}) {
   const copy = {
     connect: {
       title: 'Connect your review source',
-      description: 'Start by connecting Judge.me so Reply Pilot can read reviews and sync reply status before drafting anything.',
+      description: 'Start by connecting a review provider so Reply Pilot can read reviews and sync reply status before drafting anything.',
     },
     builder: {
       title: 'Create your first Personality',
@@ -148,10 +148,14 @@ export default function OnboardingPage() {
   const [useProductDescription, setUseProductDescription] = useState(Boolean(loaderData.settings?.useProductDescription));
   const [brandVoiceConfig, setBrandVoiceConfig] = useState(loaderData.brandVoice?.settings ?? {});
 
-  const connection = connectFetcher.data && 'connection' in connectFetcher.data
-    ? connectFetcher.data.connection
-    : loaderData.connection;
-  const connected = connection?.status === 'connected';
+  const fetcherConnections = connectFetcher.data && 'connections' in connectFetcher.data
+    ? connectFetcher.data.connections
+    : undefined;
+  const loaderConnections = Array.isArray(loaderData.connections)
+    ? loaderData.connections
+    : loaderData.connection ? [loaderData.connection] : [];
+  const connections = Array.isArray(fetcherConnections) ? fetcherConnections : loaderConnections;
+  const connected = connections.some((item) => item.status === 'connected');
   const currentStep = wizardSteps[currentStepIndex];
   const brandSection = currentStep.brandSection;
   const connectResult = connectFetcher.data;
@@ -207,7 +211,7 @@ export default function OnboardingPage() {
       {currentStep.id === 'connect' ? (
         <div className="rp-onboarding-connect-panel">
           <ConnectPanel
-            connection={connection}
+            connections={connections}
             fetcher={connectFetcher}
             loaderData={loaderData}
             actionPath={connectActionPath}

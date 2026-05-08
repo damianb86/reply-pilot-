@@ -16,7 +16,7 @@ import {
   serializeCreditError,
   spendCredits,
 } from "../credits.server";
-import { serializeJudgeMeError } from "../judgeme.server";
+import { serializeReviewProviderError } from "../review-providers.server";
 import { loadAppSettings } from "../settings.server";
 import { authenticate } from "../shopify.server";
 import { loadShopifyProductById } from "../shopify-products.server";
@@ -335,7 +335,7 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (error) {
     const serialized =
       error instanceof Error && error.name === "JudgeMeApiError"
-        ? serializeJudgeMeError(error)
+        ? serializeReviewProviderError(error)
         : error instanceof CreditError
           ? serializeCreditError(error)
         : serializeAiError(error);

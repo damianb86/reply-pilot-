@@ -22,6 +22,7 @@ Fixtures live in `tests/fixtures/reply-pilot.ts`.
 ## Future fixture gaps
 - Judge.me account snapshot success/error.
 - Judge.me review list with existing replies.
+- Yotpo token, review list, and review comment responses.
 - Shopify Billing accepted/declined/pending responses.
 - AI provider valid, empty, malformed, and rate-limited responses.
 - Compliance webhook HMAC examples.

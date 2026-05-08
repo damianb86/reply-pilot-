@@ -112,7 +112,7 @@ export default function App() {
                   <InlineStack gap="200" blockAlign="center">
                     <Badge tone="attention">Setup</Badge>
                     <Text as="p" variant="bodyMd" fontWeight="semibold">
-                      Connect Judge.me
+                      Connect reviews
                     </Text>
                   </InlineStack>
                   <Text as="p" variant="bodySm" tone="subdued">

@@ -24,7 +24,8 @@ npm run qa:full
 
 ## External credentials
 - Shopify CLI/dev store for embedded app testing.
-- Judge.me private API token for provider testing.
+- Judge.me private API token for Judge.me provider testing.
+- Yotpo Store ID/App Key, API secret, and App Developer API access token for Yotpo provider testing.
 - OpenAI and/or Gemini API keys for AI generation.
 - SMTP credentials for contact/privacy email testing.
 

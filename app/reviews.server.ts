@@ -8,6 +8,17 @@ import {
 } from "./ai.server";
 import { callJudgeMeApi, decryptSecret, JudgeMeApiError } from "./judgeme.server";
 import {
+  fetchYotpoReviews,
+  getConnectedYotpoCredentials,
+  yotpoAlreadyCommentedMessage,
+  YotpoApiError,
+  sendYotpoReviewComment,
+} from "./yotpo.server";
+import {
+  getActiveReviewProviderViews,
+  reviewProviderMetadata,
+} from "./review-providers.server";
+import {
   cleanupExpiredReviewHistory,
   isSameTimeZoneDay,
   loadAppSettings,
@@ -673,6 +684,57 @@ function reviewFields(rawReview: unknown) {
   };
 }
 
+function yotpoReviewFields(rawReview: unknown) {
+  const review = readObject(rawReview);
+  const reviewer = readObject(review.reviewer);
+  const user = readObject(review.user);
+  const customer = firstScalarString(
+    user.display_name,
+    user.name,
+    user.email,
+    reviewer.name,
+    reviewer.email,
+    review.display_name,
+    review.reviewer_name,
+    review.name,
+    review.email,
+  ) || "Customer";
+  const productLookup = productLookupFromReview(rawReview);
+  const body = firstScalarString(
+    review.content,
+    review.review_content,
+    review.body,
+    review.text,
+    review.message,
+    review.title,
+    review.review_title,
+  ) || "No review body provided.";
+  const rating = Math.round(readNumber(
+    review.score ?? review.review_score ?? review.rating,
+    0,
+  ));
+  const createdAtValue = firstScalarString(
+    review.created_at,
+    review.review_created_at,
+    review.date,
+    review.created,
+    review.updated_at,
+  );
+  const createdAt = createdAtValue ? new Date(createdAtValue) : new Date();
+
+  return {
+    id: firstScalarString(review.id, review.review_id),
+    customer,
+    initials: initialsFromName(customer),
+    productTitle: productLookup.title || firstScalarString(review.product_title) || "Store review",
+    productExternalId: productLookup.externalId,
+    productHandle: productLookup.handle,
+    reviewBody: body,
+    rating,
+    sourceCreatedAt: Number.isNaN(createdAt.getTime()) ? new Date() : createdAt,
+  };
+}
+
 type JudgeMeSourceReply = {
   present: boolean;
   content: string;
@@ -714,7 +776,7 @@ function readReplyDate(value: unknown): string | null {
   return date || null;
 }
 
-function readReplyAuthor(value: unknown): string {
+function readReplyAuthor(value: unknown, fallback = "Review provider"): string {
   const object = readObject(value);
   const author = readObject(object.author);
   return (
@@ -722,11 +784,15 @@ function readReplyAuthor(value: unknown): string {
     readString(object.name) ||
     readString(author.name) ||
     readString(author.email) ||
-    "Judge.me"
+    fallback
   );
 }
 
-function sourceReplyFromCandidate(value: unknown, visibility: string): JudgeMeSourceReply | null {
+function sourceReplyFromCandidate(
+  value: unknown,
+  visibility: string,
+  fallbackAuthor = "Review provider",
+): JudgeMeSourceReply | null {
   if (value === undefined || value === null || value === false) return null;
 
   const content = readReplyContent(value);
@@ -737,7 +803,7 @@ function sourceReplyFromCandidate(value: unknown, visibility: string): JudgeMeSo
     present: true,
     content,
     createdAt: readReplyDate(value),
-    author: readReplyAuthor(value),
+    author: readReplyAuthor(value, fallbackAuthor),
     visibility,
     contentAvailable: Boolean(content),
   };
@@ -847,7 +913,7 @@ function extractWidgetReplies(response: unknown) {
   return replies;
 }
 
-function readCachedReply(rawReview: Record<string, unknown>): JudgeMeSourceReply | null {
+function readCachedReply(rawReview: Record<string, unknown>, fallbackAuthor = "Review provider"): JudgeMeSourceReply | null {
   const cache = readObject(rawReview.__replyPilot);
   const sourceReply = readObject(cache.sourceReply);
   const content = readReplyContent(sourceReply);
@@ -857,14 +923,14 @@ function readCachedReply(rawReview: Record<string, unknown>): JudgeMeSourceReply
       present: true,
       content,
       createdAt: readReplyDate(sourceReply),
-      author: readReplyAuthor(sourceReply),
+      author: readReplyAuthor(sourceReply, fallbackAuthor),
       visibility: readString(sourceReply.visibility) || "public",
       contentAvailable: Boolean(content),
       message: readString(sourceReply.message) || undefined,
     };
   }
 
-  const reply = sourceReplyFromCandidate(cache.sourceReply, "public");
+  const reply = sourceReplyFromCandidate(cache.sourceReply, "public", fallbackAuthor);
   return reply?.present ? reply : null;
 }
 
@@ -880,21 +946,21 @@ function mergeCachedReply(rawReview: unknown, reply: JudgeMeSourceReply) {
   };
 }
 
-function markRawReviewAsAlreadyReplied(rawReview: unknown, message: string) {
+function markRawReviewAsAlreadyReplied(rawReview: unknown, message: string, providerName = "Review provider") {
   return mergeCachedReply(rawReview, {
     present: true,
     content: "",
     createdAt: null,
-    author: "Judge.me",
+    author: providerName,
     visibility: "public",
     contentAvailable: false,
     message,
   });
 }
 
-function extractJudgeMeSourceReply(rawReview: unknown): JudgeMeSourceReply | null {
+function extractSourceReply(rawReview: unknown, providerName = "Review provider"): JudgeMeSourceReply | null {
   const review = readObject(rawReview);
-  const cachedReply = readCachedReply(review);
+  const cachedReply = readCachedReply(review, providerName);
   if (cachedReply) return cachedReply;
 
   const directCandidates: Array<[unknown, string]> = [
@@ -916,12 +982,12 @@ function extractJudgeMeSourceReply(rawReview: unknown): JudgeMeSourceReply | nul
 
   const foundReplies = [
     ...directCandidates
-      .map(([value, visibility]) => sourceReplyFromCandidate(value, visibility))
+      .map(([value, visibility]) => sourceReplyFromCandidate(value, visibility, providerName))
       .filter((reply): reply is JudgeMeSourceReply => Boolean(reply)),
     ...arrayCandidates.flatMap(([value, visibility]) => (
       Array.isArray(value)
         ? value
-            .map((item) => sourceReplyFromCandidate(item, visibility))
+            .map((item) => sourceReplyFromCandidate(item, visibility, providerName))
             .filter((reply): reply is JudgeMeSourceReply => Boolean(reply))
         : []
     )),
@@ -940,13 +1006,24 @@ function extractJudgeMeSourceReply(rawReview: unknown): JudgeMeSourceReply | nul
       present: true,
       content: "",
       createdAt: readReplyDate(review),
-      author: "Judge.me",
+      author: providerName,
       visibility: "public",
       contentAvailable: false,
     };
   }
 
   return null;
+}
+
+function extractJudgeMeSourceReply(rawReview: unknown): JudgeMeSourceReply | null {
+  return extractSourceReply(rawReview, "Judge.me");
+}
+
+function recordSourceReply(record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number]) {
+  return extractSourceReply(
+    safeJsonParse(record.sourceReviewJson),
+    reviewProviderMetadata(record.source).name,
+  );
 }
 
 async function getConnectedJudgeMeCredentials(shop: string) {
@@ -1111,13 +1188,165 @@ export async function syncJudgeMeReviews(shop: string, admin?: AdminGraphql) {
   return { connected: true, imported };
 }
 
+export async function syncYotpoReviews(shop: string, admin?: AdminGraphql) {
+  const credentials = await getConnectedYotpoCredentials(shop);
+  if (!credentials) return { connected: false, imported: 0, reviewCount: 0 };
+  const products = await loadShopifyProducts(admin).catch(() => [] as ShopifyProductSummary[]);
+
+  const response = await fetchYotpoReviews(credentials);
+  const importedReviews = response.reviews
+    .map((rawReview) => ({ rawReview, fields: yotpoReviewFields(rawReview) }))
+    .filter((review) => Boolean(review.fields.id));
+  let imported = 0;
+
+  for (const importedReview of importedReviews) {
+    const { fields } = importedReview;
+    if (!fields.id) continue;
+
+    const rawReview = importedReview.rawReview;
+    const externalReply = extractSourceReply(rawReview, "Yotpo");
+    const product = findProductByTitle(products, fields.productTitle);
+    const productType = product?.productType || null;
+    const productTagsJson = compactTags(product?.tags);
+    const externalReplyData = externalReply?.present
+      ? {
+          draft: "",
+          confidence: 0,
+          aiModelId: null,
+          aiModelName: null,
+          aiProviderName: null,
+          aiProviderModel: null,
+          draftGeneratedAt: null,
+          draftEditedAt: null,
+          draftRevisionCount: 0,
+          humanRequired: false,
+          lastError: null,
+        }
+      : {};
+
+    const existing = await db.reviewDraft.findUnique({
+      where: {
+        shop_source_sourceReviewId: {
+          shop,
+          source: "yotpo",
+          sourceReviewId: fields.id,
+        },
+      },
+    });
+
+    if (existing) {
+      await db.reviewDraft.update({
+        where: { id: existing.id },
+        data: {
+          customerName: fields.customer,
+          customerInitials: fields.initials,
+          productTitle: fields.productTitle,
+          productType,
+          productTagsJson,
+          reviewBody: fields.reviewBody,
+          rating: fields.rating,
+          sourceCreatedAt: fields.sourceCreatedAt,
+          sourceReviewJson: compactJson(rawReview),
+          lastSyncedAt: new Date(),
+          ...externalReplyData,
+        },
+      });
+    } else {
+      await db.reviewDraft.create({
+        data: {
+          shop,
+          source: "yotpo",
+          sourceReviewId: fields.id,
+          customerName: fields.customer,
+          customerInitials: fields.initials,
+          productTitle: fields.productTitle,
+          productType,
+          productTagsJson,
+          reviewBody: fields.reviewBody,
+          rating: fields.rating,
+          sourceCreatedAt: fields.sourceCreatedAt,
+          sourceReviewJson: compactJson(rawReview),
+          draft: "",
+          confidence: 0,
+          humanRequired: false,
+          status: "pending",
+          lastSyncedAt: new Date(),
+        },
+      });
+      imported += 1;
+    }
+  }
+
+  await db.reviewProviderConnection.updateMany({
+    where: { shop, provider: "yotpo" },
+    data: {
+      reviewCount: response.reviewCount,
+      lastVerifiedAt: new Date(),
+      lastError: null,
+    },
+  });
+
+  return { connected: true, imported, reviewCount: response.reviewCount };
+}
+
+export async function syncReviewProviders(shop: string, admin?: AdminGraphql) {
+  const activeProviders = await getActiveReviewProviderViews(shop);
+  if (!activeProviders.length) return { connected: false, imported: 0, providers: [], errors: [] };
+
+  const settled = await Promise.allSettled(activeProviders.map(async (provider) => {
+    const result = provider.provider === "yotpo"
+      ? await syncYotpoReviews(shop, admin)
+      : await syncJudgeMeReviews(shop, admin);
+
+    return {
+      provider: provider.provider,
+      providerName: provider.providerName,
+      imported: result.imported,
+      connected: result.connected,
+    };
+  }));
+
+  const providers = settled
+    .filter((result): result is PromiseFulfilledResult<{
+      provider: string;
+      providerName: string;
+      imported: number;
+      connected: boolean;
+    }> => result.status === "fulfilled")
+    .map((result) => result.value);
+  const errors = settled
+    .map((result, index) => ({ result, provider: activeProviders[index] }))
+    .filter((item): item is { result: PromiseRejectedResult; provider: typeof activeProviders[number] } => (
+      item.result.status === "rejected" && Boolean(item.provider)
+    ))
+    .map(({ result, provider }) => {
+      return {
+        provider: provider.provider,
+        providerName: provider.providerName,
+        message: result.reason instanceof Error ? result.reason.message : "Unknown provider sync error",
+        details: result.reason instanceof JudgeMeApiError || result.reason instanceof YotpoApiError
+          ? result.reason.details
+          : undefined,
+      };
+    });
+
+  return {
+    connected: true,
+    imported: providers.reduce((sum, provider) => sum + provider.imported, 0),
+    providers,
+    errors,
+  };
+}
+
 function mapDraft(record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number]) {
   const sourceReview = safeJsonParse(record.sourceReviewJson);
-  const judgeMeReply = extractJudgeMeSourceReply(sourceReview);
+  const provider = reviewProviderMetadata(record.source);
+  const sourceReply = extractSourceReply(sourceReview, provider.name);
 
   return {
     id: record.id,
     source: record.source,
+    sourceProvider: provider,
     sourceReviewId: record.sourceReviewId,
     initials: record.customerInitials || initialsFromName(record.customerName || "Customer"),
     customer: record.customerName || "Customer",
@@ -1141,8 +1370,10 @@ function mapDraft(record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[nu
           model: record.aiProviderModel || "",
         }
       : null,
-    judgeMeReply,
-    hasJudgeMeReply: Boolean(judgeMeReply?.present),
+    sourceReply,
+    hasSourceReply: Boolean(sourceReply?.present),
+    judgeMeReply: sourceReply,
+    hasJudgeMeReply: Boolean(sourceReply?.present),
     lastError: record.lastError || "",
     status: record.status,
   };
@@ -1188,7 +1419,7 @@ export async function getQueueData(shop: string, settings?: AppSettings) {
   const reviews = reviewRecords.map(mapDraft);
   const pendingReviews = reviews.filter((review) => review.status === "pending");
   const generatedPendingReviews = pendingReviews.filter((review) => review.draftGenerated);
-  const judgeMeRepliedReviews = pendingReviews.filter((review) => review.hasJudgeMeReply);
+  const sourceRepliedReviews = pendingReviews.filter((review) => review.hasSourceReply);
   const products = Array.from(new Set(reviews.map((review) => review.product))).sort();
 
   return {
@@ -1202,8 +1433,9 @@ export async function getQueueData(shop: string, settings?: AppSettings) {
       ).length,
       sent: reviewRecords.filter((record) => record.status === "sent").length,
       skipped: reviewRecords.filter((record) => record.status === "skipped").length,
-      judgeMeReplied: judgeMeRepliedReviews.length,
-      ungenerated: pendingReviews.filter((review) => !review.draftGenerated && !review.hasJudgeMeReply).length,
+      sourceReplied: sourceRepliedReviews.length,
+      judgeMeReplied: sourceRepliedReviews.length,
+      ungenerated: pendingReviews.filter((review) => !review.draftGenerated && !review.hasSourceReply).length,
       highConfidence: generatedPendingReviews.filter((review) =>
         review.confidence >= appSettings.highConfidenceThreshold,
       ).length,
@@ -1218,22 +1450,29 @@ export async function loadReviewsPageData(
 ) {
   const appSettings = await loadAppSettings(shop);
   await cleanupExpiredReviewHistory(shop, appSettings);
-  let connection = await db.judgeMeConnection.findUnique({ where: { shop } });
-  let syncResult: Awaited<ReturnType<typeof syncJudgeMeReviews>> | null = null;
+  let activeProviders = await getActiveReviewProviderViews(shop);
+  let syncResult: Awaited<ReturnType<typeof syncReviewProviders>> | null = null;
   let syncError: unknown = null;
 
-  if (options.sync && connection?.status === "connected") {
+  if (options.sync && activeProviders.length) {
     try {
-      syncResult = await syncJudgeMeReviews(shop, options.admin);
+      syncResult = await syncReviewProviders(shop, options.admin);
+      if (syncResult.errors.length) {
+        syncError = {
+          message: "Some review providers could not sync.",
+          details: syncResult.errors,
+        };
+      }
     } catch (error) {
       syncError = error;
     }
-    connection = await db.judgeMeConnection.findUnique({ where: { shop } });
+    activeProviders = await getActiveReviewProviderViews(shop);
   }
 
   return {
-    connected: Boolean(connection && connection.status === "connected"),
-    connectionStatus: connection?.status ?? "not_connected",
+    connected: activeProviders.length > 0,
+    connectionStatus: activeProviders.length ? "connected" : "not_connected",
+    activeProviders,
     aiConfig: await loadQueueAiConfig(shop, appSettings),
     credits: await getCreditOverview(shop),
     syncResult,
@@ -1243,6 +1482,8 @@ export async function loadReviewsPageData(
             message: syncError.message,
             details: syncError instanceof JudgeMeApiError ? syncError.details : undefined,
           }
+        : syncError && typeof syncError === "object"
+          ? syncError
         : null,
     ...(await getQueueData(shop, appSettings)),
   };
@@ -1450,7 +1691,7 @@ type DraftGenerationResult = {
 export async function generateDrafts(shop: string, ids: string[], admin?: AdminGraphql) {
   const records = (await db.reviewDraft.findMany({
     where: { shop, id: { in: ids }, status: "pending", draft: "" },
-  })).filter((record) => !extractJudgeMeSourceReply(safeJsonParse(record.sourceReviewJson))?.present);
+  })).filter((record) => !recordSourceReply(record)?.present);
   const [products, brandVoice, appSettings] = await Promise.all([
     loadShopifyProducts(admin).catch(() => [] as ShopifyProductSummary[]),
     loadBrandVoiceForDrafts(shop),
@@ -1557,7 +1798,7 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
 export async function regenerateDrafts(shop: string, ids: string[], nudge?: string, admin?: AdminGraphql) {
   const records = (await db.reviewDraft.findMany({
     where: { shop, id: { in: ids }, status: "pending", draft: { not: "" } },
-  })).filter((record) => !extractJudgeMeSourceReply(safeJsonParse(record.sourceReviewJson))?.present);
+  })).filter((record) => !recordSourceReply(record)?.present);
   const [products, brandVoice, appSettings] = await Promise.all([
     loadShopifyProducts(admin).catch(() => [] as ShopifyProductSummary[]),
     loadBrandVoiceForDrafts(shop),
@@ -1837,15 +2078,16 @@ export async function restoreDrafts(shop: string, ids: string[]) {
   return result.count;
 }
 
-async function markDraftAsExternalJudgeMeReply(
+async function markDraftAsExternalSourceReply(
   record: Awaited<ReturnType<typeof db.reviewDraft.findMany>>[number],
   message: string,
 ) {
   const sourceReview = safeJsonParse(record.sourceReviewJson);
+  const provider = reviewProviderMetadata(record.source);
   await db.reviewDraft.update({
     where: { id: record.id },
     data: {
-      sourceReviewJson: compactJson(markRawReviewAsAlreadyReplied(sourceReview, message)),
+      sourceReviewJson: compactJson(markRawReviewAsAlreadyReplied(sourceReview, message, provider.name)),
       draft: "",
       confidence: 0,
       aiModelId: null,
@@ -1862,42 +2104,66 @@ async function markDraftAsExternalJudgeMeReply(
 }
 
 export async function approveAndSendDrafts(shop: string, ids: string[]) {
-  const credentials = await getConnectedJudgeMeCredentials(shop);
-  if (!credentials) {
-    throw new JudgeMeApiError("Connect Judge.me before approving replies.");
-  }
-
   const appSettings = await loadAppSettings(shop);
   const records = await db.reviewDraft.findMany({
     where: { shop, id: { in: ids }, status: "pending", draft: { not: "" } },
   });
   const errors: Array<{ id: string; reviewId: string; message: string }> = [];
   const alreadyReplied: Array<{ id: string; reviewId: string; message: string }> = [];
+  const credentialsCache = new Map<string, unknown>();
   let sent = 0;
 
   for (const record of records) {
+    const provider = reviewProviderMetadata(record.source);
     try {
-      const sourceReply = extractJudgeMeSourceReply(safeJsonParse(record.sourceReviewJson));
+      const sourceReply = recordSourceReply(record);
       if (sourceReply?.present) {
         const message = sourceReply.contentAvailable
-          ? "Judge.me already has a public reply for this review. Reply Pilot did not send or change anything."
-          : "Judge.me already has an external reply for this review, but Reply Pilot could not import the reply text.";
+          ? `${provider.name} already has a public reply for this review. Reply Pilot did not send or change anything.`
+          : `${provider.name} already has an external reply for this review, but Reply Pilot could not import the reply text.`;
         alreadyReplied.push({ id: record.id, reviewId: record.sourceReviewId, message });
-        await markDraftAsExternalJudgeMeReply(record, message);
+        await markDraftAsExternalSourceReply(record, message);
         continue;
       }
 
-      const numericReviewId = Number(record.sourceReviewId);
-      await callJudgeMeApi("/replies", {
-        method: "POST",
-        apiToken: credentials.apiToken,
-        shopDomain: credentials.shopDomain,
-        body: {
-          review_id: Number.isNaN(numericReviewId) ? record.sourceReviewId : numericReviewId,
-          send_reply_email: appSettings.sendReplyEmail,
-          reply: { content: record.draft },
-        },
-      });
+      if (record.source === "yotpo") {
+        let yotpoCredentials = credentialsCache.get("yotpo") as Awaited<ReturnType<typeof getConnectedYotpoCredentials>> | undefined;
+        if (yotpoCredentials === undefined) {
+          yotpoCredentials = await getConnectedYotpoCredentials(shop);
+          credentialsCache.set("yotpo", yotpoCredentials);
+        }
+        if (!yotpoCredentials) {
+          throw new YotpoApiError("Connect Yotpo before approving Yotpo replies.");
+        }
+
+        await sendYotpoReviewComment({
+          credentials: yotpoCredentials,
+          reviewId: record.sourceReviewId,
+          content: record.draft,
+          isPublic: true,
+        });
+      } else {
+        let judgeMeCredentials = credentialsCache.get("judgeme") as Awaited<ReturnType<typeof getConnectedJudgeMeCredentials>> | undefined;
+        if (judgeMeCredentials === undefined) {
+          judgeMeCredentials = await getConnectedJudgeMeCredentials(shop);
+          credentialsCache.set("judgeme", judgeMeCredentials);
+        }
+        if (!judgeMeCredentials) {
+          throw new JudgeMeApiError("Connect Judge.me before approving Judge.me replies.");
+        }
+
+        const numericReviewId = Number(record.sourceReviewId);
+        await callJudgeMeApi("/replies", {
+          method: "POST",
+          apiToken: judgeMeCredentials.apiToken,
+          shopDomain: judgeMeCredentials.shopDomain,
+          body: {
+            review_id: Number.isNaN(numericReviewId) ? record.sourceReviewId : numericReviewId,
+            send_reply_email: appSettings.sendReplyEmail,
+            reply: { content: record.draft },
+          },
+        });
+      }
 
       await db.reviewDraft.update({
         where: { id: record.id },
@@ -1909,12 +2175,15 @@ export async function approveAndSendDrafts(shop: string, ids: string[]) {
       });
       sent += 1;
     } catch (error) {
-      if (judgeMeAlreadyRepliedMessage(error)) {
-        const message = "Judge.me rejected this review because it already has a reply. Reply Pilot did not send or change anything.";
+      if (
+        (record.source === "yotpo" && yotpoAlreadyCommentedMessage(error)) ||
+        (record.source !== "yotpo" && judgeMeAlreadyRepliedMessage(error))
+      ) {
+        const message = `${provider.name} rejected this review because it already has a reply. Reply Pilot did not send or change anything.`;
         alreadyReplied.push({ id: record.id, reviewId: record.sourceReviewId, message });
-        await markDraftAsExternalJudgeMeReply(record, message);
+        await markDraftAsExternalSourceReply(record, message);
       } else {
-        const message = error instanceof Error ? error.message : "Unknown Judge.me send error";
+        const message = error instanceof Error ? error.message : `Unknown ${provider.name} send error`;
         errors.push({ id: record.id, reviewId: record.sourceReviewId, message });
         await db.reviewDraft.update({
           where: { id: record.id },

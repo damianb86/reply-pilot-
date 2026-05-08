@@ -23,6 +23,12 @@ In development, `npm run dev` runs Prisma against `prisma/schema.dev.prisma` and
 Leave `SHOPIFY_APP_URL` and `DEV_SHOPIFY_APP_URL` empty to use the default Cloudflare tunnel from `shopify app dev`; set `DEV_SHOPIFY_APP_URL` only when you need a fixed development URL.
 For production-like commands, set `APP_ENV=production`.
 
+## Review providers
+
+Reply Pilot can connect Judge.me and Yotpo at the same time. Yotpo requires Store ID/App Key, API secret, and an App Developer API access token so the app can both import reviews and publish public review comments.
+
+See `docs/yotpo-integration.md` for the official Yotpo endpoints used by the app.
+
 ## Deploy
 
 ```sh

@@ -1,13 +1,11 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-} from "node:crypto";
 import db from "./db.server";
+import {
+  decryptSecret as decryptReviewProviderSecret,
+  encryptSecret as encryptReviewProviderSecret,
+  maskSecret,
+} from "./secret.server";
 
 const JUDGEME_API_BASE = process.env.JUDGEME_API_BASE_URL || "https://judge.me/api/v1";
-const TOKEN_PREFIX = "v1";
 const DEFAULT_JUDGEME_TIMEOUT_MS = 10000;
 
 type JsonObject = Record<string, unknown>;
@@ -26,51 +24,16 @@ export class JudgeMeApiError extends Error {
   }
 }
 
-function base64Url(buffer: Buffer) {
-  return buffer.toString("base64url");
-}
-
-function fromBase64Url(value: string) {
-  return Buffer.from(value, "base64url");
-}
-
-function encryptionKey() {
-  const seed =
-    process.env.JUDGEME_TOKEN_ENCRYPTION_KEY ||
-    process.env.SHOPIFY_API_SECRET ||
-    process.env.SHOPIFY_API_KEY ||
-    "reply-pilot-local-development-key";
-
-  return createHash("sha256").update(seed).digest();
-}
-
 export function encryptSecret(secret: string) {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-
-  return [TOKEN_PREFIX, base64Url(iv), base64Url(tag), base64Url(encrypted)].join(":");
+  return encryptReviewProviderSecret(secret);
 }
 
 export function decryptSecret(value: string) {
-  const [prefix, ivValue, tagValue, encryptedValue] = value.split(":");
-  if (prefix !== TOKEN_PREFIX || !ivValue || !tagValue || !encryptedValue) {
-    return value;
-  }
-
-  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), fromBase64Url(ivValue));
-  decipher.setAuthTag(fromBase64Url(tagValue));
-
-  return Buffer.concat([
-    decipher.update(fromBase64Url(encryptedValue)),
-    decipher.final(),
-  ]).toString("utf8");
+  return decryptReviewProviderSecret(value);
 }
 
 export function maskJudgeMeToken(token: string) {
-  if (token.length <= 10) return "••••";
-  return `${token.slice(0, 4)}••••${token.slice(-4)}`;
+  return maskSecret(token);
 }
 
 function safeJsonParse(value?: string | null) {

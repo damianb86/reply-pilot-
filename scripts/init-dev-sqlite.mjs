@@ -84,6 +84,45 @@ await prisma.$executeRawUnsafe(`
 `);
 
 await prisma.$executeRawUnsafe(`
+  CREATE TABLE IF NOT EXISTS "ReviewProviderConnection" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "providerAccountId" TEXT,
+    "providerShopDomain" TEXT,
+    "authMethod" TEXT NOT NULL,
+    "encryptedCredentialsJson" TEXT NOT NULL,
+    "credentialMaskJson" TEXT NOT NULL,
+    "scope" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'connected',
+    "displayName" TEXT,
+    "reviewCount" INTEGER,
+    "lastVerifiedAt" DATETIME,
+    "lastError" TEXT,
+    "accountJson" TEXT,
+    "settingsJson" TEXT,
+    "sampleReviewsJson" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE UNIQUE INDEX IF NOT EXISTS "ReviewProviderConnection_shop_provider_key"
+  ON "ReviewProviderConnection"("shop", "provider")
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE INDEX IF NOT EXISTS "ReviewProviderConnection_shop_status_idx"
+  ON "ReviewProviderConnection"("shop", "status")
+`);
+
+await prisma.$executeRawUnsafe(`
+  CREATE INDEX IF NOT EXISTS "ReviewProviderConnection_shop_provider_status_idx"
+  ON "ReviewProviderConnection"("shop", "provider", "status")
+`);
+
+await prisma.$executeRawUnsafe(`
   CREATE TABLE IF NOT EXISTS "ReviewDraft" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shop" TEXT NOT NULL,

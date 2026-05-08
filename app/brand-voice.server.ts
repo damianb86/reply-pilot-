@@ -7,7 +7,7 @@ import {
   resolveAiModelId,
 } from "./ai.server";
 import { getCreditOverview } from "./credits.server";
-import { getJudgeMeConnectionView } from "./judgeme.server";
+import { getActiveReviewProviderViews } from "./review-providers.server";
 
 type ImportedReply = {
   id: string;
@@ -110,8 +110,8 @@ function mapBrandVoiceSettings(
 }
 
 export async function loadBrandVoicePageData(shop: string) {
-  const [connection, recentSentReplies, settings, aiModels, credits] = await Promise.all([
-    getJudgeMeConnectionView(shop),
+  const [connections, recentSentReplies, settings, aiModels, credits] = await Promise.all([
+    getActiveReviewProviderViews(shop),
     db.reviewDraft.findMany({
       where: { shop, status: "sent" },
       orderBy: [{ sentAt: "desc" }, { updatedAt: "desc" }],
@@ -124,7 +124,8 @@ export async function loadBrandVoicePageData(shop: string) {
   const settingsView = mapBrandVoiceSettings(settings);
 
   return {
-    connection,
+    connection: connections[0] ?? null,
+    connections,
     settings: settingsView,
     recentSentReplies: recentSentReplies.map((reply, index) => ({
       id: reply.id,
@@ -155,7 +156,7 @@ export async function loadSentReplyExamplesForBrandVoice(shop: string, limit: nu
       rating: reply.rating,
       customer: reply.customerName,
       product: reply.productTitle,
-      source: index === 0 ? "Latest sent Judge.me reply" : "Sent Judge.me reply",
+      source: index === 0 ? "Latest sent provider reply" : "Sent provider reply",
     })),
     importedCount: sentReplies.length,
     requestedCount: safeLimit,

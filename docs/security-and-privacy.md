@@ -2,9 +2,9 @@
 
 ## Secrets
 - Do not commit `.env` or production credentials.
-- `SHOPIFY_API_SECRET`, AI keys, SMTP password, and Judge.me encryption key must live in environment/secret manager.
-- Judge.me private tokens are encrypted with AES-GCM before persistence.
-- Token display must use `maskJudgeMeToken`.
+- `SHOPIFY_API_SECRET`, AI keys, SMTP password, and review provider encryption key must live in environment/secret manager.
+- Judge.me private tokens, Yotpo API secrets, and Yotpo App Developer access tokens are encrypted with AES-GCM before persistence.
+- Token display must use provider credential masks only.
 
 ## Merchant data
 - Review text, customer names, product names, AI replies, and sent reply metadata are merchant data.
@@ -27,5 +27,5 @@
 ## Production hardening
 - Use PostgreSQL with managed backups and SSL as required by hosting provider.
 - Use a unique production DB user and strong password.
-- Use a dedicated `JUDGEME_TOKEN_ENCRYPTION_KEY`; do not rely on Shopify API key fallback in production.
+- Use a dedicated `REVIEW_PROVIDER_TOKEN_ENCRYPTION_KEY`; do not rely on Shopify API key fallback in production.
 - Configure SMTP only through secrets.

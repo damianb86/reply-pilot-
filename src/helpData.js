@@ -1,19 +1,19 @@
 export const helpHeroBenefits = [
   {
-    title: 'Customize',
-    description: 'Reply Pilot for your unique workflow',
+    title: 'Configure',
+    description: 'Reply Pilot for your review workflow',
   },
   {
-    title: 'Build',
-    description: 'New Shopify apps from scratch',
+    title: 'Connect',
+    description: 'Supported review providers',
   },
   {
-    title: 'Create',
-    description: 'Custom features for themes or admin',
+    title: 'Tune',
+    description: 'Brand Voice and approval rules',
   },
   {
     title: 'Support',
-    description: 'Guidance from the Reply Pilot implementation team',
+    description: 'Guidance from the Reply Pilot team',
   },
 ];
 
@@ -21,7 +21,7 @@ export const helpQuickLinks = [
   {
     title: 'Getting started',
     description:
-      'Connect Judge.me, train brand voice, and start approving replies.',
+      'Connect review providers, train brand voice, and start approving replies.',
     actionLabel: 'View guide',
     icon: 'book',
     tone: 'green',

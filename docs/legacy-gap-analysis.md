@@ -10,7 +10,7 @@
 
 ## Remaining gaps
 - No full embedded Shopify E2E without dev store/OAuth.
-- No automated Judge.me provider contract tests beyond fixtures/MSW starter handlers.
+- Automated Yotpo provider API tests cover token/review/comment contracts, but full DB-backed multi-provider sync is still manual.
 - No automated billing approval test because Shopify-hosted confirmation is interactive.
 - No automated AI generation test against real providers.
 - Limited component tests for large Polaris pages due legacy page size and high UI complexity.
@@ -19,5 +19,5 @@
 ## Recommended next hardening
 - Extract route action parsers into smaller pure functions for more unit coverage.
 - Add integration tests with Prisma test database for credit spend/refund and review sync.
-- Add provider contract fixtures for Judge.me real API response variants.
+- Add provider contract fixtures for Judge.me and Yotpo real API response variants.
 - Add Playwright authenticated smoke suite once a stable dev-store auth harness exists.

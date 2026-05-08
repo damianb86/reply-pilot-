@@ -41,6 +41,24 @@ function Stars({rating}) {
   );
 }
 
+function reviewProvider(review) {
+  if (review?.sourceProvider) return review.sourceProvider;
+  if (review?.source === 'yotpo') {
+    return {id: 'yotpo', name: 'Yotpo', logo: '/provider-logos/yotpo.svg'};
+  }
+  return {id: 'judgeme', name: 'Judge.me', logo: '/provider-logos/judgeme.png'};
+}
+
+function ReviewProviderMark({review}) {
+  const provider = reviewProvider(review);
+
+  return (
+    <span className="rp-review-provider-cell" title={provider.name} aria-label={provider.name}>
+      <img src={provider.logo} alt="" aria-hidden="true" />
+    </span>
+  );
+}
+
 function ConfidenceMeter({value}) {
   const isWarning = value < 75;
 
@@ -79,8 +97,8 @@ function QueueEmptyState({connected, connectUrl, onRefresh, refreshing}) {
         <Text as="h2" variant="headingLg" alignment="center">No messages to show</Text>
         <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
           {connected
-            ? 'When Judge.me has reviews ready for attention, Reply Pilot will import them here so you can review existing replies and generate new drafts.'
-            : 'Connect Judge.me from Connect to import reviews and start replying from Reviews.'}
+            ? 'When a connected provider has reviews ready for attention, Reply Pilot will import them here so you can review existing replies and generate new drafts.'
+            : 'Connect a review provider from Connect to import reviews and start replying from Reviews.'}
         </Text>
       </BlockStack>
       <InlineStack gap="200" align="center">
@@ -121,7 +139,7 @@ function ResultBanner({result, syncError}) {
     return (
       <Banner tone="critical">
         <BlockStack gap="150">
-          <Text as="p" variant="bodyMd">Could not sync Judge.me reviews.</Text>
+          <Text as="p" variant="bodyMd">Could not sync all review providers.</Text>
           <pre className="rp-json-preview is-error">{JSON.stringify(syncError, null, 2)}</pre>
         </BlockStack>
       </Banner>
@@ -151,8 +169,12 @@ function hasDraft(review) {
   return Boolean(review?.draftGenerated ?? review?.draft?.trim());
 }
 
-function hasJudgeMeReply(review) {
-  return Boolean(review?.hasJudgeMeReply || review?.judgeMeReply?.present);
+function hasSourceReply(review) {
+  return Boolean(review?.hasSourceReply || review?.sourceReply?.present || review?.hasJudgeMeReply || review?.judgeMeReply?.present);
+}
+
+function sourceReply(review) {
+  return review?.sourceReply || review?.judgeMeReply || null;
 }
 
 function formatReplyDate(value) {
@@ -274,7 +296,9 @@ function ReviewsContent() {
   const [latestPageData, setLatestPageData] = useState(null);
   const pageData = latestPageData ?? loaderData;
   const reviews = useMemo(() => pageData.reviews ?? [], [pageData.reviews]);
-  const stats = pageData.stats ?? {pending: 0, sentToday: 0, sent: 0, skipped: 0, ungenerated: 0, judgeMeReplied: 0, highConfidence: 0, needsHuman: 0};
+  const stats = pageData.stats ?? {pending: 0, sentToday: 0, sent: 0, skipped: 0, ungenerated: 0, sourceReplied: 0, highConfidence: 0, needsHuman: 0};
+  const activeProviders = pageData.activeProviders ?? [];
+  const showProviderColumn = activeProviders.length > 1;
   const queueSettings = pageData.settings ?? {};
   const highConfidenceThreshold = queueSettings.highConfidenceThreshold ?? 85;
   const products = pageData.products ?? [];
@@ -326,27 +350,29 @@ function ReviewsContent() {
   const activeReview = filteredReviews.find((review) => review.id === activeReviewId) ?? filteredReviews[0] ?? null;
   const visibleIds = filteredReviews.map((review) => review.id);
   const activeHasDraft = hasDraft(activeReview);
-  const activeHasJudgeMeReply = hasJudgeMeReply(activeReview);
-  const activeCanUseAiDraft = activeReview?.status === 'pending' && !activeHasJudgeMeReply;
+  const activeHasSourceReply = hasSourceReply(activeReview);
+  const activeSourceReply = sourceReply(activeReview);
+  const activeProviderName = reviewProvider(activeReview).name;
+  const activeCanUseAiDraft = activeReview?.status === 'pending' && !activeHasSourceReply;
   const highConfidenceVisible = filteredReviews.filter((review) => (
     review.status === 'pending' && hasDraft(review) && review.confidence >= highConfidenceThreshold
   ));
   const ungeneratedVisible = filteredReviews.filter((review) => (
-    review.status === 'pending' && !hasDraft(review) && !hasJudgeMeReply(review)
+    review.status === 'pending' && !hasDraft(review) && !hasSourceReply(review)
   ));
   const selectedVisibleIds = selectedIds.filter((id) => visibleIds.includes(id));
   const selectedPendingIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'pending');
   const selectedGeneratedPendingIds = selectedPendingIds.filter((id) => {
     const review = filteredReviews.find((item) => item.id === id);
-    return hasDraft(review) && !hasJudgeMeReply(review);
+    return hasDraft(review) && !hasSourceReply(review);
   });
   const selectedUngeneratedPendingIds = selectedPendingIds.filter((id) => {
     const review = filteredReviews.find((item) => item.id === id);
-    return !hasDraft(review) && !hasJudgeMeReply(review);
+    return !hasDraft(review) && !hasSourceReply(review);
   });
-  const selectedJudgeMeReplyIds = selectedPendingIds.filter((id) => {
+  const selectedSourceReplyIds = selectedPendingIds.filter((id) => {
     const review = filteredReviews.find((item) => item.id === id);
-    return hasJudgeMeReply(review);
+    return hasSourceReply(review);
   });
   const selectedSkippedIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'skipped');
   const selectedSentIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'sent');
@@ -620,6 +646,11 @@ function ReviewsContent() {
       tone={review.id === activeReview?.id ? 'success' : undefined}
       onClick={() => setActiveReviewId(review.id)}
     >
+      {showProviderColumn ? (
+        <IndexTable.Cell>
+          <ReviewProviderMark review={review} />
+        </IndexTable.Cell>
+      ) : null}
       <IndexTable.Cell>
         <CustomerCell review={review} />
       </IndexTable.Cell>
@@ -639,14 +670,14 @@ function ReviewsContent() {
             ) : review.status === 'sent' ? (
               <Badge tone="success">Sent</Badge>
             ) : null}
-            {hasJudgeMeReply(review) ? <Badge tone="success">Judge.me replied</Badge> : null}
-            {!hasDraft(review) && !hasJudgeMeReply(review) ? (
+            {hasSourceReply(review) ? <Badge tone="success">{reviewProvider(review).name} replied</Badge> : null}
+            {!hasDraft(review) && !hasSourceReply(review) ? (
               <Badge tone="info">Draft needed</Badge>
             ) : hasDraft(review) ? (
               <span className="rp-draft-ready">✶ draft ready</span>
             ) : null}
             {review.human ? <Badge tone="critical">Human</Badge> : null}
-            {review.lastError && !hasJudgeMeReply(review) ? <Badge tone="critical">AI error</Badge> : null}
+            {review.lastError && !hasSourceReply(review) ? <Badge tone="critical">AI error</Badge> : null}
           </InlineStack>
         </div>
       </IndexTable.Cell>
@@ -655,7 +686,7 @@ function ReviewsContent() {
           <ConfidenceMeter value={review.confidence} />
         ) : (
           <Text as="span" variant="bodySm" tone="subdued">
-            {hasJudgeMeReply(review) ? 'Judge.me reply' : 'Not generated'}
+            {hasSourceReply(review) ? `${reviewProvider(review).name} reply` : 'Not generated'}
           </Text>
         )}
       </IndexTable.Cell>
@@ -718,7 +749,7 @@ function ReviewsContent() {
         <BlockStack gap="100">
           <Text as="h1" variant="heading2xl">Reviews</Text>
           <Text as="p" variant="bodyLg" tone="subdued">
-            Review approvals stay table-first for speed while existing Judge.me replies and AI drafts remain visible in the side panel.
+            Review approvals stay table-first for speed while existing provider replies and AI drafts remain visible in the side panel.
           </Text>
         </BlockStack>
         <span className="rp-refresh-action">
@@ -745,7 +776,7 @@ function ReviewsContent() {
               <Badge tone={aiConfigured ? 'info' : 'critical'}>AI: {aiDisplayName}</Badge>
               <Badge tone={creditBalance < replyCreditCost ? 'critical' : 'info'}>{formatCreditAmount(creditBalance)} credits</Badge>
               {productDescriptionMultiplier > 1 ? <Badge tone="info">Product descriptions {productDescriptionMultiplier}x</Badge> : null}
-              <Badge>{pageData.connected ? 'Judge.me connected' : 'Source missing'}</Badge>
+              <Badge>{pageData.connected ? `${activeProviders.length || 1} source${(activeProviders.length || 1) === 1 ? '' : 's'} connected` : 'Source missing'}</Badge>
               <Badge tone={pageData.connected ? 'success' : 'attention'}>{pageData.connected ? 'Ready' : 'Setup needed'}</Badge>
             </InlineStack>
           </InlineStack>
@@ -844,8 +875,8 @@ function ReviewsContent() {
               {selectedSentIds.length ? (
                 <Badge tone="success">{selectedSentIds.length} already sent</Badge>
               ) : null}
-              {selectedJudgeMeReplyIds.length ? (
-                <Badge tone="success">{selectedJudgeMeReplyIds.length} already replied in Judge.me</Badge>
+              {selectedSourceReplyIds.length ? (
+                <Badge tone="success">{selectedSourceReplyIds.length} already replied in provider</Badge>
               ) : null}
             </InlineStack>
             <InlineStack gap="200" blockAlign="center">
@@ -872,6 +903,7 @@ function ReviewsContent() {
                 selectedItemsCount={selectedCount === filteredReviews.length && selectedCount ? 'All' : selectedCount}
                 onSelectionChange={handleSelectionChange}
                 headings={[
+                  ...(showProviderColumn ? [{title: ''}] : []),
                   {title: 'Customer'},
                   {title: 'Product'},
                   {title: 'Review'},
@@ -910,8 +942,8 @@ function ReviewsContent() {
                     <InlineStack gap="200" blockAlign="center">
                       {activeReview.status === 'skipped' ? <Badge tone="attention">Skipped</Badge> : null}
                       {activeReview.status === 'sent' ? <Badge tone="success">Sent</Badge> : null}
-                      {activeHasJudgeMeReply ? <Badge tone="success">Judge.me replied</Badge> : null}
-                      <Badge>Judge.me</Badge>
+                      {activeHasSourceReply ? <Badge tone="success">{activeProviderName} replied</Badge> : null}
+                      <Badge>{activeProviderName}</Badge>
                     </InlineStack>
                   </InlineStack>
 
@@ -919,32 +951,32 @@ function ReviewsContent() {
                     <Text as="p" variant="bodyMd">"{activeReview.review}"</Text>
                   </div>
 
-                  {activeHasJudgeMeReply ? (
+                  {activeHasSourceReply ? (
                     <div className="rp-source-reply-card">
                       <BlockStack gap="250">
                         <InlineStack align="space-between" blockAlign="center" gap="300">
                           <InlineStack gap="200" blockAlign="center">
                             <Icon source={ChatIcon} tone="success" />
-                            <Text as="h3" variant="headingMd">Judge.me reply</Text>
+                            <Text as="h3" variant="headingMd">{activeProviderName} reply</Text>
                           </InlineStack>
-                          <Badge tone={activeReview.judgeMeReply?.contentAvailable ? 'success' : 'attention'}>
-                            {activeReview.judgeMeReply?.contentAvailable ? 'Imported' : 'Detected'}
+                          <Badge tone={activeSourceReply?.contentAvailable ? 'success' : 'attention'}>
+                            {activeSourceReply?.contentAvailable ? 'Imported' : 'Detected'}
                           </Badge>
                         </InlineStack>
-                        {activeReview.judgeMeReply?.contentAvailable ? (
-                          <Text as="p" variant="bodyMd">{activeReview.judgeMeReply.content}</Text>
+                        {activeSourceReply?.contentAvailable ? (
+                          <Text as="p" variant="bodyMd">{activeSourceReply.content}</Text>
                         ) : (
                           <Text as="p" variant="bodyMd" tone="subdued">
-                            {activeReview.judgeMeReply?.message || 'Judge.me already has an external reply for this review, but Reply Pilot could not import the reply text.'}
+                            {activeSourceReply?.message || `${activeProviderName} already has an external reply for this review, but Reply Pilot could not import the reply text.`}
                           </Text>
                         )}
                         <InlineStack gap="200" blockAlign="center">
                           <Text as="span" variant="bodySm" tone="subdued">
-                            {activeReview.judgeMeReply?.author || 'Judge.me'}
+                            {activeSourceReply?.author || activeProviderName}
                           </Text>
-                          {activeReview.judgeMeReply?.createdAt ? (
+                          {activeSourceReply?.createdAt ? (
                             <Text as="span" variant="bodySm" tone="subdued">
-                              {formatReplyDate(activeReview.judgeMeReply.createdAt)}
+                              {formatReplyDate(activeSourceReply.createdAt)}
                             </Text>
                           ) : null}
                         </InlineStack>
@@ -952,7 +984,7 @@ function ReviewsContent() {
                     </div>
                   ) : null}
 
-                  {activeReview.lastError && !activeHasJudgeMeReply ? (
+                  {activeReview.lastError && !activeHasSourceReply ? (
                     <Banner tone="critical">
                       <BlockStack gap="150">
                         <Text as="p" variant="bodyMd">The last AI generation attempt for this review failed.</Text>
@@ -961,10 +993,10 @@ function ReviewsContent() {
                     </Banner>
                   ) : null}
 
-                  {activeHasJudgeMeReply ? (
+                  {activeHasSourceReply ? (
                     <Banner tone="info">
                       <Text as="p" variant="bodyMd">
-                        This review is already answered in Judge.me. Reply Pilot cleared the AI draft and will not generate, edit, regenerate, or approve another public reply for it.
+                        This review is already answered in {activeProviderName}. Reply Pilot cleared the AI draft and will not generate, edit, regenerate, or approve another public reply for it.
                       </Text>
                     </Banner>
                   ) : (
@@ -1027,7 +1059,7 @@ function ReviewsContent() {
                     </>
                   )}
 
-                  {activeReview.status === 'pending' && activeHasDraft && !activeHasJudgeMeReply ? (
+                  {activeReview.status === 'pending' && activeHasDraft && !activeHasSourceReply ? (
                     <div className="rp-draft-adjuster">
                       <BlockStack gap="250">
                         <InlineStack align="space-between" blockAlign="center" gap="300">
@@ -1095,7 +1127,7 @@ function ReviewsContent() {
                         <Button icon={SendIcon} size="large" fullWidth disabled>
                           Already sent
                         </Button>
-                      ) : activeHasJudgeMeReply ? (
+                      ) : activeHasSourceReply ? (
                         <span className="rp-action-button is-reject is-full">
                           <Button icon={XIcon} variant="primary" size="large" fullWidth disabled={isSubmitting} loading={isSubmitting && actionFetcher.formData?.get('intent') === 'skip'} onClick={() => submitSingle('skip', activeReview.id)}>
                             Don't reply
@@ -1112,7 +1144,7 @@ function ReviewsContent() {
                           </Button>
                         </span>
                       )}
-                      {!activeHasJudgeMeReply ? (
+                      {!activeHasSourceReply ? (
                         <>
                           <Button icon={EditIcon} accessibilityLabel="Edit draft" disabled={activeReview.status !== 'pending'} onClick={() => setIsEditing(true)} />
                           <AiActionButton className="is-icon-only is-secondary" accessibilityLabel="Regenerate draft" disabled={!aiConfigured || isSubmitting || activeReview.status !== 'pending' || !activeHasDraft} onClick={() => submitSingleAiAction('regenerate', activeReview.id, 'Regenerating this draft')} />
@@ -1130,14 +1162,14 @@ function ReviewsContent() {
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
                         This reply has already been sent and is shown for review only.
                       </Text>
-                    ) : activeHasJudgeMeReply ? (
+                    ) : activeHasSourceReply ? (
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
-                        Mark it as Don't reply to clear it from Reviews without changing the existing Judge.me reply.
+                        Mark it as Don't reply to clear it from Reviews without changing the existing {activeProviderName} reply.
                       </Text>
                     ) : !activeHasDraft ? (
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
-                        {activeHasJudgeMeReply
-                          ? 'This review is excluded from bulk generation because it already has a Judge.me reply.'
+                        {activeHasSourceReply
+                          ? `This review is excluded from bulk generation because it already has a ${activeProviderName} reply.`
                           : 'Generate a message before approving this reply.'}
                       </Text>
                     ) : (

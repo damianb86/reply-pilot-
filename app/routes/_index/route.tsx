@@ -31,8 +31,8 @@ export default function Index() {
           <p className={styles.eyebrow}>Shopify embedded app</p>
           <h1>Reply Pilot</h1>
           <p className={styles.lede}>
-            AI drafts for Judge.me reviews, trained on the merchant's brand
-            voice and approved from a Shopify-native queue.
+            AI drafts for connected review providers, trained on the merchant's
+            brand voice and approved from a Shopify-native queue.
           </p>
           <p className={styles.lede}>
             Open Reply Pilot from Shopify Admin or from the Shopify App Store to

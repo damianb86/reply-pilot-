@@ -12,7 +12,7 @@ import {
 } from "../reviews.server";
 import { serializeAiError } from "../ai.server";
 import { CreditError, formatCreditAmount, serializeCreditError } from "../credits.server";
-import { serializeJudgeMeError } from "../judgeme.server";
+import { serializeReviewProviderError } from "../review-providers.server";
 import { authenticate } from "../shopify.server";
 
 function parseIds(formData: FormData) {
@@ -190,8 +190,8 @@ export async function action({ request }: ActionFunctionArgs) {
         : "";
       const alreadyRepliedMessage = blockedCount
         ? blockedCount === 1
-          ? "Judge.me rejected this review because it already has a reply."
-          : `Judge.me rejected ${blockedCount} reviews because they already have replies.`
+          ? "The review provider rejected this review because it already has a reply."
+          : `The review provider rejected ${blockedCount} reviews because they already have replies.`
         : "";
       const failureMessage = result.errors.length
         ? `${result.errors.length} failed.`
@@ -215,7 +215,7 @@ export async function action({ request }: ActionFunctionArgs) {
         ? serializeAiError(error)
         : error instanceof CreditError
           ? serializeCreditError(error)
-        : serializeJudgeMeError(error);
+        : serializeReviewProviderError(error);
     return {
       ok: false,
       intent,

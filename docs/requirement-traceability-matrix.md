@@ -4,9 +4,9 @@
 | --- | --- | --- |
 | FR-001 | `tests/e2e/public-landing.e2e.ts` | Embedded Admin iframe manual |
 | FR-002 | Typecheck/build | OAuth dev store manual |
-| FR-003 | - | Judge.me connect manual; helpers covered by unit |
-| FR-004 | `tests/unit/judgeme.server.test.ts` | Confirm masked token in UI |
-| FR-005 | - | Requires Judge.me token or deeper DB/integration mocks |
+| FR-003 | - | Provider connect manual; helpers covered by unit |
+| FR-004 | `tests/unit/judgeme.server.test.ts`, `tests/unit/yotpo.server.test.ts` | Confirm masked tokens in UI |
+| FR-005 | `tests/unit/yotpo.server.test.ts` | Requires provider credentials or deeper DB/integration mocks |
 | FR-006 | `tests/unit/credits.server.test.ts` | Queue generation manual |
 | FR-007 | `tests/unit/credits.server.test.ts` | Failure refund manual/e2e future |
 | FR-008 | - | Queue UI manual; future integration tests |

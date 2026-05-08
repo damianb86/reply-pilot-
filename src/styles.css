@@ -729,6 +729,24 @@ select {
   vertical-align: top;
 }
 
+.rp-review-provider-cell {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--rp-platform-chip-border);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--rp-card-surface);
+}
+
+.rp-review-provider-cell img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
+}
+
 .rp-queue-empty {
   min-height: 560px;
   padding: 48px 24px;
@@ -2318,13 +2336,13 @@ select {
 .rp-connect-provider-tile {
   min-height: 64px;
   position: relative;
-  padding: 13px 14px;
+  padding: 14px 42px 14px 16px;
   border: 1px solid var(--rp-platform-chip-border);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 22px;
   background: var(--rp-card-surface);
   color: inherit;
   cursor: pointer;
@@ -2400,8 +2418,8 @@ select {
 
 .rp-connect-provider-check {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 10px;
+  right: 12px;
   width: 18px;
   height: 18px;
   border-radius: 999px;
@@ -2410,6 +2428,13 @@ select {
   justify-content: center;
   background: var(--rp-approved-text);
   color: var(--rp-card-surface);
+}
+
+.rp-connect-source-card {
+  padding: 14px;
+  border: 1px solid var(--rp-border);
+  border-radius: 8px;
+  background: var(--rp-platform-chip-surface);
 }
 
 .rp-connect-review-bubble {

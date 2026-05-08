@@ -4,7 +4,7 @@ test("public landing explains how to open Reply Pilot securely", async ({ page }
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Reply Pilot" })).toBeVisible();
-  await expect(page.getByText("AI drafts for Judge.me reviews")).toBeVisible();
+  await expect(page.getByText("AI drafts for connected review providers")).toBeVisible();
   await expect(page.getByText("Open Reply Pilot from Shopify Admin")).toBeVisible();
 });
 

@@ -35,9 +35,9 @@ const requestCards = [
     id: 'customization',
     icon: WrenchIcon,
     tone: 'coral',
-    title: 'Customize Reply Pilot',
-    description: 'Adapt review approval, AI generation, routing, and internal workflows to the way your team actually works.',
-    action: 'Describe your workflow',
+    title: 'Configure Reply Pilot',
+    description: 'Adapt review approval, AI generation, routing, and Reply Pilot workflows to the way your team handles reviews.',
+    action: 'Describe review workflow',
   },
   {
     id: 'suggestion',
@@ -52,7 +52,7 @@ const requestCards = [
     icon: ChatIcon,
     tone: 'blue',
     title: 'Contact support',
-    description: 'Ask about Judge.me setup, Brand Voice, credits, AI model behavior, Queue, Sent, or data handling.',
+    description: 'Ask about review provider setup, Brand Voice, credits, AI model behavior, Queue, Sent, or data handling.',
     action: 'Contact us',
   },
 ];
@@ -61,7 +61,7 @@ const customizationServices = [
   {
     icon: SettingsIcon,
     title: 'Queue and approval workflows',
-    text: 'Custom review routing, team handoffs, confidence rules, skipped/sent views, and batch approval flows.',
+    text: 'Review routing, team handoffs, confidence rules, skipped/sent views, and batch approval flows inside Reply Pilot.',
   },
   {
     icon: MagicIcon,
@@ -70,13 +70,13 @@ const customizationServices = [
   },
   {
     icon: CodeIcon,
-    title: 'Shopify integrations',
-    text: 'Connect reviews, products, customer service tools, analytics, internal dashboards, or private admin flows.',
+    title: 'Review provider setup',
+    text: 'Help connecting supported review providers, Shopify product context, and Reply Pilot approval workflows.',
   },
 ];
 
 const dataItems = [
-  'Judge.me connection details and encrypted API token',
+  'Review provider connection details and encrypted credentials',
   'Imported review records, product context, generated drafts, and sent/skipped status',
   'Brand Voice settings, model tier, preview review, and AI configuration choices',
   'Credit account, credit ledger entries, and credit purchase records',
@@ -85,7 +85,7 @@ const dataItems = [
 ];
 
 const heroChecklist = [
-  'Connect Judge.me and import recent reviews',
+  'Connect review providers and import recent reviews',
   'Tune Brand Voice with examples, presets, and live preview',
   'Generate replies with the selected model tier and review them before sending',
 ];
@@ -95,9 +95,9 @@ const modalContent = {
     title: 'Request customization',
     type: 'customization',
     subjectPlaceholder: 'Custom review workflow',
-    messageLabel: 'What should we build or adapt?',
-    messagePlaceholder: 'Example: Add a review escalation flow for low-confidence replies and sync approved responses to our helpdesk.',
-    intro: 'Share the current workflow, what feels slow or risky, and what the ideal Reply Pilot flow should do.',
+    messageLabel: 'What should Reply Pilot adapt?',
+    messagePlaceholder: 'Example: Add a review escalation flow for low-confidence replies before anyone sends them.',
+    intro: 'Share the current review workflow, what feels slow or risky, and what Reply Pilot should support.',
     primary: 'Send request',
   },
   suggestion: {
@@ -114,7 +114,7 @@ const modalContent = {
     type: 'support',
     subjectPlaceholder: 'Question about Reply Pilot',
     messageLabel: 'How can we help?',
-    messagePlaceholder: 'Example: Judge.me is connected, but the Queue is not importing my newest reviews.',
+    messagePlaceholder: 'Example: my review provider is connected, but the Queue is not importing my newest reviews.',
     intro: 'Send enough context for us to understand or reproduce the issue.',
     primary: 'Send message',
   },
@@ -166,7 +166,7 @@ function summaryText(data) {
   return [
     data.message,
     `${counts.reviews} reviews/drafts`,
-    `${counts.judgeMeConnections} Judge.me connection(s)`,
+    `${(counts.judgeMeConnections || 0) + (counts.reviewProviderConnections || 0)} review provider connection(s)`,
     `${counts.creditLedgerEntries} credit ledger entries`,
   ].join(' ');
 }
@@ -280,7 +280,7 @@ export default function HelpPage() {
         <BlockStack gap="100">
           <Text as="h1" variant="heading2xl">Help</Text>
           <Text as="p" variant="bodyLg" tone="subdued">
-            Custom workflows, implementation support, product feedback, and data controls for Reply Pilot.
+            Workflow setup, product feedback, app support, and data controls for Reply Pilot.
           </Text>
         </BlockStack>
       </InlineStack>
@@ -290,16 +290,16 @@ export default function HelpPage() {
           <InlineStack gap="150">
             <Badge tone="success">Implementation support</Badge>
             <Badge tone="info">AI reply operations</Badge>
-            <Badge>Custom development</Badge>
+            <Badge>Workflow setup</Badge>
           </InlineStack>
           <BlockStack gap="150">
             <Text as="h2" variant="heading2xl">Make Reply Pilot fit the way your store works.</Text>
             <Text as="p" variant="bodyLg" tone="subdued">
-              Our team can tune the app, improve your approval flow, connect review operations to Shopify, or help with broader Shopify development when your store needs something custom.
+              Our team can tune Reply Pilot, improve your approval flow, and help connect supported review operations to Shopify.
             </Text>
           </BlockStack>
           <InlineStack gap="200">
-            <Button variant="primary" icon={WrenchIcon} onClick={() => setOpenModal('customization')}>Custom development</Button>
+            <Button variant="primary" icon={WrenchIcon} onClick={() => setOpenModal('customization')}>Reply Pilot setup</Button>
             <Button icon={LightbulbIcon} onClick={() => setOpenModal('suggestion')}>Suggest an improvement</Button>
           </InlineStack>
         </div>
@@ -323,9 +323,9 @@ export default function HelpPage() {
           <div className="rp-help-shopify-note">
             <HelpIcon source={StoreIcon} tone="blue" size="sm" />
             <BlockStack gap="050">
-              <Text as="p" variant="bodyMd" fontWeight="semibold">Need help outside reviews?</Text>
+              <Text as="p" variant="bodyMd" fontWeight="semibold">Need setup help?</Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                Our implementation team can help with theme work, private admin tools, app integrations, and store operations.
+                Our team can help with Reply Pilot setup, supported review providers, product context, and approval workflows.
               </Text>
             </BlockStack>
           </div>
@@ -464,7 +464,7 @@ export default function HelpPage() {
         <Modal.Section>
           <BlockStack gap="300">
             <Text as="p" variant="bodyMd">
-              This permanently deletes review records, AI drafts, Brand Voice settings, Judge.me connection data, app settings, credit records, contact requests, and Shopify sessions for this shop.
+              This permanently deletes review records, AI drafts, Brand Voice settings, review provider connection data, app settings, credit records, contact requests, and Shopify sessions for this shop.
             </Text>
             <Text as="p" variant="bodyMd" tone="subdued">
               This action cannot be undone. You may be asked to log in again after deletion.

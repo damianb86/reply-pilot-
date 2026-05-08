@@ -1,20 +1,20 @@
 # Product brief
 
 ## Problem
-Merchants using Judge.me reviews need a safe way to draft brand-consistent public replies without handing full control to AI. Review queues can grow quickly, low-star reviews need human care, and replies should preserve the merchant's tone.
+Merchants using review platforms such as Judge.me and Yotpo need a safe way to draft brand-consistent public replies without handing full control to AI. Review queues can grow quickly, low-star reviews need human care, and replies should preserve the merchant's tone.
 
 ## Target user
 Store owner, support lead, or ecommerce ops manager responsible for review response quality and response time.
 
 ## Merchant persona
-Small to mid-size Shopify merchant with an active review flow, usually using Judge.me, who wants faster reply drafting while keeping final approval inside Shopify Admin.
+Small to mid-size Shopify merchant with an active review flow, usually using Judge.me or Yotpo, who wants faster reply drafting while keeping final approval inside Shopify Admin.
 
 ## Value proposition
-Reply Pilot imports Judge.me reviews, generates AI reply drafts using a saved Brand Voice, routes sensitive reviews to humans, tracks sent replies, and charges credits according to model tier and operation.
+Reply Pilot imports reviews from connected providers, generates AI reply drafts using a saved Brand Voice, routes sensitive reviews to humans, tracks sent replies, and charges credits according to model tier and operation.
 
 ## Primary flow
 1. Merchant opens Reply Pilot embedded in Shopify Admin.
-2. Merchant connects Judge.me with a private API token.
+2. Merchant connects one or more review providers.
 3. Merchant configures Brand Voice, greeting, sign-off, avoided phrases, selected AI model, and reply length.
 4. Merchant syncs reviews into Queue.
 5. Merchant generates or regenerates AI drafts.
@@ -22,7 +22,7 @@ Reply Pilot imports Judge.me reviews, generates AI reply drafts using a saved Br
 7. Merchant audits sent replies and credit usage.
 
 ## Current functional surface
-- Connect dashboard for Judge.me status and token management.
+- Connect dashboard for Judge.me and Yotpo status and credential management.
 - Reviews queue for sync, generation, revision, skip/restore, and approve/send workflows.
 - Brand Voice builder with imported historical replies and live preview.
 - Settings page for queue behavior, privacy retention, and Brand Voice sections.
@@ -31,14 +31,14 @@ Reply Pilot imports Judge.me reviews, generates AI reply drafts using a saved Br
 - Help page with contact form and privacy data request/delete actions.
 
 ## MVP boundaries
-- Judge.me is the only active review provider.
+- Judge.me and Yotpo are active review providers; both can run simultaneously.
 - AI providers are OpenAI and Google Gemini, selected by model tier.
 - Shopify product reads are used for product context only.
 - No autonomous sending: merchant approval remains required.
 
 ## Future scope
-- Additional review providers: Loox, Yotpo, Stamped, Google Business, Trustpilot.
-- Provider-specific write APIs beyond Judge.me.
+- Additional review providers: Loox, Stamped, Google Business, Trustpilot.
+- Provider-specific write APIs beyond Judge.me and Yotpo.
 - More granular team permissions and approval workflows.
 - Background jobs for scheduled sync/generation.
 - Production observability dashboards.

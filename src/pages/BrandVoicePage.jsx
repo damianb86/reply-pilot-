@@ -1510,9 +1510,9 @@ export default function BrandVoicePage({
                           <img src="/provider-logos/judgeme.png" alt="" aria-hidden="true" />
                         </span>
                         <BlockStack gap="050">
-                          <Text as="p" variant="bodyMd" fontWeight="semibold">Load sent replies from Judge.me history</Text>
+                          <Text as="p" variant="bodyMd" fontWeight="semibold">Load sent replies from provider history</Text>
                           <Text as="p" variant="bodySm" tone="subdued">
-                            Use replies that Reply Pilot already sent and stored for this shop. This does not call Judge.me; it loads your saved sent reply history.
+                            Use replies that Reply Pilot already sent and stored for this shop. This does not call the provider; it loads your saved sent reply history.
                           </Text>
                         </BlockStack>
                       </InlineStack>

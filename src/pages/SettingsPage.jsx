@@ -335,7 +335,7 @@ export default function SettingsPage() {
           {activeSection === 'queue' ? (
             <SectionCard
               title="Queue behavior"
-              description="Control how Reply Pilot marks drafts for review and how Judge.me sends approved replies."
+              description="Control how Reply Pilot marks drafts for review and how providers send approved replies."
               action={<Badge tone="info">Applies on next generation/send</Badge>}
             >
               <ThresholdSlider
@@ -370,7 +370,7 @@ export default function SettingsPage() {
                   onChange={(value) => set('routeLowStarReviews', value)}
                 />
               </FieldRow>
-              <FieldRow label="Send Judge.me reply email" description="When enabled, Judge.me also emails the customer after an approved reply is sent.">
+              <FieldRow label="Send Judge.me reply email" description="When enabled, Judge.me also emails the customer after an approved reply is sent. Yotpo public comments are sent through Yotpo's review comment API.">
                 <Checkbox
                   label="Send Judge.me reply email"
                   checked={settings.sendReplyEmail}
