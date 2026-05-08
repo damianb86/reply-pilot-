@@ -1209,6 +1209,47 @@ select {
   background: linear-gradient(135deg, var(--rp-card-surface) 0%, var(--rp-ai-surface) 100%);
 }
 
+.rp-refresh-action {
+  display: inline-flex;
+}
+
+.rp-refresh-action .Polaris-Button {
+  min-height: 42px;
+  padding-inline: 16px;
+  border-color: var(--rp-preview-border);
+  background: linear-gradient(135deg, var(--rp-preview-surface) 0%, var(--rp-ai-selected) 100%);
+  color: var(--rp-preview-text);
+  font-weight: 700;
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--rp-preview-text-rgb), 0.06),
+    0 8px 18px rgba(var(--rp-preview-text-rgb), 0.12);
+}
+
+.rp-refresh-action .Polaris-Button:hover {
+  border-color: var(--rp-preview-text);
+  background: var(--rp-ai-selected);
+  color: var(--rp-preview-text);
+}
+
+.rp-refresh-action .Polaris-Button:active {
+  border-color: var(--rp-ai-primary);
+  background: var(--rp-preview-border);
+}
+
+.rp-refresh-action .Polaris-Button:disabled,
+.rp-refresh-action .Polaris-Button[aria-disabled="true"],
+.rp-refresh-action .Polaris-Button.Polaris-Button--disabled {
+  border-color: var(--rp-border-subtle);
+  background: var(--rp-platform-chip-surface);
+  color: var(--rp-text-muted);
+  box-shadow: none;
+  opacity: 0.68;
+}
+
+.rp-refresh-action .Polaris-Icon {
+  color: currentColor;
+}
+
 .rp-ai-action-button {
   display: inline-flex;
 }

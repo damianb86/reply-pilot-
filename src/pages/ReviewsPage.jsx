@@ -84,7 +84,11 @@ function QueueEmptyState({connected, connectUrl, onRefresh, refreshing}) {
         </Text>
       </BlockStack>
       <InlineStack gap="200" align="center">
-        <Button icon={RefreshIcon} loading={refreshing} disabled={!connected || refreshing} onClick={onRefresh}>Refresh reviews</Button>
+        <span className="rp-refresh-action">
+          <Button icon={RefreshIcon} loading={refreshing} disabled={!connected || refreshing} onClick={onRefresh}>
+            {refreshing ? 'Refreshing' : 'Refresh reviews'}
+          </Button>
+        </span>
         {!connected ? <Button url={connectUrl} variant="primary">Go to Connect</Button> : null}
       </InlineStack>
     </div>
@@ -264,7 +268,8 @@ function ReviewsContent() {
   const lastToastKey = useRef('');
   const initialRefreshStarted = useRef(false);
   const [localToast, setLocalToast] = useState(null);
-  const [showInitialRefreshLoading, setShowInitialRefreshLoading] = useState(Boolean(loaderData.connected));
+  const hasCachedReviews = Array.isArray(loaderData.reviews) && loaderData.reviews.length > 0;
+  const [showInitialRefreshLoading, setShowInitialRefreshLoading] = useState(Boolean(loaderData.connected && !hasCachedReviews));
   const pageData = fetcher.data?.reviews ? fetcher.data : loaderData;
   const reviews = useMemo(() => pageData.reviews ?? [], [pageData.reviews]);
   const stats = pageData.stats ?? {pending: 0, sentToday: 0, sent: 0, skipped: 0, ungenerated: 0, judgeMeReplied: 0, highConfidence: 0, needsHuman: 0};
@@ -408,13 +413,15 @@ function ReviewsContent() {
   useEffect(() => {
     if (!loaderData.connected || initialRefreshStarted.current) return;
     initialRefreshStarted.current = true;
-    setShowInitialRefreshLoading(true);
+    if (!hasCachedReviews) {
+      setShowInitialRefreshLoading(true);
+    }
     const formData = new FormData();
     formData.set('intent', 'sync');
     formData.set('ids', '[]');
     formData.set('source', 'initial-load');
     fetcher.submit(formData, {method: 'post'});
-  }, [fetcher, loaderData.connected]);
+  }, [fetcher, hasCachedReviews, loaderData.connected]);
 
   useEffect(() => {
     if (
@@ -688,9 +695,11 @@ function ReviewsContent() {
             Review approvals stay table-first for speed while existing Judge.me replies and AI drafts remain visible in the side panel.
           </Text>
         </BlockStack>
-        <Button icon={RefreshIcon} loading={isSyncing} disabled={!pageData.connected || isSyncing} onClick={handleRefresh}>
-          Refresh
-        </Button>
+        <span className="rp-refresh-action">
+          <Button icon={RefreshIcon} size="large" loading={isSyncing} disabled={!pageData.connected || isSyncing} onClick={handleRefresh}>
+            {isSyncing ? 'Refreshing' : 'Refresh'}
+          </Button>
+        </span>
       </InlineStack>
 
       <div className="rp-queue-shell">
