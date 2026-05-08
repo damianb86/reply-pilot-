@@ -79,6 +79,8 @@ const sentReplyOptions = [
   {label: 'Last 25 sent replies', value: '25'},
   {label: 'Last 50 sent replies', value: '50'},
 ];
+const manualReplyMaxCharacters = 1000;
+const bulkReplyMaxCharacters = 12000;
 
 const personalityPresets = [
   {
@@ -232,6 +234,33 @@ function mergeExampleReplies(current, incoming) {
   }
 
   return merged;
+}
+
+function splitBulkReplyText(value) {
+  const normalized = String(value ?? '').replace(/\r\n/g, '\n').trim();
+  if (!normalized) return [];
+
+  const blankSeparated = normalized
+    .split(/\n{2,}/)
+    .map((reply) => reply.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  const candidates = blankSeparated.length > 1
+    ? blankSeparated
+    : normalized
+      .split(/\n+/)
+      .map((reply) => reply.trim())
+      .filter(Boolean);
+
+  const seen = new Set();
+  return candidates
+    .map((reply) => reply.replace(/^\s*(?:[-*•]\s+|\d+[.)]\s+)/, '').trim())
+    .filter((reply) => {
+      const key = reply.toLowerCase();
+      if (!reply || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 50);
 }
 
 function creditsText(amount) {
@@ -653,8 +682,10 @@ export default function BrandVoicePage({
   const [replyLength, setReplyLength] = useState(initialConfig.replyLength);
   const [exampleReplies, setExampleReplies] = useState([]);
   const [showManualReplyForm, setShowManualReplyForm] = useState(false);
+  const [manualReplyMode, setManualReplyMode] = useState('single');
   const [manualReplyRating, setManualReplyRating] = useState('5');
   const [manualReplyText, setManualReplyText] = useState('');
+  const [bulkReplyText, setBulkReplyText] = useState('');
   const [sentReplyLimit, setSentReplyLimit] = useState('10');
   const [livePreview, setLivePreview] = useState(initialConfig.livePreview);
   const [previewReview, setPreviewReview] = useState(initialConfig.previewReview);
@@ -689,6 +720,7 @@ export default function BrandVoicePage({
   const characterCount = persona.length;
   const personalityIsAtLimit =
     wordCount >= personalityMaxWords || characterCount >= personalityMaxCharacters;
+  const bulkReplyCount = useMemo(() => splitBulkReplyText(bulkReplyText).length, [bulkReplyText]);
 
   const previewReply = useMemo(() => {
     const safeGreeting = greeting.replace('{name}', 'Anya').trim() || 'Hi Anya -';
@@ -1057,6 +1089,14 @@ export default function BrandVoicePage({
     setExampleReplies((current) => current.filter((example) => example.id !== id));
   }
 
+  function resetManualReplyForm() {
+    setManualReplyText('');
+    setBulkReplyText('');
+    setManualReplyRating('5');
+    setManualReplyMode('single');
+    setShowManualReplyForm(false);
+  }
+
   function addManualExampleReply() {
     const text = manualReplyText.trim();
     if (!text) return;
@@ -1078,6 +1118,29 @@ export default function BrandVoicePage({
       ok: true,
       intent: 'add-example-reply',
       message: 'Example reply added. Generate Personality when you have enough examples.',
+    });
+  }
+
+  function addBulkExampleReplies() {
+    const replies = splitBulkReplyText(bulkReplyText);
+    if (!replies.length) return;
+
+    const stamp = Date.now();
+    setExampleReplies((current) => mergeExampleReplies(current, replies.map((text, index) => ({
+      id: `bulk-${stamp}-${index}-${Math.random().toString(36).slice(2)}`,
+      text: text.slice(0, manualReplyMaxCharacters),
+      rating: null,
+      customer: null,
+      product: null,
+      source: 'Bulk paste',
+    }))));
+    setBulkReplyText('');
+    setManualReplyMode('single');
+    setShowManualReplyForm(false);
+    showToast({
+      ok: true,
+      intent: 'add-bulk-example-replies',
+      message: `${replies.length} pasted ${replies.length === 1 ? 'reply' : 'replies'} added. Generate Personality when you have enough examples.`,
     });
   }
 
@@ -1194,7 +1257,14 @@ export default function BrandVoicePage({
                     </BlockStack>
                     <Button
                       icon={showManualReplyForm ? XIcon : PlusIcon}
-                      onClick={() => setShowManualReplyForm((value) => !value)}
+                      onClick={() => {
+                        if (showManualReplyForm) {
+                          resetManualReplyForm();
+                        } else {
+                          setManualReplyMode('single');
+                          setShowManualReplyForm(true);
+                        }
+                      }}
                     >
                       {showManualReplyForm ? 'Close' : 'Add reply'}
                     </Button>
@@ -1203,7 +1273,7 @@ export default function BrandVoicePage({
                   <div className="rp-manual-reply-note">
                     <Icon source={InfoIcon} tone="base" />
                     <Text as="p" variant="bodySm" tone="subdued">
-                      Best results come from 3-10 real public replies. Copy the exact response you would send to a customer, choose the review rating it answered, and remove any example that does not match the voice you want.
+                      Best results come from 3-10 real public replies. Paste only the merchant responses your team wrote, not the customer's review text, because Personality is inferred from the responder's voice.
                     </Text>
                   </div>
 
@@ -1245,36 +1315,70 @@ export default function BrandVoicePage({
                   {showManualReplyForm ? (
                     <div className="rp-manual-reply-form">
                       <BlockStack gap="300">
-                        <StarRatingPicker
-                          value={manualReplyRating}
-                          onChange={setManualReplyRating}
-                          label="Review stars"
-                          helpText="Use the rating from the review this response was written for."
-                        />
-                        <TextField
-                          label="Reply example"
-                          value={manualReplyText}
-                          onChange={setManualReplyText}
-                          autoComplete="off"
-                          multiline={4}
-                          maxLength={1000}
-                          showCharacterCount
-                          placeholder="Paste a real reply you wrote to a customer review."
-                          helpText="Only paste the merchant reply, not the original review."
-                        />
+                        <InlineStack align="space-between" blockAlign="start" gap="300">
+                          <BlockStack gap="050">
+                            <Text as="h4" variant="headingSm">
+                              {manualReplyMode === 'bulk' ? 'Paste all replies' : 'Add one reply'}
+                            </Text>
+                            <Text as="p" variant="bodySm" tone="subdued">
+                              {manualReplyMode === 'bulk'
+                                ? "Don't want to add replies one by one? Paste many merchant replies here, one per line. Reply Pilot will treat them as separate response examples and use them to interpret the responder's personality."
+                                : "Paste only the response that was sent to the review. You do not need to include the customer's review, because the builder learns from the reply writer's wording."}
+                            </Text>
+                          </BlockStack>
+                          <Button onClick={() => setManualReplyMode(manualReplyMode === 'bulk' ? 'single' : 'bulk')}>
+                            {manualReplyMode === 'bulk' ? 'Add one reply' : 'Paste all replies'}
+                          </Button>
+                        </InlineStack>
+
+                        {manualReplyMode === 'bulk' ? (
+                          <TextField
+                            label="Paste all replies"
+                            value={bulkReplyText}
+                            onChange={setBulkReplyText}
+                            autoComplete="off"
+                            multiline={8}
+                            maxLength={bulkReplyMaxCharacters}
+                            showCharacterCount
+                            placeholder={"Thanks so much for sharing this with us...\nWe appreciate you taking the time to write this...\nI'm sorry this was not the experience you expected..."}
+                            helpText={`${bulkReplyCount || 'No'} ${bulkReplyCount === 1 ? 'reply' : 'replies'} detected. Put each merchant reply on its own line and leave out the customer's review text.`}
+                          />
+                        ) : (
+                          <>
+                            <StarRatingPicker
+                              value={manualReplyRating}
+                              onChange={setManualReplyRating}
+                              label="Review stars"
+                              helpText="Use the rating from the review this response was written for."
+                            />
+                            <TextField
+                              label="Reply example"
+                              value={manualReplyText}
+                              onChange={setManualReplyText}
+                              autoComplete="off"
+                              multiline={4}
+                              maxLength={manualReplyMaxCharacters}
+                              showCharacterCount
+                              placeholder="Paste one reply you wrote to a customer review."
+                              helpText="Only paste the merchant reply, not the original review. This is the text Reply Pilot uses to learn the responder's personality."
+                            />
+                          </>
+                        )}
                         <InlineStack align="end" gap="200">
                           <Button
-                            onClick={() => {
-                              setManualReplyText('');
-                              setManualReplyRating('5');
-                              setShowManualReplyForm(false);
-                            }}
+                            onClick={resetManualReplyForm}
                           >
                             Cancel
                           </Button>
-                          <Button variant="primary" icon={PlusIcon} disabled={!manualReplyText.trim()} onClick={addManualExampleReply}>
-                            Add example
-                          </Button>
+                          {manualReplyMode === 'bulk' ? (
+                            <Button variant="primary" icon={PlusIcon} disabled={!bulkReplyCount} onClick={addBulkExampleReplies}>
+                              Add pasted replies
+                            </Button>
+                          ) : (
+                            <Button variant="primary" icon={PlusIcon} disabled={!manualReplyText.trim()} onClick={addManualExampleReply}>
+                              Add example
+                            </Button>
+                          )}
                         </InlineStack>
                       </BlockStack>
                     </div>

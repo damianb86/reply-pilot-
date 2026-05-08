@@ -616,6 +616,8 @@ function personalityPrompt(replies: ImportedReply[], context: BrandVoiceContext 
   return [
     "Generate the Personality field for Reply Pilot, a Shopify app that drafts public replies to product reviews.",
     "Use ONLY the imported merchant replies as evidence. Do not invent identity, names, locations, family relationships, product origin, policies, languages, materials, or brand facts.",
+    "The imported replies are merchant-written responses, not customer reviews. If a pasted item contains many replies together, separate them mentally by line breaks, numbering, bullets, repeated greetings, or repeated sign-offs before inferring personality.",
+    "If accidental customer review text or labels are included, ignore those parts and learn only from the merchant response wording.",
     "If a detail is not clearly present in the replies, leave it out.",
     "Focus on the durable voice and basic rules the assistant should follow: attitude, boundaries, word choice, cadence, specificity, apology style, gratitude style, and how the merchant treats customers.",
     "Do not include drafting controls such as reply length, sentence count, tone preset, voice intensity, format, or how strongly to apply the voice. Those controls are configured separately.",
