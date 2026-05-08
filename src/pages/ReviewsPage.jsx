@@ -263,14 +263,16 @@ function ProductFilter({products, value, onChange}) {
 function ReviewsContent() {
   const loaderData = useLoaderData();
   const location = useLocation();
-  const fetcher = useFetcher();
+  const actionFetcher = useFetcher();
+  const syncFetcher = useFetcher();
   const shopify = useAppBridge();
   const lastToastKey = useRef('');
   const initialRefreshStarted = useRef(false);
   const [localToast, setLocalToast] = useState(null);
   const hasCachedReviews = Array.isArray(loaderData.reviews) && loaderData.reviews.length > 0;
   const [showInitialRefreshLoading, setShowInitialRefreshLoading] = useState(Boolean(loaderData.connected && !hasCachedReviews));
-  const pageData = fetcher.data?.reviews ? fetcher.data : loaderData;
+  const [latestPageData, setLatestPageData] = useState(null);
+  const pageData = latestPageData ?? loaderData;
   const reviews = useMemo(() => pageData.reviews ?? [], [pageData.reviews]);
   const stats = pageData.stats ?? {pending: 0, sentToday: 0, sent: 0, skipped: 0, ungenerated: 0, judgeMeReplied: 0, highConfidence: 0, needsHuman: 0};
   const queueSettings = pageData.settings ?? {};
@@ -349,17 +351,22 @@ function ReviewsContent() {
   const selectedSkippedIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'skipped');
   const selectedSentIds = selectedVisibleIds.filter((id) => filteredReviews.find((review) => review.id === id)?.status === 'sent');
   const selectedCount = selectedVisibleIds.length;
-  const timeout = useFetcherTimeout(fetcher, {
+  const actionTimeout = useFetcherTimeout(actionFetcher, {
     timeoutMs: 120000,
     message: 'The Reviews action took too long. Please try again later.',
   });
-  const actionResult = timeout.result || fetcher.data;
-  const isSubmitting = timeout.pending;
-  const pendingIntent = String(fetcher.formData?.get('intent') ?? '');
-  const pendingIds = readPendingIds(fetcher.formData);
+  const syncTimeout = useFetcherTimeout(syncFetcher, {
+    timeoutMs: 120000,
+    message: 'Refreshing reviews took too long. Please try again later.',
+  });
+  const isSubmitting = actionTimeout.pending;
+  const pendingIntent = String(actionFetcher.formData?.get('intent') ?? '');
+  const pendingIds = readPendingIds(actionFetcher.formData);
   const isBulkAiProcessing = isSubmitting && ['generate', 'regenerate'].includes(pendingIntent) && pendingIds.length > 1;
   const bulkProcessingVerb = pendingIntent === 'regenerate' ? 'Regenerating' : 'Generating';
-  const isSyncing = isSubmitting && pendingIntent === 'sync';
+  const syncPendingIntent = String(syncFetcher.formData?.get('intent') ?? '');
+  const isSyncing = syncTimeout.pending && syncPendingIntent === 'sync';
+  const actionResult = actionTimeout.result || actionFetcher.data || syncTimeout.result || syncFetcher.data;
   const connectUrl = `/app/dashboard${location.search || ''}`;
   const creditsFor = useCallback((count) => Math.max(0, count * replyCreditCost), [replyCreditCost]);
   const formatCreditAmount = useCallback((value) => {
@@ -420,18 +427,30 @@ function ReviewsContent() {
     formData.set('intent', 'sync');
     formData.set('ids', '[]');
     formData.set('source', 'initial-load');
-    fetcher.submit(formData, {method: 'post'});
-  }, [fetcher, hasCachedReviews, loaderData.connected]);
+    syncFetcher.submit(formData, {method: 'post'});
+  }, [hasCachedReviews, loaderData.connected, syncFetcher]);
 
   useEffect(() => {
     if (
       showInitialRefreshLoading &&
-      fetcher.state === 'idle' &&
-      fetcher.data?.intent === 'sync'
+      syncFetcher.state === 'idle' &&
+      (syncFetcher.data?.intent === 'sync' || syncTimeout.timedOut)
     ) {
       setShowInitialRefreshLoading(false);
     }
-  }, [fetcher.data?.intent, fetcher.state, showInitialRefreshLoading]);
+  }, [showInitialRefreshLoading, syncFetcher.data?.intent, syncFetcher.state, syncTimeout.timedOut]);
+
+  useEffect(() => {
+    if (syncFetcher.data?.reviews) {
+      setLatestPageData(syncFetcher.data);
+    }
+  }, [syncFetcher.data]);
+
+  useEffect(() => {
+    if (actionFetcher.data?.reviews) {
+      setLatestPageData(actionFetcher.data);
+    }
+  }, [actionFetcher.data]);
 
   useEffect(() => {
     if (!activeReview && filteredReviews[0]) {
@@ -447,26 +466,30 @@ function ReviewsContent() {
   }, [activeReview?.id, activeReview?.draft]);
 
   useEffect(() => {
-    if (['generate', 'regenerate'].includes(fetcher.data?.intent)) {
-      const generatedIds = Array.isArray(fetcher.data?.generation?.generatedIds)
-        ? fetcher.data.generation.generatedIds
+    if (['generate', 'regenerate'].includes(actionFetcher.data?.intent)) {
+      const generatedIds = Array.isArray(actionFetcher.data?.generation?.generatedIds)
+        ? actionFetcher.data.generation.generatedIds
         : [];
       if (generatedIds.length) {
         setSelectedIds((current) => current.filter((id) => !generatedIds.includes(id)));
       }
-    } else if ((fetcher.data?.ok || fetcher.data?.generation?.generated) && ['send', 'skip', 'restore'].includes(fetcher.data?.intent)) {
+    } else if ((actionFetcher.data?.ok || actionFetcher.data?.generation?.generated) && ['send', 'skip', 'restore'].includes(actionFetcher.data?.intent)) {
       setSelectedIds([]);
     }
 
-    if (fetcher.data?.ok && fetcher.data.intent === 'revise-draft') {
+    if (actionFetcher.data?.ok && actionFetcher.data.intent === 'revise-draft') {
       setDraftInstruction('');
       setShowDraftAdjuster(false);
     }
-  }, [fetcher.data]);
+  }, [actionFetcher.data]);
 
   useEffect(() => {
-    showToast(actionResult);
-  }, [actionResult, showToast]);
+    showToast(actionTimeout.result || actionFetcher.data);
+  }, [actionFetcher.data, actionTimeout.result, showToast]);
+
+  useEffect(() => {
+    showToast(syncTimeout.result || syncFetcher.data);
+  }, [showToast, syncFetcher.data, syncTimeout.result]);
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -509,7 +532,7 @@ function ReviewsContent() {
       formData.set(key, value);
     });
 
-    fetcher.submit(formData, {method: 'post'});
+    actionFetcher.submit(formData, {method: 'post'});
   }
 
   function submitSingle(intent, id, extra = {}) {
@@ -561,7 +584,10 @@ function ReviewsContent() {
 
   function handleRefresh() {
     if (!pageData.connected || isSyncing) return;
-    submitAction('sync', []);
+    const formData = new FormData();
+    formData.set('intent', 'sync');
+    formData.set('ids', '[]');
+    syncFetcher.submit(formData, {method: 'post'});
   }
 
   function handleSaveDraft() {
@@ -571,7 +597,7 @@ function ReviewsContent() {
     formData.set('intent', 'update-draft');
     formData.set('id', activeReview.id);
     formData.set('draft', draftValue);
-    fetcher.submit(formData, {method: 'post'});
+    actionFetcher.submit(formData, {method: 'post'});
   }
 
   function handleReviseDraft() {
@@ -582,7 +608,7 @@ function ReviewsContent() {
     formData.set('intent', 'revise-draft');
     formData.set('id', activeReview.id);
     formData.set('instruction', draftInstruction.trim().slice(0, 100));
-    fetcher.submit(formData, {method: 'post'});
+    actionFetcher.submit(formData, {method: 'post'});
   }
 
   const rowMarkup = filteredReviews.map((review, index) => (
@@ -980,7 +1006,7 @@ function ReviewsContent() {
                                 Cancel
                               </Button>
                               <span className="rp-action-button is-save">
-                                <Button variant="primary" loading={isSubmitting && fetcher.formData?.get('intent') === 'update-draft'} onClick={handleSaveDraft}>
+                                <Button variant="primary" loading={isSubmitting && actionFetcher.formData?.get('intent') === 'update-draft'} onClick={handleSaveDraft}>
                                   Save draft
                                 </Button>
                               </span>
@@ -1045,7 +1071,7 @@ function ReviewsContent() {
                                 className="is-tone"
                                 variant="primary"
                                 disabled={!aiConfigured || !draftInstruction.trim()}
-                                loading={isSubmitting && fetcher.formData?.get('intent') === 'revise-draft'}
+                                loading={isSubmitting && actionFetcher.formData?.get('intent') === 'revise-draft'}
                                 onClick={handleReviseDraft}
                               >
                                 Apply change
@@ -1062,7 +1088,7 @@ function ReviewsContent() {
                   <BlockStack gap="300">
                     <InlineStack gap="200" wrap={false}>
                       {activeReview.status === 'skipped' ? (
-                        <Button icon={RefreshIcon} variant="primary" size="large" fullWidth loading={isSubmitting && fetcher.formData?.get('intent') === 'restore'} onClick={() => submitSingle('restore', activeReview.id)}>
+                        <Button icon={RefreshIcon} variant="primary" size="large" fullWidth loading={isSubmitting && actionFetcher.formData?.get('intent') === 'restore'} onClick={() => submitSingle('restore', activeReview.id)}>
                           Restore to reviews
                         </Button>
                       ) : activeReview.status === 'sent' ? (
@@ -1071,17 +1097,17 @@ function ReviewsContent() {
                         </Button>
                       ) : activeHasJudgeMeReply ? (
                         <span className="rp-action-button is-reject is-full">
-                          <Button icon={XIcon} variant="primary" size="large" fullWidth disabled={isSubmitting} loading={isSubmitting && fetcher.formData?.get('intent') === 'skip'} onClick={() => submitSingle('skip', activeReview.id)}>
+                          <Button icon={XIcon} variant="primary" size="large" fullWidth disabled={isSubmitting} loading={isSubmitting && actionFetcher.formData?.get('intent') === 'skip'} onClick={() => submitSingle('skip', activeReview.id)}>
                             Don't reply
                           </Button>
                         </span>
                       ) : !activeHasDraft ? (
-                        <AiActionButton className="is-full" variant="primary" size="large" fullWidth disabled={!aiConfigured} loading={isSubmitting && fetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingleAiAction('generate', activeReview.id, 'Generating this message')}>
+                        <AiActionButton className="is-full" variant="primary" size="large" fullWidth disabled={!aiConfigured} loading={isSubmitting && actionFetcher.formData?.get('intent') === 'generate'} onClick={() => submitSingleAiAction('generate', activeReview.id, 'Generating this message')}>
                           Generate message
                         </AiActionButton>
                       ) : (
                         <span className="rp-action-button is-publish is-full">
-                          <Button icon={SendIcon} variant="primary" size="large" fullWidth loading={isSubmitting && fetcher.formData?.get('intent') === 'send'} onClick={() => submitSingle('send', activeReview.id)}>
+                          <Button icon={SendIcon} variant="primary" size="large" fullWidth loading={isSubmitting && actionFetcher.formData?.get('intent') === 'send'} onClick={() => submitSingle('send', activeReview.id)}>
                             Approve & send
                           </Button>
                         </span>
