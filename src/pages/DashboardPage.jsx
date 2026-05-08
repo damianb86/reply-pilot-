@@ -194,7 +194,7 @@ function ResultBanner({result}) {
           <Text as="p" variant="bodySm" tone="subdued">{statusText || timeoutText}</Text>
         ) : null}
         <Text as="p" variant="bodySm" tone="subdued">
-          Check the Judge.me shop identifier and Private API token, then try again.
+          Check the Judge.me Private API token, then try again.
         </Text>
       </BlockStack>
     </Banner>
@@ -220,7 +220,6 @@ function KeyValueRow({label, value, badgeTone}) {
 
 function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl, actionPath}) {
   const [apiToken, setApiToken] = useState('');
-  const [shopDomain, setShopDomain] = useState(shop);
   const [showToken, setShowToken] = useState(false);
   const pendingIntent = fetcher.formData?.get('intent');
   const timeout = useFetcherTimeout(fetcher, {
@@ -234,7 +233,7 @@ function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl, actionPath}) {
 
     const formData = new FormData();
     formData.set('intent', 'connect-token');
-    formData.set('shopDomain', shopDomain.trim() || shop);
+    formData.set('shopDomain', shop);
     formData.set('apiToken', apiToken.trim());
     fetcher.submit(formData, {method: 'post', action: actionPath});
   }
@@ -257,15 +256,9 @@ function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl, actionPath}) {
 
         <BlockStack gap="300">
           <Text as="p" variant="bodyMd">2. Enter your Judge.me credentials</Text>
-          <TextField
-            label="Judge.me shop identifier"
-            name="shopDomain"
-            value={shopDomain}
-            onChange={setShopDomain}
-            autoComplete="off"
-            placeholder="your Judge.me shop identifier"
-            helpText="Use the shop identifier shown in your Judge.me private API settings."
-          />
+          <Text as="p" variant="bodySm" tone="subdued">
+            Judge.me uses this authenticated Shopify shop and your Private API token to import reviews and send approved replies.
+          </Text>
           <TextField
             label="API token"
             name="apiToken"
