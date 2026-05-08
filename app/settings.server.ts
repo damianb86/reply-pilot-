@@ -231,6 +231,7 @@ export function reviewNeedsHuman(input: {
   rating: number;
   confidence: number;
   settings: AppSettings;
+  productMismatch?: boolean;
 }) {
   const sensitive = input.settings.routeSensitiveReviews && isSensitiveReview(input.reviewBody);
   const lowStarNeedsExtraReview =
@@ -240,6 +241,7 @@ export function reviewNeedsHuman(input: {
 
   return (
     input.confidence < input.settings.humanReviewThreshold ||
+    Boolean(input.productMismatch) ||
     lowStarNeedsExtraReview ||
     sensitive
   );

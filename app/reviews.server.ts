@@ -166,6 +166,14 @@ type ConfidenceInput = {
   productTags?: string[] | null;
 };
 
+type ProductMismatchInput = {
+  reviewBody: string;
+  productTitle?: string | null;
+  productType?: string | null;
+  productTags?: string[] | null;
+  productDescription?: string | null;
+};
+
 const STOP_WORDS = new Set([
   "about",
   "after",
@@ -301,6 +309,119 @@ const RISKY_REPLY_PROMISES = [
   "replacement",
 ];
 
+const PRODUCT_MISMATCH_REVIEW_TERMS = [
+  "different item",
+  "different product",
+  "not the item",
+  "not the product",
+  "not what i ordered",
+  "not what we ordered",
+  "received a different",
+  "received the wrong",
+  "sent me a different",
+  "sent me the wrong",
+  "wrong item",
+  "wrong product",
+  "articulo equivocado",
+  "item equivocado",
+  "me enviaron otro",
+  "no es el producto",
+  "no es lo que pedi",
+  "pedido equivocado",
+  "producto distinto",
+  "producto equivocado",
+  "recibi otro",
+];
+
+const PRODUCT_CATEGORY_TERMS = [
+  "backpack",
+  "bag",
+  "blanket",
+  "board",
+  "book",
+  "bottle",
+  "bowl",
+  "bracelet",
+  "candle",
+  "chair",
+  "charger",
+  "conditioner",
+  "cup",
+  "curtain",
+  "dress",
+  "earring",
+  "fork",
+  "glove",
+  "hat",
+  "hoodie",
+  "jacket",
+  "knife",
+  "lamp",
+  "lotion",
+  "mat",
+  "mug",
+  "napkin",
+  "necklace",
+  "notebook",
+  "oil",
+  "pant",
+  "perfume",
+  "phone",
+  "pillow",
+  "plate",
+  "poster",
+  "print",
+  "ring",
+  "rug",
+  "serum",
+  "shampoo",
+  "shirt",
+  "shoe",
+  "skirt",
+  "snowboard",
+  "soap",
+  "sock",
+  "sofa",
+  "spoon",
+  "sticker",
+  "sweater",
+  "sweatshirt",
+  "table",
+  "towel",
+  "toy",
+  "wallet",
+  "acondicionador",
+  "alfombra",
+  "almohada",
+  "anillo",
+  "bolsa",
+  "botella",
+  "buzo",
+  "camisa",
+  "cargador",
+  "champu",
+  "crema",
+  "cuaderno",
+  "jabon",
+  "libro",
+  "manta",
+  "mesa",
+  "pantalon",
+  "plato",
+  "pulsera",
+  "remera",
+  "silla",
+  "sombrero",
+  "sueter",
+  "taza",
+  "telefono",
+  "toalla",
+  "vela",
+  "vestido",
+  "zapatilla",
+  "zapato",
+];
+
 function normalizeText(value?: string | null) {
   return (value ?? "")
     .normalize("NFD")
@@ -314,6 +435,8 @@ function textWords(value?: string | null) {
     .map((word) => word.trim())
     .filter(Boolean);
 }
+
+const NORMALIZED_PRODUCT_CATEGORY_TERMS = new Set(PRODUCT_CATEGORY_TERMS.map((term) => normalizeText(term)));
 
 function wordCount(value?: string | null) {
   return textWords(value).length;
@@ -341,6 +464,52 @@ function meaningfulKeywords(...values: Array<string | null | undefined>) {
         .slice(0, 60),
     ),
   );
+}
+
+function productCategoryMatches(value?: string | null) {
+  const matches = new Set<string>();
+
+  for (const word of textWords(value)) {
+    const candidates = [
+      word,
+      word.replace(/s$/u, ""),
+      word.replace(/es$/u, ""),
+      word.replace(/ies$/u, "y"),
+    ];
+    const match = candidates.find((candidate) => NORMALIZED_PRODUCT_CATEGORY_TERMS.has(candidate));
+    if (match) matches.add(match);
+  }
+
+  return matches;
+}
+
+function reviewProductContextMismatch(input: ProductMismatchInput) {
+  const reviewBody = input.reviewBody || "";
+  const reviewText = normalizeText(reviewBody);
+  if (!reviewText) return false;
+
+  if (PRODUCT_MISMATCH_REVIEW_TERMS.some((term) => reviewText.includes(normalizeText(term)))) {
+    return true;
+  }
+
+  const productTruth = [
+    input.productTitle,
+    input.productType,
+    ...(input.productTags ?? []),
+    input.productDescription,
+  ].filter(Boolean).join(" ");
+  const truthCategories = productCategoryMatches(productTruth);
+  const reviewCategories = productCategoryMatches(reviewBody);
+
+  if (!truthCategories.size || !reviewCategories.size || wordCount(reviewBody) < 4) return false;
+
+  return !Array.from(reviewCategories).some((category) => truthCategories.has(category));
+}
+
+function confidenceWithProductMismatch(confidence: number, settings: AppSettings, productMismatch: boolean) {
+  return productMismatch
+    ? Math.min(confidence, Math.max(22, settings.humanReviewThreshold - 1))
+    : confidence;
 }
 
 function keywordOverlap(draft: string, keywords: string[]) {
@@ -1242,6 +1411,13 @@ async function generateReplyForRecord(
       nudge,
     },
   });
+  const productMismatch = reviewProductContextMismatch({
+    reviewBody: record.reviewBody,
+    productTitle: productContext.productTitle,
+    productType: productContext.productType,
+    productTags: productContext.productTags,
+    productDescription: productContext.productDescription,
+  });
 
   return {
     draft: result.reply,
@@ -1249,6 +1425,7 @@ async function generateReplyForRecord(
     productType: productContext.productType || null,
     productTags: productContext.productTags,
     productTagsJson: compactTags(productContext.productTags),
+    productMismatch,
     aiModelId: result.model.id,
     aiModelName: result.model.name,
     aiProviderName: result.model.provider,
@@ -1310,7 +1487,7 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
   for (const record of records) {
     try {
       const generated = await generateReplyForRecord(record, products, brandVoice, appSettings, admin, productCache);
-      const confidence = buildConfidence({
+      const draftConfidence = buildConfidence({
         reviewBody: record.reviewBody,
         rating: record.rating ?? 0,
         draft: generated.draft,
@@ -1318,6 +1495,7 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
         productType: generated.productType,
         productTags: generated.productTags,
       });
+      const confidence = confidenceWithProductMismatch(draftConfidence, appSettings, generated.productMismatch);
 
       await db.reviewDraft.update({
         where: { id: record.id },
@@ -1338,6 +1516,7 @@ export async function generateDrafts(shop: string, ids: string[], admin?: AdminG
             rating: record.rating ?? 0,
             confidence,
             settings: appSettings,
+            productMismatch: generated.productMismatch,
           }),
           lastError: null,
         },
@@ -1415,7 +1594,7 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
   for (const record of records) {
     try {
       const generated = await generateReplyForRecord(record, products, brandVoice, appSettings, admin, productCache, nudge);
-      const confidence = buildConfidence({
+      const draftConfidence = buildConfidence({
         reviewBody: record.reviewBody,
         rating: record.rating ?? 0,
         draft: generated.draft,
@@ -1423,6 +1602,7 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
         productType: generated.productType,
         productTags: generated.productTags,
       });
+      const confidence = confidenceWithProductMismatch(draftConfidence, appSettings, generated.productMismatch);
 
       await db.reviewDraft.update({
         where: { id: record.id },
@@ -1443,6 +1623,7 @@ export async function regenerateDrafts(shop: string, ids: string[], nudge?: stri
             rating: record.rating ?? 0,
             confidence,
             settings: appSettings,
+            productMismatch: generated.productMismatch,
           }),
           lastError: null,
         },
@@ -1487,14 +1668,22 @@ export async function updateDraft(shop: string, id: string, draft: string) {
   if (!record) return;
 
   const appSettings = await loadAppSettings(shop);
-  const confidence = buildConfidence({
+  const productTags = readStringListJson(record.productTagsJson);
+  const productMismatch = reviewProductContextMismatch({
+    reviewBody: record.reviewBody,
+    productTitle: record.productTitle,
+    productType: record.productType,
+    productTags,
+  });
+  const draftConfidence = buildConfidence({
     reviewBody: record.reviewBody,
     rating: record.rating ?? 0,
     draft,
     productTitle: record.productTitle,
     productType: record.productType,
-    productTags: readStringListJson(record.productTagsJson),
+    productTags,
   });
+  const confidence = confidenceWithProductMismatch(draftConfidence, appSettings, productMismatch);
 
   await db.reviewDraft.updateMany({
     where: { shop, id, status: "pending" },
@@ -1509,6 +1698,7 @@ export async function updateDraft(shop: string, id: string, draft: string) {
         rating: record.rating ?? 0,
         confidence,
         settings: appSettings,
+        productMismatch,
       }),
       lastError: null,
     },
@@ -1570,7 +1760,14 @@ export async function reviseDraft(shop: string, id: string, instruction: string,
         instruction: trimmedInstruction,
       },
     });
-    const confidence = buildConfidence({
+    const productMismatch = reviewProductContextMismatch({
+      reviewBody: record.reviewBody,
+      productTitle: productContext.productTitle,
+      productType: productContext.productType,
+      productTags: productContext.productTags,
+      productDescription: productContext.productDescription,
+    });
+    const draftConfidence = buildConfidence({
       reviewBody: record.reviewBody,
       rating: record.rating ?? 0,
       draft: result.reply,
@@ -1578,6 +1775,7 @@ export async function reviseDraft(shop: string, id: string, instruction: string,
       productType: productContext.productType,
       productTags: productContext.productTags,
     });
+    const confidence = confidenceWithProductMismatch(draftConfidence, appSettings, productMismatch);
 
     await db.reviewDraft.update({
       where: { id: record.id },
@@ -1597,6 +1795,7 @@ export async function reviseDraft(shop: string, id: string, instruction: string,
           rating: record.rating ?? 0,
           confidence,
           settings: appSettings,
+          productMismatch,
         }),
         lastError: null,
       },

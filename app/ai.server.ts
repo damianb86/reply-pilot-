@@ -566,12 +566,12 @@ function productContextLines(input: {
   const tags = input.productTags?.filter(Boolean).slice(0, 12).join(", ") || "none";
   const description = input.productDescription?.trim();
   return [
-    `Product title: ${input.productTitle?.trim() || "Store review"}`,
-    `Product type: ${input.productType?.trim() || "unknown"}`,
-    `Product tags: ${tags}`,
+    `Primary product source of truth - title/name: ${input.productTitle?.trim() || "Store review"}`,
+    `Primary product source of truth - type: ${input.productType?.trim() || "unknown"}`,
+    `Primary product source of truth - tags: ${tags}`,
     description
-      ? `Product description, merchant-provided context. Use only when directly relevant and do not overquote it: ${description}`
-      : "Product description: not included",
+      ? `Primary product source of truth - merchant description. Use only when directly relevant and do not overquote it: ${description}`
+      : "Primary product source of truth - merchant description: not included",
   ];
 }
 
@@ -651,6 +651,9 @@ function previewPrompt(context: BrandVoiceContext) {
     "Output the reply text only. No JSON, no Markdown, no label.",
     "Write like a thoughtful human merchant, not a review analyst.",
     "Respect the configured tone preset, voice intensity, and length. Do not make the reply shorter than requested.",
+    "Product truth hierarchy: product title/name, product type, product tags, and merchant product description are more reliable than the customer's wording.",
+    "Treat the customer review as a fallible report. The customer may be mistaken, may describe a different item, or may mix up product details.",
+    "If the review appears inconsistent with the product truth, do not endorse the inconsistent claim as fact. Acknowledge the possible mix-up lightly and invite clarification or a closer look.",
     "Do not summarize the review point-by-point, mirror every clause, or sound like a template.",
     "Mention at most two concrete review details, then respond to what matters.",
     "Use the same language as the review when it is clear; otherwise use English.",
@@ -694,6 +697,10 @@ function reviewReplyPrompt(context: ReviewReplyContext) {
     "Output the reply text only. No JSON, no Markdown, no label.",
     "Write like a thoughtful human merchant, not a review analyst.",
     "Use the merchant voice and product context. Mention product details only when they help the reply feel specific and true.",
+    "Product truth hierarchy: product title/name, product type, product tags, all merchant-provided product data, and the product description are the primary sources of truth.",
+    "Treat the customer's review as a fallible report, not guaranteed fact. The customer may be mistaken, may be describing another product, or may be mixing up product details.",
+    "If the review conflicts with the product truth, do not validate the conflicting detail as true. Gently signal the possible confusion without sounding accusatory, for example by saying you want to make sure you are looking at the right item or that the detail does not seem to match this product.",
+    "When product truth and review wording conflict, stay grounded in the product truth and keep the reply cautious enough for a human to review before sending.",
     "Do not summarize the review point-by-point, mirror every clause, or sound like a template.",
     "Mention at most two concrete review details, then respond to what matters.",
     "Do not invent numbers, counts, percentages, statistics, product materials, policies, shipping facts, guarantees, discounts, people, timelines, or private customer details.",
@@ -740,6 +747,8 @@ function reviewReplyRevisionPrompt(context: ReviewReplyRevisionContext) {
     "This is a revision task, not a fresh generation task.",
     "Start from the current draft and make the smallest useful change that satisfies the merchant instruction.",
     "Preserve facts, tone, customer context, product context, language, greeting, and sign-off unless the instruction explicitly asks to change them.",
+    "Product truth hierarchy: product title/name, product type, product tags, all merchant-provided product data, and the product description are more reliable than the review wording.",
+    "Treat the review as fallible. If the current draft validates a product detail that conflicts with product truth, revise it to be cautious and lightly flag the possible mix-up.",
     "Do not add unsupported numbers, facts, policies, guarantees, people, timelines, materials, discounts, or private customer details.",
     "Do not summarize the review again or restart the reply from scratch.",
     "If the instruction asks for an unsafe or unsupported change, apply the closest safe wording while staying grounded in the review.",
@@ -1178,7 +1187,7 @@ export async function generateReviewReplyText(input: {
       responseFormat: "text",
       maxTokens: lengthConfig.maxTokens,
       system:
-        "Write one natural public product-review reply as plain text only. Sound human, use product context and rating, never invent facts or numbers, and respect the exact sign-off.",
+        "Write one natural public product-review reply as plain text only. Treat merchant product context as the source of truth, treat review wording as fallible, never invent facts or numbers, and respect the exact sign-off.",
       temperature: 0.25,
       textVerbosity: input.context.replyLength === "short" ? "low" : "medium",
       reasoningEffort: "low",
@@ -1212,7 +1221,7 @@ export async function generateReviewReplyRevisionText(input: {
       responseFormat: "text",
       maxTokens: Math.max(lengthConfig.maxTokens, 1600),
       system:
-        "Edit the provided product-review reply as plain text only. Keep the original draft as the base, follow the merchant instruction, and never invent facts or numbers.",
+        "Edit the provided product-review reply as plain text only. Treat merchant product context as the source of truth, keep the original draft as the base, follow the merchant instruction, and never invent facts or numbers.",
       temperature: 0.2,
       textVerbosity: input.context.replyLength === "short" ? "low" : "medium",
       reasoningEffort: "low",

@@ -70,6 +70,16 @@ describe("settings.server", () => {
         settings: settings.strictReview,
       }),
     ).toBe(false);
+
+    expect(
+      reviewNeedsHuman({
+        reviewBody: "I think this review is describing another item.",
+        rating: 5,
+        confidence: 95,
+        settings: settings.strictReview,
+        productMismatch: true,
+      }),
+    ).toBe(true);
   });
 
   it("builds timezone-safe day keys", () => {
