@@ -32,6 +32,17 @@ function yotpoTimeoutMs() {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_YOTPO_TIMEOUT_MS;
 }
 
+function yotpoAppDeveloperAccessToken() {
+  return process.env.YOTPO_APP_DEVELOPER_ACCESS_TOKEN?.trim() || null;
+}
+
+function withBackendDeveloperAccessToken(credentials: YotpoCredentials): YotpoCredentials {
+  return {
+    ...credentials,
+    developerAccessToken: credentials.developerAccessToken || yotpoAppDeveloperAccessToken(),
+  };
+}
+
 function compactJson(value: unknown) {
   return JSON.stringify(value ?? null);
 }
@@ -365,9 +376,11 @@ async function optionalYotpoApi(
 }
 
 export async function fetchYotpoReviews(credentials: YotpoCredentials) {
-  if (credentials.developerAccessToken) {
+  const resolvedCredentials = withBackendDeveloperAccessToken(credentials);
+
+  if (resolvedCredentials.developerAccessToken) {
     const response = await callYotpoDeveloperApi(`/${encodeURIComponent(credentials.storeId)}/reviews`, {
-      accessToken: credentials.developerAccessToken,
+      accessToken: resolvedCredentials.developerAccessToken,
       searchParams: {
         count: 50,
         page: 1,
@@ -405,7 +418,7 @@ export async function buildYotpoSnapshot(input: {
   developerAccessToken?: string | null;
 }) {
   const storeId = input.storeId.trim();
-  const developerAccessToken = input.developerAccessToken?.trim() || null;
+  const developerAccessToken = input.developerAccessToken?.trim() || yotpoAppDeveloperAccessToken();
   const coreAccessToken = await generateYotpoCoreAccessToken(storeId, input.apiSecret);
   const reviewsResult = await optionalYotpoApi(
     developerAccessToken ? "/reviews" : "/v1/apps/{store_id}/reviews",
@@ -466,6 +479,7 @@ function credentialMasks(input: YotpoCredentials) {
     storeId: input.storeId,
     apiSecret: maskSecret(input.apiSecret),
     developerAccessToken: input.developerAccessToken ? maskSecret(input.developerAccessToken) : null,
+    backendDeveloperAccessToken: yotpoAppDeveloperAccessToken() ? "configured in environment" : null,
   });
 }
 
@@ -493,6 +507,7 @@ export async function upsertYotpoConnection(input: {
     developerAccessToken: input.developerAccessToken?.trim() || null,
   };
   const snapshot = await buildYotpoSnapshot(credentials);
+  const hasDeveloperAccessToken = Boolean(credentials.developerAccessToken || yotpoAppDeveloperAccessToken());
 
   return db.reviewProviderConnection.upsert({
     where: {
@@ -504,10 +519,10 @@ export async function upsertYotpoConnection(input: {
     update: {
       providerAccountId: credentials.storeId,
       providerShopDomain: null,
-      authMethod: credentials.developerAccessToken ? "app_key_secret_developer_token" : "app_key_secret",
+      authMethod: hasDeveloperAccessToken ? "app_key_secret_developer_token" : "app_key_secret",
       encryptedCredentialsJson: encryptedCredentials(credentials),
       credentialMaskJson: credentialMasks(credentials),
-      scope: credentials.developerAccessToken ? "reviews:read reviews:comment" : "reviews:read",
+      scope: hasDeveloperAccessToken ? "reviews:read reviews:comment" : "reviews:read",
       status: "connected",
       displayName: "Yotpo",
       reviewCount: snapshot.reviewCount,
@@ -522,10 +537,10 @@ export async function upsertYotpoConnection(input: {
       provider: "yotpo",
       providerAccountId: credentials.storeId,
       providerShopDomain: null,
-      authMethod: credentials.developerAccessToken ? "app_key_secret_developer_token" : "app_key_secret",
+      authMethod: hasDeveloperAccessToken ? "app_key_secret_developer_token" : "app_key_secret",
       encryptedCredentialsJson: encryptedCredentials(credentials),
       credentialMaskJson: credentialMasks(credentials),
-      scope: credentials.developerAccessToken ? "reviews:read reviews:comment" : "reviews:read",
+      scope: hasDeveloperAccessToken ? "reviews:read reviews:comment" : "reviews:read",
       status: "connected",
       displayName: "Yotpo",
       reviewCount: snapshot.reviewCount,
@@ -583,7 +598,7 @@ export async function getConnectedYotpoCredentials(shop: string) {
 
   const credentials = decryptCredentials(connection.encryptedCredentialsJson);
   if (!credentials.storeId || !credentials.apiSecret) return null;
-  return credentials;
+  return withBackendDeveloperAccessToken(credentials);
 }
 
 export async function getYotpoConnectionView(shop: string) {
@@ -639,9 +654,11 @@ export async function sendYotpoReviewComment(input: {
   content: string;
   isPublic?: boolean;
 }) {
-  if (!input.credentials.developerAccessToken) {
+  const developerAccessToken = input.credentials.developerAccessToken || yotpoAppDeveloperAccessToken();
+
+  if (!developerAccessToken) {
     throw new YotpoApiError(
-      "Yotpo App Developer API access token is required to comment on reviews.",
+      "Yotpo App Developer API access token is required to comment on reviews. Configure YOTPO_APP_DEVELOPER_ACCESS_TOKEN in the backend environment or complete the Yotpo OAuth install flow for this merchant.",
       { details: { endpoint: "/{account_id}/reviews/{review_id}/comment" } },
     );
   }
@@ -649,7 +666,7 @@ export async function sendYotpoReviewComment(input: {
   return callYotpoDeveloperApi(
     `/${encodeURIComponent(input.credentials.storeId)}/reviews/${encodeURIComponent(input.reviewId)}/comment`,
     {
-      accessToken: input.credentials.developerAccessToken,
+      accessToken: developerAccessToken,
       method: "POST",
       body: {
         content: input.content,

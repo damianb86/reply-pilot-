@@ -38,14 +38,13 @@ export async function action({ request }: ActionFunctionArgs) {
     const shopDomain = String(formData.get("shopDomain") || session.shop).trim();
     const storeId = String(formData.get("storeId") ?? "").trim();
     const apiSecret = String(formData.get("apiSecret") ?? "").trim();
-    const developerAccessToken = String(formData.get("developerAccessToken") ?? "").trim();
 
-    if (provider === "yotpo" && (!storeId || !apiSecret || !developerAccessToken)) {
+    if (provider === "yotpo" && (!storeId || !apiSecret)) {
       return {
         ok: false,
         intent,
         provider,
-        message: "Yotpo Store ID, API secret, and App Developer API access token are required.",
+        message: "Yotpo Store ID/App Key and API secret are required.",
       };
     }
 
@@ -66,7 +65,6 @@ export async function action({ request }: ActionFunctionArgs) {
         apiToken,
         storeId,
         apiSecret,
-        developerAccessToken,
       });
 
       return {

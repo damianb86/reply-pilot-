@@ -11,7 +11,7 @@
 - Shopify OAuth install/reinstall.
 - Embedded Admin navigation.
 - Judge.me connect/refresh/disconnect with test token.
-- Yotpo connect/refresh/disconnect with Store ID, API secret, and App Developer API access token.
+- Yotpo connect/refresh/disconnect with Store ID and API secret; reply/comment sending with `YOTPO_APP_DEVELOPER_ACCESS_TOKEN` configured in backend environment.
 - Review sync with one provider and with Judge.me + Yotpo active together.
 - AI generation with OpenAI and Gemini keys.
 - Credit spend/refund behavior during AI failures.

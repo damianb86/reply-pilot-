@@ -60,16 +60,13 @@ describe('DashboardPage provider connection form', () => {
     fireEvent.click(yotpoTile);
 
     expect(screen.getByText('2. Enter your Yotpo credentials')).toBeInTheDocument();
-    expect(screen.getByText(/App Developer API access token to publish review comments/)).toBeInTheDocument();
+    expect(screen.getByText(/App Developer access token configured on the Reply Pilot backend/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Yotpo Store ID / App Key'), {
       target: {value: 'store-123'},
     });
     fireEvent.change(screen.getByLabelText('API secret'), {
       target: {value: 'secret-123'},
-    });
-    fireEvent.change(screen.getByLabelText('App Developer API access token'), {
-      target: {value: 'developer-token-123'},
     });
     fireEvent.click(screen.getByRole('button', {name: 'Test and add Yotpo'}));
 
@@ -79,7 +76,7 @@ describe('DashboardPage provider connection form', () => {
     expect(formData.get('provider')).toBe('yotpo');
     expect(formData.get('storeId')).toBe('store-123');
     expect(formData.get('apiSecret')).toBe('secret-123');
-    expect(formData.get('developerAccessToken')).toBe('developer-token-123');
+    expect(formData.has('developerAccessToken')).toBe(false);
     expect(options).toMatchObject({method: 'post', action: '/app/dashboard'});
   });
 });

@@ -248,7 +248,6 @@ function ConnectForm({fetcher, shop, loaderData, actionPath, connections = [], i
   const [apiToken, setApiToken] = useState('');
   const [storeId, setStoreId] = useState('');
   const [apiSecret, setApiSecret] = useState('');
-  const [developerAccessToken, setDeveloperAccessToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const selectedProvider = providerById(selectedProviderId);
   const selectedIsConnected = connectedProviderIds.has(selectedProviderId);
@@ -259,7 +258,7 @@ function ConnectForm({fetcher, shop, loaderData, actionPath, connections = [], i
   });
   const isSubmitting = timeout.pending && pendingIntent === 'connect-token';
   const canSubmit = selectedProviderId === 'yotpo'
-    ? storeId.trim() && apiSecret.trim() && developerAccessToken.trim()
+    ? storeId.trim() && apiSecret.trim()
     : apiToken.trim();
 
   useEffect(() => {
@@ -282,7 +281,6 @@ function ConnectForm({fetcher, shop, loaderData, actionPath, connections = [], i
     formData.set('apiToken', apiToken.trim());
     formData.set('storeId', storeId.trim());
     formData.set('apiSecret', apiSecret.trim());
-    formData.set('developerAccessToken', developerAccessToken.trim());
     fetcher.submit(formData, {method: 'post', action: actionPath});
   }
 
@@ -314,7 +312,7 @@ function ConnectForm({fetcher, shop, loaderData, actionPath, connections = [], i
             <BlockStack gap="100">
               <Text as="p" variant="bodyMd" fontWeight="semibold">2. Enter your Yotpo credentials</Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                Yotpo uses the Store ID/App Key and API secret to generate a Core API token for imports. Reply Pilot also needs the App Developer API access token to publish review comments as replies.
+                Yotpo uses the Store ID/App Key and API secret to generate a Core API token for imports. Reply sending uses the App Developer access token configured on the Reply Pilot backend.
               </Text>
             </BlockStack>
             <TextField
@@ -343,16 +341,9 @@ function ConnectForm({fetcher, shop, loaderData, actionPath, connections = [], i
               )}
               helpText="Yotpo requires this secret to generate the Core API access token used for most API calls."
             />
-            <TextField
-              label="App Developer API access token"
-              name="developerAccessToken"
-              type={showToken ? 'text' : 'password'}
-              value={developerAccessToken}
-              onChange={setDeveloperAccessToken}
-              autoComplete="off"
-              placeholder="Paste your Yotpo App Developer API access token"
-              helpText="Required by Yotpo's App Developer review comment endpoint. Each review can receive one public comment."
-            />
+            <Banner tone="info">
+              The Yotpo App Developer access token is not requested from merchants. Configure `YOTPO_APP_DEVELOPER_ACCESS_TOKEN` in the backend environment to enable public review comments/replies.
+            </Banner>
           </BlockStack>
         ) : (
           <BlockStack gap="300">

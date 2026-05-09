@@ -25,7 +25,7 @@ For production-like commands, set `APP_ENV=production`.
 
 ## Review providers
 
-Reply Pilot can connect Judge.me and Yotpo at the same time. Yotpo requires Store ID/App Key, API secret, and an App Developer API access token so the app can both import reviews and publish public review comments.
+Reply Pilot can connect Judge.me and Yotpo at the same time. Merchants enter their Yotpo Store ID/App Key and API secret for review import. Public Yotpo review comments use `YOTPO_APP_DEVELOPER_ACCESS_TOKEN` from the backend environment.
 
 See `docs/yotpo-integration.md` for the official Yotpo endpoints used by the app.
 

@@ -73,14 +73,12 @@ export async function connectReviewProvider(input: {
   apiToken?: string;
   storeId?: string;
   apiSecret?: string;
-  developerAccessToken?: string;
 }) {
   if (input.provider === "yotpo") {
     return upsertYotpoConnection({
       shop: input.shop,
       storeId: input.storeId || "",
       apiSecret: input.apiSecret || "",
-      developerAccessToken: input.developerAccessToken || null,
     });
   }
 

@@ -99,6 +99,43 @@ describe("yotpo.server", () => {
     })).resolves.toMatchObject({ response: { id: "comment-1" } });
   });
 
+  it("posts a public review comment with the backend App Developer token", async () => {
+    const previousToken = process.env.YOTPO_APP_DEVELOPER_ACCESS_TOKEN;
+    process.env.YOTPO_APP_DEVELOPER_ACCESS_TOKEN = "backend-token-123";
+
+    try {
+      server.use(
+        http.post("https://developers.yotpo.com/v2/store-123/reviews/review-45/comment", async ({ request }) => {
+          const url = new URL(request.url);
+          expect(url.searchParams.get("access_token")).toBe("backend-token-123");
+          expect(request.headers.get("authorization")).toBe("Bearer backend-token-123");
+          await expect(request.json()).resolves.toEqual({
+            content: "Thanks for your review.",
+            public: true,
+          });
+
+          return HttpResponse.json({ response: { id: "comment-1" } });
+        }),
+      );
+
+      await expect(sendYotpoReviewComment({
+        credentials: {
+          storeId: "store-123",
+          apiSecret: "secret-123",
+          developerAccessToken: null,
+        },
+        reviewId: "review-45",
+        content: "Thanks for your review.",
+      })).resolves.toMatchObject({ response: { id: "comment-1" } });
+    } finally {
+      if (previousToken === undefined) {
+        delete process.env.YOTPO_APP_DEVELOPER_ACCESS_TOKEN;
+      } else {
+        process.env.YOTPO_APP_DEVELOPER_ACCESS_TOKEN = previousToken;
+      }
+    }
+  });
+
   it("serializes Yotpo API errors without exposing credentials", () => {
     const error = new YotpoApiError("Yotpo failed", {
       status: 401,
