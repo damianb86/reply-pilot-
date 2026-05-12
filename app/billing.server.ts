@@ -23,8 +23,16 @@ function envBillingTestOverride() {
 
 export async function shouldUseTestBilling(admin: AdminGraphql) {
   const override = envBillingTestOverride();
-  if (override !== null) return override;
-  if (process.env.NODE_ENV !== "production") return true;
+  if (override !== null) {
+    console.info("[billing] test mode resolved from SHOPIFY_BILLING_TEST", {
+      isTest: override,
+    });
+    return override;
+  }
+  if (process.env.NODE_ENV !== "production") {
+    console.info("[billing] test mode enabled outside production");
+    return true;
+  }
 
   try {
     const response = await admin.graphql(SHOP_PLAN_QUERY);
@@ -44,8 +52,15 @@ export async function shouldUseTestBilling(admin: AdminGraphql) {
       throw new Error(json.errors.map((error) => error.message).join("; "));
     }
 
-    return Boolean(json.data?.shop?.plan?.partnerDevelopment);
+    const isTest = Boolean(json.data?.shop?.plan?.partnerDevelopment);
+    console.info("[billing] test mode resolved from Shopify shop plan", {
+      isTest,
+      partnerDevelopment: json.data?.shop?.plan?.partnerDevelopment ?? null,
+      plan: json.data?.shop?.plan?.publicDisplayName ?? null,
+    });
+    return isTest;
   } catch {
+    console.warn("[billing] could not resolve Shopify shop plan; using live billing mode");
     return false;
   }
 }
