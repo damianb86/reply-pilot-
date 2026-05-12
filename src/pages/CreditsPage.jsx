@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import {useEffect} from 'react';
-import {useFetcher, useLoaderData} from 'react-router';
+import {useFetcher, useLoaderData, useLocation, useRevalidator} from 'react-router';
 import {
   Badge,
   Banner,
@@ -109,6 +109,8 @@ function ModelSpendCard({name, costs}) {
 export default function CreditsPage() {
   const loaderData = useLoaderData();
   const purchaseFetcher = useFetcher();
+  const location = useLocation();
+  const revalidator = useRevalidator();
   const credits = loaderData.credits;
   const modelCosts = credits.modelCosts ?? {};
   const actionData = purchaseFetcher.data;
@@ -120,6 +122,13 @@ export default function CreditsPage() {
   const actionResult = timeout.result || actionData;
   const message = actionResult?.message ?? loaderData.message;
   const ok = actionResult?.ok ?? loaderData.ok;
+  const purchaseId = new URLSearchParams(location.search).get('credit_purchase');
+  const shouldPollPurchase = Boolean(
+    purchaseId &&
+      loaderData.ok === false &&
+      typeof loaderData.message === 'string' &&
+      loaderData.message.toLowerCase().includes('pending'),
+  );
 
   useEffect(() => {
     if (!actionData?.confirmationUrl) return;
@@ -129,6 +138,19 @@ export default function CreditsPage() {
       window.location.href = actionData.confirmationUrl;
     }
   }, [actionData?.confirmationUrl]);
+
+  useEffect(() => {
+    if (!shouldPollPurchase) return undefined;
+
+    let attempts = 0;
+    const interval = window.setInterval(() => {
+      attempts += 1;
+      revalidator.revalidate();
+      if (attempts >= 6) window.clearInterval(interval);
+    }, 2000);
+
+    return () => window.clearInterval(interval);
+  }, [revalidator, shouldPollPurchase]);
 
   return (
     <BlockStack gap="400">

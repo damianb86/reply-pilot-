@@ -1,4 +1,5 @@
 import db from "./db.server";
+import { shouldUseTestBilling } from "./billing.server";
 import { loadAppSettings } from "./settings.server";
 
 type AdminGraphql = {
@@ -470,11 +471,6 @@ async function grantPurchasedCredits(
   });
 }
 
-function billingIsTest() {
-  if (process.env.SHOPIFY_BILLING_TEST === "true") return true;
-  return (process.env.APP_ENV || process.env.NODE_ENV || "development") !== "production";
-}
-
 async function readGraphql(response: Response) {
   return (await response.json()) as Record<string, unknown>;
 }
@@ -502,6 +498,7 @@ export async function createCreditPurchase(
   const bonusCredits = bonusAvailable ? firstPurchaseBonusCredits(pkg.credits) : 0;
   const totalCredits = pkg.credits + bonusCredits;
   const billingName = creditPurchaseBillingName(pkg, bonusCredits);
+  const isTestBilling = await shouldUseTestBilling(admin);
   const purchase = await db.creditPurchase.create({
     data: {
       shop,
@@ -527,7 +524,7 @@ export async function createCreditPurchase(
           amount: pkg.amountCents / 100,
           currencyCode: pkg.currencyCode,
         },
-        test: billingIsTest(),
+        test: isTestBilling,
       },
     });
     const body = await readGraphql(response);

@@ -8,13 +8,31 @@ import {
 } from "../credits.server";
 import { authenticate } from "../shopify.server";
 
+function shopAdminHandle(shop: string) {
+  return shop.replace(/\.myshopify\.com$/i, "");
+}
+
 function returnUrlForRequest(request: Request) {
   const url = new URL(request.url);
+  const shop = url.searchParams.get("shop");
+  const apiKey = process.env.SHOPIFY_API_KEY;
+
+  if (apiKey && shop) {
+    return `https://admin.shopify.com/store/${shopAdminHandle(shop)}/apps/${apiKey}/app/credits`;
+  }
+
   const returnUrl = new URL("/app/credits", url.origin);
 
   for (const key of ["embedded", "host", "shop"]) {
     const value = url.searchParams.get(key);
     if (value) returnUrl.searchParams.set(key, value);
+  }
+
+  if (shop && !returnUrl.searchParams.get("host")) {
+    returnUrl.searchParams.set(
+      "host",
+      Buffer.from(`admin.shopify.com/store/${shopAdminHandle(shop)}`).toString("base64"),
+    );
   }
 
   return returnUrl.toString();
