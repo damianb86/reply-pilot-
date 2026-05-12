@@ -46,7 +46,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   if (purchaseId) {
     try {
-      result = await finalizeCreditPurchase(session.shop, purchaseId, admin);
+      result = await finalizeCreditPurchase(session.shop, purchaseId, admin, {
+        chargeId: url.searchParams.get("charge_id"),
+        settleApproval: !url.pathname.endsWith(".data"),
+      });
     } catch (error) {
       const serialized = serializeCreditError(error);
       result = { ok: false, message: serialized.message };

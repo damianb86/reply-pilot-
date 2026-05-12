@@ -123,11 +123,17 @@ export default function CreditsPage() {
   const message = actionResult?.message ?? loaderData.message;
   const ok = actionResult?.ok ?? loaderData.ok;
   const purchaseId = new URLSearchParams(location.search).get('credit_purchase');
+  const purchasePending = Boolean(
+    purchaseId &&
+      ok === false &&
+      typeof message === 'string' &&
+      message.toLowerCase().includes('still confirming'),
+  );
   const shouldPollPurchase = Boolean(
     purchaseId &&
       loaderData.ok === false &&
       typeof loaderData.message === 'string' &&
-      loaderData.message.toLowerCase().includes('pending'),
+      loaderData.message.toLowerCase().includes('still confirming'),
   );
 
   useEffect(() => {
@@ -155,7 +161,7 @@ export default function CreditsPage() {
   return (
     <BlockStack gap="400">
       {message ? (
-        <Banner tone={ok ? 'success' : 'critical'}>
+        <Banner tone={ok ? 'success' : purchasePending ? 'info' : 'critical'}>
           <Text as="p" variant="bodyMd">{message}</Text>
         </Banner>
       ) : null}

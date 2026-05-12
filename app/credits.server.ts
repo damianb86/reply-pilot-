@@ -487,6 +487,10 @@ function readPackage(packageId: string) {
   return pkg;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function createCreditPurchase(
   shop: string,
   packageId: string,
@@ -566,7 +570,26 @@ export async function createCreditPurchase(
   }
 }
 
-export async function finalizeCreditPurchase(shop: string, purchaseId: string, admin: AdminGraphql) {
+type FinalizeCreditPurchaseOptions = {
+  chargeId?: string | null;
+  settleApproval?: boolean;
+};
+
+async function readShopifyPurchaseStatus(admin: AdminGraphql, shopifyPurchaseId: string) {
+  const response = await admin.graphql(APP_PURCHASE_STATUS, {
+    variables: { id: shopifyPurchaseId },
+  });
+  const body = await readGraphql(response);
+  const node = readObject(readObject(body.data).node);
+  return String(node.status || "").toLowerCase();
+}
+
+export async function finalizeCreditPurchase(
+  shop: string,
+  purchaseId: string,
+  admin: AdminGraphql,
+  options: FinalizeCreditPurchaseOptions = {},
+) {
   const purchase = await db.creditPurchase.findFirst({ where: { id: purchaseId, shop } });
   if (!purchase) {
     return { ok: false, message: "Credit purchase was not found." };
@@ -581,12 +604,26 @@ export async function finalizeCreditPurchase(shop: string, purchaseId: string, a
     return { ok: false, message: "Credit purchase is missing Shopify confirmation data." };
   }
 
-  const response = await admin.graphql(APP_PURCHASE_STATUS, {
-    variables: { id: purchase.shopifyPurchaseId },
+  let status = "";
+  let attempts = 0;
+  const maxAttempts = options.settleApproval ? 4 : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    attempts = attempt;
+    status = await readShopifyPurchaseStatus(admin, purchase.shopifyPurchaseId);
+    if (status === "active" || status !== "pending" || attempt === maxAttempts) break;
+    await sleep(1500);
+  }
+
+  console.info("[billing] credit purchase approval return resolved", {
+    shop,
+    purchaseId,
+    shopifyPurchaseId: purchase.shopifyPurchaseId,
+    chargeId: options.chargeId ?? null,
+    status: status || "unknown",
+    attempts,
+    settled: Boolean(options.settleApproval),
   });
-  const body = await readGraphql(response);
-  const node = readObject(readObject(body.data).node);
-  const status = String(node.status || "").toLowerCase();
 
   if (status === "active") {
     const granted = await grantPurchasedCredits(shop, purchase.id, purchase.credits, purchase.bonusCredits);
@@ -611,7 +648,7 @@ export async function finalizeCreditPurchase(shop: string, purchaseId: string, a
     ok: false,
     message:
       status === "pending"
-        ? "Credit purchase is still pending approval."
+        ? "Shopify is still confirming this credit purchase. We will refresh the status automatically."
         : "Credit purchase was not approved.",
   };
 }
