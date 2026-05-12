@@ -49,10 +49,18 @@ services:
       OPENAI_PRO_MODEL: ${OPENAI_PRO_MODEL:-gpt-5.4-mini}
       OPENAI_PREMIUM_MODEL: ${OPENAI_PREMIUM_MODEL:-gpt-5.4}
     labels:
+      observability.stack: qorve
+      observability.app: reply-pilot
+      observability.service: app
       caddy: ${APP_HOST:?Set APP_HOST in the app .env}
       caddy.encode: zstd gzip
       caddy.reverse_proxy: "{{upstreams 3000}}"
       caddy_ingress_network: ${SHARED_DOCKER_NETWORK:-shared_apps}
+    logging:
+      driver: json-file
+      options:
+        max-size: ${DOCKER_LOG_MAX_SIZE:-10m}
+        max-file: ${DOCKER_LOG_MAX_FILE:-5}
     depends_on:
       db-init:
         condition: service_completed_successfully
