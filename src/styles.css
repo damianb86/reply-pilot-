@@ -2398,6 +2398,18 @@ select {
   color: currentColor;
 }
 
+.rp-connect-test-store-field {
+  background: var(--rp-attention-surface);
+  border: 1px solid var(--rp-attention-border);
+  border-radius: 8px;
+  color: var(--rp-attention-text);
+  padding: 14px;
+}
+
+.rp-connect-test-store-field .Polaris-TextField__Input {
+  background: #fffefa;
+}
+
 .rp-connect-provider-check {
   position: absolute;
   top: 8px;

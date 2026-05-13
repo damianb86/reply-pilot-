@@ -218,8 +218,16 @@ function KeyValueRow({label, value, badgeTone}) {
   );
 }
 
-function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl, actionPath}) {
+function ConnectForm({
+  fetcher,
+  shop,
+  apiSettingsUrl,
+  apiDocsUrl,
+  actionPath,
+  showTestStoreDomainField = false,
+}) {
   const [apiToken, setApiToken] = useState('');
+  const [shopDomain, setShopDomain] = useState(shop);
   const [showToken, setShowToken] = useState(false);
   const pendingIntent = fetcher.formData?.get('intent');
   const timeout = useFetcherTimeout(fetcher, {
@@ -233,7 +241,7 @@ function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl, actionPath}) {
 
     const formData = new FormData();
     formData.set('intent', 'connect-token');
-    formData.set('shopDomain', shop);
+    formData.set('shopDomain', showTestStoreDomainField ? shopDomain.trim() || shop : shop);
     formData.set('apiToken', apiToken.trim());
     fetcher.submit(formData, {method: 'post', action: actionPath});
   }
@@ -259,6 +267,29 @@ function ConnectForm({fetcher, shop, apiSettingsUrl, apiDocsUrl, actionPath}) {
           <Text as="p" variant="bodySm" tone="subdued">
             Judge.me uses this authenticated Shopify shop and your Private API token to import reviews and send approved replies.
           </Text>
+          {showTestStoreDomainField ? (
+            <div className="rp-connect-test-store-field">
+              <BlockStack gap="200">
+                <BlockStack gap="050">
+                  <Text as="p" variant="bodyMd" fontWeight="semibold">
+                    Test store domain override
+                  </Text>
+                  <Text as="p" variant="bodySm">
+                    Este campo solo es visible en test stores. Usalo solo para pruebas de Judge.me; en producción Reply Pilot usa la tienda autenticada por Shopify.
+                  </Text>
+                </BlockStack>
+                <TextField
+                  label="Judge.me shop domain for tests"
+                  name="shopDomain"
+                  value={shopDomain}
+                  onChange={setShopDomain}
+                  autoComplete="off"
+                  placeholder="your-test-store.myshopify.com"
+                  helpText="Only change this when your Judge.me test data belongs to a different development store domain."
+                />
+              </BlockStack>
+            </div>
+          ) : null}
           <TextField
             label="API token"
             name="apiToken"
@@ -532,6 +563,7 @@ export function ConnectPanel({connection, fetcher, loaderData, actionPath, showP
           apiSettingsUrl={loaderData.judgeMeApiSettingsUrl}
           apiDocsUrl={loaderData.judgeMeApiDocsUrl}
           actionPath={actionPath}
+          showTestStoreDomainField={Boolean(loaderData.isDevelopment)}
         />
       </BlockStack>
     </Card>
