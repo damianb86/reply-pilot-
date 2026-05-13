@@ -275,7 +275,7 @@ function ConnectForm({
                     Test store domain override
                   </Text>
                   <Text as="p" variant="bodySm">
-                    Este campo solo es visible en test stores. Usalo solo para pruebas de Judge.me; en producción Reply Pilot usa la tienda autenticada por Shopify.
+                    This field is only visible on test stores. Use it only for Judge.me testing; in production, Reply Pilot uses the authenticated Shopify store.
                   </Text>
                 </BlockStack>
                 <TextField
