@@ -563,7 +563,7 @@ export function ConnectPanel({connection, fetcher, loaderData, actionPath, showP
           apiSettingsUrl={loaderData.judgeMeApiSettingsUrl}
           apiDocsUrl={loaderData.judgeMeApiDocsUrl}
           actionPath={actionPath}
-          showTestStoreDomainField={Boolean(loaderData.isDevelopment)}
+          showTestStoreDomainField={Boolean(loaderData.isDevelopment || loaderData.isDevelopmentStore)}
         />
       </BlockStack>
     </Card>

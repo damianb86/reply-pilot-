@@ -13,6 +13,31 @@ type AdminGraphql = {
   graphql: (query: string, options?: { variables?: Record<string, unknown> }) => Promise<Response>;
 };
 
+export async function isPartnerDevelopmentStore(admin: AdminGraphql) {
+  try {
+    const response = await admin.graphql(SHOP_PLAN_QUERY);
+    const json = (await response.json()) as {
+      data?: {
+        shop?: {
+          plan?: {
+            partnerDevelopment?: boolean | null;
+            publicDisplayName?: string | null;
+          } | null;
+        } | null;
+      };
+      errors?: { message: string }[];
+    };
+
+    if (json.errors?.length) {
+      throw new Error(json.errors.map((error) => error.message).join("; "));
+    }
+
+    return Boolean(json.data?.shop?.plan?.partnerDevelopment);
+  } catch {
+    return false;
+  }
+}
+
 function envBillingTestOverride() {
   const value = process.env.SHOPIFY_BILLING_TEST?.trim().toLowerCase();
   if (!value) return null;
