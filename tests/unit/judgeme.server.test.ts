@@ -1,13 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   JudgeMeApiError,
   decryptSecret,
   encryptSecret,
+  isJudgeMeTestDomainFieldEnabled,
   maskJudgeMeToken,
   serializeJudgeMeError,
 } from "../../app/judgeme.server";
 
 describe("judgeme.server", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("encrypts and decrypts API tokens", () => {
     vi.stubEnv("JUDGEME_TOKEN_ENCRYPTION_KEY", "unit-test-key");
     const encrypted = encryptSecret("private-token-123");
@@ -38,5 +43,19 @@ describe("judgeme.server", () => {
       statusText: "Unauthorized",
       details: { error: "bad token" },
     });
+  });
+
+  it("only enables the Judge.me test domain field from an explicit environment flag", () => {
+    vi.stubEnv("JUDGEME_TEST_DOMAIN_FIELD_ENABLED", "");
+    expect(isJudgeMeTestDomainFieldEnabled()).toBe(false);
+
+    vi.stubEnv("JUDGEME_TEST_DOMAIN_FIELD_ENABLED", "true");
+    expect(isJudgeMeTestDomainFieldEnabled()).toBe(true);
+
+    vi.stubEnv("JUDGEME_TEST_DOMAIN_FIELD_ENABLED", "1");
+    expect(isJudgeMeTestDomainFieldEnabled()).toBe(true);
+
+    vi.stubEnv("JUDGEME_TEST_DOMAIN_FIELD_ENABLED", "false");
+    expect(isJudgeMeTestDomainFieldEnabled()).toBe(false);
   });
 });

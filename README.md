@@ -11,6 +11,7 @@ Reply Pilot is a Shopify public embedded app configured to run as one app contai
 - `APP_ENV=development` is the default local mode and uses SQLite through `DEV_DATABASE_URL`.
 - `APP_ENV=production` uses PostgreSQL through `DATABASE_URL` and publishes `SHOPIFY_APP_URL` from `PROD_SHOPIFY_APP_URL` in Docker.
 - In development, `shopify app dev` provides the Cloudflare tunnel URL through `HOST`; Reply Pilot prefers that URL over the production `SHOPIFY_APP_URL`.
+- `JUDGEME_TEST_DOMAIN_FIELD_ENABLED=true` shows the Judge.me test domain override in Connect. Leave it unset or `false` for normal installs.
 
 ## Local development
 

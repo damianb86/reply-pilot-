@@ -1,9 +1,9 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import DashboardPage from "../../src/pages/DashboardPage";
-import { isPartnerDevelopmentStore } from "../billing.server";
 import {
   disconnectJudgeMe,
   getJudgeMeConnectionView,
+  isJudgeMeTestDomainFieldEnabled,
   refreshJudgeMeConnection,
   serializeJudgeMeError,
   upsertJudgeMeConnection,
@@ -11,9 +11,8 @@ import {
 import { authenticate } from "../shopify.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { admin, session } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   const appEnv = process.env.APP_ENV || process.env.NODE_ENV || "development";
-  const isDevelopmentStore = await isPartnerDevelopmentStore(admin);
 
   return {
     shop: session.shop,
@@ -22,7 +21,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     judgeMeApiSettingsUrl: "https://judge.me/settings?jump_to=judge.me+api",
     judgeMeApiDocsUrl: "https://judge.me/help/en/articles/8409180-judge-me-api",
     isDevelopment: appEnv !== "production",
-    isDevelopmentStore,
+    showJudgeMeTestDomainField: isJudgeMeTestDomainFieldEnabled(),
     appEnv,
   };
 }
@@ -34,7 +33,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === "connect-token") {
     const apiToken = String(formData.get("apiToken") ?? "").trim();
-    const shopDomain = String(formData.get("shopDomain") || session.shop).trim();
+    const submittedShopDomain = String(formData.get("shopDomain") ?? "").trim();
+    const shopDomain =
+      isJudgeMeTestDomainFieldEnabled() && submittedShopDomain
+        ? submittedShopDomain
+        : session.shop;
 
     if (!apiToken) {
       return {

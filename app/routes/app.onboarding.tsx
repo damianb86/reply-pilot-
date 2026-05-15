@@ -3,7 +3,7 @@ import OnboardingPage from "../../src/pages/OnboardingPage";
 import { loadBrandVoicePageData, saveBrandVoiceSettings } from "../brand-voice.server";
 import { productDescriptionCreditMultiplier } from "../credits.server";
 import db from "../db.server";
-import { getJudgeMeConnectionView } from "../judgeme.server";
+import { getJudgeMeConnectionView, isJudgeMeTestDomainFieldEnabled } from "../judgeme.server";
 import { loadAppSettings, saveAppSettings } from "../settings.server";
 import { authenticate } from "../shopify.server";
 import { loadShopifyProducts } from "../shopify-products.server";
@@ -73,6 +73,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     judgeMeApiSettingsUrl: "https://judge.me/settings?jump_to=judge.me+api",
     judgeMeApiDocsUrl: "https://judge.me/help/en/articles/8409180-judge-me-api",
     isDevelopment: appEnv !== "production",
+    showJudgeMeTestDomainField: isJudgeMeTestDomainFieldEnabled(),
     appEnv,
     brandVoice: {
       ...brandVoice,

@@ -9,6 +9,7 @@ import db from "./db.server";
 const JUDGEME_API_BASE = process.env.JUDGEME_API_BASE_URL || "https://judge.me/api/v1";
 const TOKEN_PREFIX = "v1";
 const DEFAULT_JUDGEME_TIMEOUT_MS = 10000;
+const ENABLED_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 
 type JsonObject = Record<string, unknown>;
 
@@ -71,6 +72,14 @@ export function decryptSecret(value: string) {
 export function maskJudgeMeToken(token: string) {
   if (token.length <= 10) return "••••";
   return `${token.slice(0, 4)}••••${token.slice(-4)}`;
+}
+
+export function isJudgeMeTestDomainFieldEnabled() {
+  return ENABLED_ENV_VALUES.has(
+    String(process.env.JUDGEME_TEST_DOMAIN_FIELD_ENABLED || "")
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 function safeJsonParse(value?: string | null) {
